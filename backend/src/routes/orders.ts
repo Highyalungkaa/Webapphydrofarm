@@ -1,0 +1,240 @@
+import { Router, Response } from 'express';
+import { z } from 'zod';
+import { supabaseAdmin } from '../config/supabase.js';
+import { requireAuth, AuthenticatedRequest } from '../middlewares/auth.js';
+import { orderCreationLimiter } from '../middlewares/rateLimiter.js';
+
+const router = Router();
+
+const createOrderSchema = z.object({
+  round_id: z.string().uuid('รหัสรอบการปลูกไม่ถูกต้อง'),
+  items: z.array(
+    z.object({
+      round_item_id: z.string().uuid('รหัสรายการผักไม่ถูกต้อง'),
+      qty_kg: z.number().min(0.5, 'จำนวนผักต้องไม่ต่ำกว่า 0.5 กก.'),
+    })
+  ).min(1, 'กรุณาเลือกผักอย่างน้อย 1 ชนิด'),
+  fulfillment_method: z.enum(['pickup', 'delivery'], {
+    errorMap: () => ({ message: 'กรุณาเลือกวิธีรับของ (มารับเอง หรือ จัดส่ง)' }),
+  }),
+  delivery_address: z.string().optional().nullable(),
+  district_id: z.string().uuid('รหัสอำเภอ/ตำบลไม่ถูกต้อง').optional().nullable(),
+  contact_phone: z.string().min(9, 'กรุณาระบุเบอร์โทรศัพท์ติดต่ออย่างน้อย 9 หลัก'),
+  note: z.string().optional().nullable(),
+  accepted_substitution_terms: z.boolean().refine((val) => val === true, {
+    message: 'กรุณายอมรับเงื่อนไขการทดแทนผักกรณีผลผลิตไม่เพียงพอก่อนทำการจอง',
+  }),
+});
+
+// POST /api/orders - Create an order using PostgreSQL atomic transaction RPC
+router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const parseResult = createOrderSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      const firstError = parseResult.error.errors[0]?.message || 'ข้อมูลการสั่งจองไม่ถูกต้อง';
+      res.status(400).json({ error: firstError });
+      return;
+    }
+
+    const {
+      round_id,
+      items,
+      fulfillment_method,
+      delivery_address,
+      district_id,
+      contact_phone,
+      note,
+      accepted_substitution_terms,
+    } = parseResult.data;
+
+    // Check round status & auto-heal booking_opens_at if round is open for booking
+    const { data: roundData } = await supabaseAdmin
+      .from('planting_rounds')
+      .select('id, status, booking_opens_at, booking_closes_at')
+      .eq('id', round_id)
+      .maybeSingle();
+
+    if (roundData && roundData.status === 'booking_open') {
+      const now = new Date();
+      if (roundData.booking_opens_at && new Date(roundData.booking_opens_at) > now) {
+        await supabaseAdmin
+          .from('planting_rounds')
+          .update({ booking_opens_at: now.toISOString(), updated_at: now.toISOString() })
+          .eq('id', round_id);
+      }
+    }
+
+    // Call stored procedure create_order in Supabase
+    const { data: result, error } = await supabaseAdmin.rpc('create_order', {
+      p_round_id: round_id,
+      p_customer_id: req.user!.id,
+      p_items: items,
+      p_fulfillment_method: fulfillment_method,
+      p_delivery_address: delivery_address || null,
+      p_district_id: district_id || null,
+      p_contact_phone: contact_phone,
+      p_note: note || null,
+      p_accepted_terms: accepted_substitution_terms,
+    });
+
+    if (error) {
+      console.error('Create Order RPC Error:', error);
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    // Also update phone in profile if not already set
+    await supabaseAdmin
+      .from('profiles')
+      .update({ phone: contact_phone, updated_at: new Date().toISOString() })
+      .eq('id', req.user!.id)
+      .is('phone', null);
+
+    res.status(201).json({
+      message: 'บันทึกการจองสำเร็จ',
+      data: result,
+    });
+  } catch (err: any) {
+    console.error('Create Order Exception:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการสร้างคำสั่งจอง: ' + (err.message || '') });
+  }
+});
+
+// GET /api/orders/mine - Get orders of the logged-in customer
+router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+
+    const { data: orders, error } = await supabaseAdmin
+      .from('orders')
+      .select(`
+        *,
+        planting_rounds (
+          id,
+          name,
+          expected_harvest_date,
+          fulfillment_date,
+          pickup_start_time,
+          pickup_end_time,
+          delivery_start_time,
+          delivery_end_time,
+          status
+        ),
+        districts (
+          id,
+          name
+        ),
+        order_items (
+          id,
+          qty_kg,
+          price_per_kg,
+          round_items (
+            id,
+            crops (
+              id,
+              name
+            )
+          )
+        )
+      `)
+      .eq('customer_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ error: 'ไม่สามารถดึงข้อมูลออเดอร์ได้: ' + error.message });
+      return;
+    }
+
+    res.json(orders || []);
+  } catch (err: any) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงรายการคำสั่งจอง' });
+  }
+});
+
+// GET /api/orders/:id - Get single order detail
+router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+
+    const { data: order, error } = await supabaseAdmin
+      .from('orders')
+      .select(`
+        *,
+        planting_rounds (
+          id,
+          name,
+          expected_harvest_date,
+          fulfillment_date,
+          pickup_start_time,
+          pickup_end_time,
+          delivery_start_time,
+          delivery_end_time,
+          status
+        ),
+        districts (
+          id,
+          name
+        ),
+        order_items (
+          id,
+          qty_kg,
+          price_per_kg,
+          fulfilled_qty_kg,
+          fulfillment_source,
+          round_items (
+            id,
+            crops (
+              id,
+              name
+            )
+          )
+        )
+      `)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !order) {
+      res.status(404).json({ error: 'ไม่พบข้อมูลคำสั่งจองที่ระบุ' });
+      return;
+    }
+
+    // Only owner or admin can view
+    if (order.customer_id !== req.user!.id && !req.user!.isAdmin) {
+      res.status(403).json({ error: 'คุณไม่มีสิทธิ์เข้าดูคำสั่งจองนี้' });
+      return;
+    }
+
+    res.json(order);
+  } catch (err: any) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลคำสั่งจอง' });
+  }
+});
+
+// POST /api/orders/:id/cancel - Cancel order
+router.post('/:id/cancel', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const reason = req.body.reason || 'ลูกค้ายกเลิกผ่านระบบ';
+
+    const { data: result, error } = await supabaseAdmin.rpc('cancel_order', {
+      p_order_id: id,
+      p_actor_id: req.user!.id,
+      p_reason: reason,
+    });
+
+    if (error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      message: 'ยกเลิกคำสั่งจองเรียบร้อยแล้ว',
+      data: result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการยกเลิกคำสั่งจอง' });
+  }
+});
+
+export default router;

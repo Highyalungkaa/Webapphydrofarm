@@ -1,0 +1,145 @@
+# 🥬 ระบบบริหารจัดการการปลูกผักไฮโดรโปนิกส์ + จองผักก่อนเก็บเกี่ยว (HydroFarm Pre-order)
+
+เว็บแอปพลิเคชันสำหรับฟาร์มผักไฮโดรโปนิกส์แบบ **"ปลูกก่อน แล้วเปิดให้ลูกค้าสั่งจองล่วงหน้าก่อนเก็บเกี่ยว"** ลูกค้าสั่งจองผักสดได้หลายชนิดในออเดอร์เดียว เลือกมารับเองที่ฟาร์มหรือให้จัดส่งฟรีในตัวเมือง ชำระเงินเมื่อได้รับสินค้าสดใหม่เท่านั้น
+
+---
+
+## 🏗️ สถาปัตยกรรมระบบ (Tech Stack)
+
+- **Frontend:** React 18 + Vite + Tailwind CSS + TypeScript (ออกแบบสไตล์ Mobile-first)
+- **Backend API:** Node.js + Express + Zod + TypeScript
+- **Database & Auth:** Supabase (PostgreSQL พร้อม Row Level Security (RLS) และ Google OAuth)
+- **Timezone:** Asia/Bangkok
+- **หน่วยสินค้า:** กิโลกรัม (ทศนิยมได้ ขั้นต่ำ 0.5 กก.)
+
+---
+
+## 📁 โครงสร้างโปรเจค (Project Structure)
+
+```
+WEBAPPHYDROFARM/
+├── backend/                  # RESTful API (Express + TypeScript)
+│   ├── src/
+│   │   ├── config/           # Supabase Service Role client
+│   │   ├── middlewares/      # JWT Auth, requireAdmin, RateLimiter
+│   │   ├── routes/           # Customer & Admin API Endpoints
+│   │   ├── services/         # Audit logging service
+│   │   └── index.ts          # Server entry point
+│   ├── .env.example
+│   └── package.json
+├── frontend/                 # Web Application (React + Vite + Tailwind)
+│   ├── src/
+│   │   ├── components/       # Layouts, Navbar, BottomNav, Badges
+│   │   ├── context/          # AuthContext (Google OAuth), CartContext
+│   │   ├── pages/
+│   │   │   ├── customer/     # หน้าลูกค้า: หน้าร้าน, ตะกร้า, จอง, ออเดอร์, โปรไฟล์
+│   │   │   └── admin/        # หลังบ้าน: แดชบอร์ด, รอบปลูก, ออเดอร์, แคตตาล็อก, ตั้งค่า
+│   │   ├── lib/              # API Client & Supabase Client
+│   │   └── types/            # TypeScript Interface definitions
+│   ├── .env.example
+│   └── package.json
+└── supabase/
+    └── migrations/           # SQL Migration Files
+        ├── 001_initial_schema.sql         # ตารางทั้งหมด (UUID, timestamptz)
+        ├── 002_functions_and_triggers.sql # create_order (Transaction), cancel_order, is_admin()
+        ├── 003_rls_policies.sql          # Row Level Security ทุกตาราง
+        └── 004_seed_data.sql             # ข้อมูลตัวอย่าง (อำเภอ, ผัก, รอบที่เปิดจอง)
+```
+
+---
+
+## 🚀 ขั้นตอนการติดตั้งและรันระบบ
+
+### 1. การตั้งค่า Supabase Database
+
+1. ไปที่ [Supabase Dashboard](https://supabase.com) และสร้างโปรเจคใหม่
+2. เปิดเมนู **SQL Editor** ใน Supabase แล้วรันไฟล์ Migration ตามลำดับ:
+   1. `supabase/migrations/001_initial_schema.sql`
+   2. `supabase/migrations/002_functions_and_triggers.sql`
+   3. `supabase/migrations/003_rls_policies.sql`
+   4. `supabase/migrations/004_seed_data.sql`
+3. เปิดใช้งาน **Google OAuth** ใน Supabase:
+   - ไปที่ `Authentication` → `Providers` → `Google` → เปิด Enabled
+   - กรอก Google Client ID และ Secret (จาก Google Cloud Console)
+   - เพิ่ม Redirect URL: `http://localhost:5173` ใน Site URL / Redirect URLs
+4. **กำหนดสิทธิ์แอดมิน:**
+   - เพิ่มอีเมล Google ของคุณในตาราง `admin_users` เพื่อให้สามารถเข้าหน้า `/admin` ได้:
+     ```sql
+     INSERT INTO admin_users (email) VALUES ('your-email@gmail.com');
+     ```
+
+---
+
+### 2. การตั้งค่าและรัน Backend
+
+1. เข้าโฟลเดอร์ `backend`:
+   ```bash
+   cd backend
+   ```
+2. คัดลอกไฟล์ Environment:
+   ```bash
+   cp .env.example .env
+   ```
+3. แก้ไขค่าใน `.env`:
+   ```env
+   PORT=4000
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+   CLIENT_ORIGIN=http://localhost:5173
+   ```
+4. ติดตั้งแพ็กเกจ (หากยังไม่ได้ติดตั้ง):
+   ```bash
+   npm install
+   ```
+5. รันเซิร์ฟเวอร์โหมด Development:
+   ```bash
+   npm run dev
+   ```
+   *(Backend จะเปิดทำงานที่ `http://localhost:4000`)*
+
+---
+
+### 3. การตั้งค่าและรัน Frontend
+
+1. เข้าโฟลเดอร์ `frontend`:
+   ```bash
+   cd frontend
+   ```
+2. คัดลอกไฟล์ Environment:
+   ```bash
+   cp .env.example .env
+   ```
+3. แก้ไขค่าใน `.env`:
+   ```env
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+   VITE_API_URL=http://localhost:4000/api
+   ```
+4. ติดตั้งแพ็กเกจ (หากยังไม่ได้ติดตั้ง):
+   ```bash
+   npm install
+   ```
+5. รันเซิร์ฟเวอร์ Vite:
+   ```bash
+   npm run dev
+   ```
+   *(เปิดเบราว์เซอร์เข้าใช้งานที่ `http://localhost:5173`)*
+
+---
+
+## 🧪 การทดสอบเกณฑ์ผ่านของเฟส 1 (Phase 1 Acceptance Criteria)
+
+| การทดสอบ | ผลการทำงาน |
+|---|---|
+| **1. ป้องกันการขายเกิน (Atomic Transaction)** | ฟังก์ชัน PostgreSQL `create_order` ทำการล็อกแถว `round_items` ด้วยคำสั่ง `SELECT ... FOR UPDATE` คำนวณสต็อกคงเหลือแบบเรียลไทม์ และ reject ทันทีหากยอดจองเกิน `bookable_qty_kg` |
+| **2. ความปลอดภัยและการเข้าถึงข้อมูล (RLS)** | มี Row Level Security ครบทุกตาราง ลูกค้าทั่วไปเข้าดูได้เฉพาะโปรไฟล์และออเดอร์ของตนเอง |
+| **3. สิทธิ์ผู้ดูแลระบบ (Admin Role)** | ฟังก์ชัน `is_admin()` ตรวจสอบอีเมลจากตาราง `admin_users` ทั้งใน PostgreSQL และ API Middleware (`requireAdmin`) ผู้ที่ไม่มีสิทธิ์จะไม่สามารถเข้า `/admin` หรือเรียก API แอดมินได้ |
+| **4. เงื่อนไขการจัดส่งและพื้นที่ส่งฟรี** | ตรวจสอบอำเภอ/ตำบลจากรายการ `districts` ที่เปิดใช้งานเท่านั้น หากยอดรวมไม่ถึงเกณฑ์ขั้นต่ำ (`delivery_min_total_kg`) ระบบจะบังคับให้เลือกได้เฉพาะรับเองที่ฟาร์ม |
+| **5. การบันทึกประวัติ (Audit Logs)** | ทุกการแก้ไขรอบการปลูก, ราคา, สต็อก, สถานะออเดอร์, การชำระเงิน, และการตั้งค่า จะถูกบันทึกลงตาราง `audit_logs` พร้อมข้อมูลเดิมและข้อมูลใหม่ |
+
+---
+
+## 📌 แผนการพัฒนาในเฟสถัดไป
+
+- **เฟส 2 (ปฏิบัติการจริง):** บันทึกผลผลิตจริงหลังเก็บเกี่ยว (`actual_qty_kg`), คำนวณรายการที่ขาด, ระบบบันทึกการซื้อผักจากเจ้าอื่นมาทดแทนต่อรายการ (`order_items.fulfillment_source`), คำนวณต้นทุนการทดแทน, และระบบจัดการออเดอร์ใหญ่/การเลื่อนวันเก็บเกี่ยว
+- **เฟส 3 (ปรับแต่ง):** โควตารายใหญ่, รายงานสรุปยอดขาย, และระบบแจ้งเตือนทางอีเมล
