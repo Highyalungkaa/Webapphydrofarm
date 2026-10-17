@@ -51,7 +51,7 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         .from('app_settings')
         .upsert({
           key,
-          value: JSON.stringify(value),
+          value,
           updated_at: new Date().toISOString(),
         });
     }

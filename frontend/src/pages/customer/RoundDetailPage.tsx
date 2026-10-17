@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { PlantingRound, RoundItem } from '../../types/index.js';
 import { useCart } from '../../context/CartContext.js';
 import { useAuth } from '../../context/AuthContext.js';
@@ -65,17 +66,7 @@ export const RoundDetailPage: React.FC = () => {
     return found ? found.qty_kg : 0;
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateDMY;
 
   if (loading) {
     return (
@@ -141,9 +132,9 @@ export const RoundDetailPage: React.FC = () => {
           <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100 space-y-1.5">
             <div className="flex items-center gap-2 font-semibold text-amber-950">
               <Clock className="w-4 h-4 text-amber-600" />
-              <span>ปิดรับการสั่งจอง</span>
+              <span>เริ่มเปิดรับจอง</span>
             </div>
-            <p className="text-slate-700 font-medium">{formatDate(round.booking_closes_at)}</p>
+            <p className="text-slate-700 font-medium">{formatDateTimeDMY(round.booking_opens_at)}</p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
@@ -173,10 +164,12 @@ export const RoundDetailPage: React.FC = () => {
           </p>
         )}
 
-        {round.status !== 'booking_open' && (
+        {(round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date()) && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm font-semibold flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <span>รอบการปลูกนี้ปิดรับการสั่งจองแล้ว ไม่สามารถสั่งจองผลผลิตได้ในขณะนี้</span>
+            <span>{round.status === 'booking_open' && new Date(round.booking_opens_at) > new Date()
+              ? `รอบนี้จะเริ่มเปิดรับจอง ${formatDateTimeDMY(round.booking_opens_at)}`
+              : 'รอบการปลูกนี้ปิดรับการสั่งจองแล้ว ไม่สามารถสั่งจองผลผลิตได้ในขณะนี้'}</span>
           </div>
         )}
       </div>
@@ -202,7 +195,7 @@ export const RoundDetailPage: React.FC = () => {
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
             const available = Number(item.available_qty_kg || 0);
-            const isBookingClosed = round.status !== 'booking_open';
+            const isBookingClosed = round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
             const isSoldOut = item.is_sold_out || available <= 0;
 
             return (

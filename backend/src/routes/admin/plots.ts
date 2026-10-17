@@ -95,6 +95,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     const { name, zone_name, slot_capacity, crop_id, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
+    if (crop_id) {
+      const { data: crop, error: cropError } = await db.from('crops').select('id, is_active').eq('id', crop_id).maybeSingle();
+      if (cropError || !crop || !crop.is_active) {
+        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งาน' });
+        return;
+      }
+    }
+
     // 1. Get farm_total_slots
     const { data: settingRow } = await db
       .from('app_settings')
@@ -201,6 +209,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     }
 
     const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
+
+    if (crop_id && crop_id !== oldPlot?.crop_id) {
+      const { data: crop, error: cropError } = await db.from('crops').select('id, is_active').eq('id', crop_id).maybeSingle();
+      if (cropError || !crop || !crop.is_active) {
+        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งาน' });
+        return;
+      }
+    }
 
     // 4. Update plot
     const { data, error } = await db

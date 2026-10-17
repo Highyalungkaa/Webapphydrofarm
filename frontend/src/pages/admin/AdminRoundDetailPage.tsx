@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { PlantingRound, Plot } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -19,6 +20,8 @@ import {
   TrendingUp,
   LayoutGrid,
   BookmarkCheck,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 
 interface StepDef {
@@ -121,10 +124,16 @@ export const AdminRoundDetailPage: React.FC = () => {
   const [updatingStep, setUpdatingStep] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [itemDaysMap, setItemDaysMap] = useState<Record<string, number>>({});
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (id) loadRound();
   }, [id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const loadRound = async () => {
     try {
@@ -186,6 +195,10 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const handleConfirmStepUpdate = async () => {
     if (!round || !inputDate) return;
+    if (activeStepTab === 4 && !isBookingActuallyOpen) {
+      setError('กรุณาเปิดรับจองที่หน้า “การเปิดสั่งจองล่วงหน้า” และรอจนถึงเวลาเปิดก่อน จึงจะยืนยันไปสถานะถัดไปได้');
+      return;
+    }
 
     try {
       setUpdatingStep(true);
@@ -194,7 +207,7 @@ export const AdminRoundDetailPage: React.FC = () => {
       
       let formattedDate = inputDate;
       if (activeStepTab === 4 && inputDate.length === 10) {
-        formattedDate = `${inputDate}T08:00:00`;
+        formattedDate = `${inputDate}T08:00:00+07:00`;
       }
 
       const maxDays = Object.values(itemDaysMap).length > 0
@@ -227,7 +240,11 @@ export const AdminRoundDetailPage: React.FC = () => {
       setActiveStepTab(nextStep);
       initDateForStep(nextStep, updated);
 
-      setActionSuccess(`อัปเดต "${STEPS[activeStepTab - 1].title}" เรียบร้อยแล้ว`);
+      setActionSuccess(
+        activeStepTab === 4 && new Date(formattedDate) > new Date()
+          ? `ตั้งเวลาเปิดจองของ "${round.name}" แล้ว ลูกค้าจะเริ่มจองได้เมื่อถึงวันที่กำหนด`
+          : `อัปเดต "${STEPS[activeStepTab - 1].title}" เรียบร้อยแล้ว`
+      );
       await loadRound();
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาดในการอัปเดตสเต็ป');
@@ -256,6 +273,11 @@ export const AdminRoundDetailPage: React.FC = () => {
   if (!round) return null;
 
   const currentStep = round.current_step || 1;
+  const isRoundCompleted = round.status === 'completed' || !!round.completed_date;
+  const isBookingActuallyOpen = round.status === 'booking_open'
+    && !!round.booking_opens_at
+    && new Date(round.booking_opens_at).getTime() <= clockNow
+    && !round.booking_closes_at;
   const growingDays = round.growing_days || 45;
   const calculatedHarvestDate = inputDate && activeStepTab === 3 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
@@ -325,8 +347,8 @@ export const AdminRoundDetailPage: React.FC = () => {
           />
 
           {STEPS.map((step) => {
-            const isCompleted = step.number < currentStep;
-            const isCurrent = step.number === currentStep;
+            const isCompleted = step.number < currentStep || (isRoundCompleted && step.number === 7);
+            const isCurrent = step.number === currentStep && !isRoundCompleted;
             const isSelected = step.number === activeStepTab;
             const recordedDate = (round as any)[step.field];
 
@@ -334,9 +356,10 @@ export const AdminRoundDetailPage: React.FC = () => {
               <button
                 key={step.number}
                 type="button"
+                disabled={step.number > currentStep}
                 onClick={() => handleSelectStepTab(step.number)}
                 className={`relative z-10 flex flex-col items-center group transition-transform ${
-                  isSelected ? 'scale-105' : 'hover:scale-102'
+                  step.number > currentStep ? 'cursor-not-allowed opacity-50' : isSelected ? 'scale-105' : 'hover:scale-102'
                 }`}
               >
                 {/* Step Circle Icon */}
@@ -366,7 +389,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     {step.title}
                   </span>
                   <span className="block text-[10px] text-slate-400 font-medium">
-                    {recordedDate ? recordedDate : step.subtitle}
+                    {recordedDate ? formatDateDMY(String(recordedDate)) : step.subtitle}
                   </span>
                 </div>
               </button>
@@ -385,13 +408,13 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">
                   ขั้นตอนที่ {activeStepTab} จาก 7
                 </span>
-                {activeStepTab === currentStep && (
+                {activeStepTab === currentStep && !isRoundCompleted && (
                   <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                     กำลังดำเนินการ
                   </span>
                 )}
-                {activeStepTab < currentStep && (
+                {(activeStepTab < currentStep || (isRoundCompleted && activeStepTab === 7)) && (
                   <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     ยืนยันแล้ว
@@ -423,7 +446,13 @@ export const AdminRoundDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
-            <div>
+            {activeStepTab === 4 ? (
+              <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${isBookingActuallyOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                {isBookingActuallyOpen
+                  ? `รับจองเปิดแล้วตั้งแต่ ${formatDateTimeDMY(round.booking_opens_at)} ยืนยันเพื่อไปยังขั้นตอนถัดไปได้`
+                  : 'ขั้นตอนนี้ต้องเปิดรับจองจากหน้า “การเปิดสั่งจองล่วงหน้า” ก่อน ปุ่มยืนยันสถานะถัดไปจะแสดงเมื่อถึงเวลาเปิดจริง'}
+              </div>
+            ) : <div>
               <label className="font-bold text-slate-800 block text-xs sm:text-sm mb-1.5">
                 เลือก{STEPS[activeStepTab - 1].title.replace(/^\d+\.\s*/, '')} <span className="text-rose-500">*</span>
               </label>
@@ -439,12 +468,11 @@ export const AdminRoundDetailPage: React.FC = () => {
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
                 {activeStepTab === 2 && '🧪 ระบุวันที่เริ่มให้ปุ๋ย AB สูตรอนุบาล (ปกติ 5-7 วันหลังปักเม็ด)'}
                 {activeStepTab === 3 && '🌿 ระบุวันที่ย้ายต้นกล้าลงรางปลูกจริง (ระบบจะคำนวณวันเก็บเกี่ยวให้)'}
-                {activeStepTab === 4 && '🛒 ระบุวันเปิดสั่งจองล่วงหน้าสำหรับลูกค้า'}
                 {activeStepTab === 5 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
                 {activeStepTab === 6 && '🏷️ ระบุวันที่ผลผลิตในรอบนี้ถูกจองหรือขายหมดแล้ว'}
                 {activeStepTab === 7 && '🏁 ระบุวันที่จัดส่งมอบเสร็จสิ้น และปิดรอบการปลูก'}
               </p>
-            </div>
+            </div>}
 
             {/* Special Feature for Step 3: Auto Harvest Calculation per Vegetable */}
             {activeStepTab === 3 && (
@@ -502,9 +530,9 @@ export const AdminRoundDetailPage: React.FC = () => {
                           <div className="bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200/60 flex items-center gap-2 text-xs text-sky-900 self-start sm:self-auto">
                             <Calendar className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
                             <span>
-                              วันปลูกจริง ({inputDate || 'ยังไม่เลือก'}) + {itemDays} วัน ➔{' '}
+                              วันปลูกจริง ({inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}) + {itemDays} วัน ➔{' '}
                               <strong className="text-sky-950 font-black underline">
-                                พร้อมเก็บและขาย: {itemHarvestDate}
+                                พร้อมเก็บและขาย: {formatDateDMY(itemHarvestDate)}
                               </strong>
                             </span>
                           </div>
@@ -513,8 +541,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                     })
                   ) : (
                     <div className="p-3 bg-white rounded-xl border border-sky-100 text-xs text-sky-900">
-                      วันปลูกจริง ({inputDate || 'ยังไม่เลือก'}) + {growingDays} วัน ➔{' '}
-                      <strong className="font-bold underline">พร้อมเก็บและขาย: {calculatedHarvestDate}</strong>
+                      วันปลูกจริง ({inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}) + {growingDays} วัน ➔{' '}
+                      <strong className="font-bold underline">พร้อมเก็บและขาย: {formatDateDMY(calculatedHarvestDate)}</strong>
                     </div>
                   )}
                 </div>
@@ -566,7 +594,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                 {cropName}
                               </span>
                               <span className="text-[11px] text-slate-500">
-                                ระยะปลูก {itemDays} วัน {round.transplant_date ? `(วันปลูกจริง: ${round.transplant_date})` : ''}
+                                ระยะปลูก {itemDays} วัน {round.transplant_date ? `(วันปลูกจริง: ${formatDateDMY(round.transplant_date)})` : ''}
                               </span>
                             </div>
                           </div>
@@ -577,7 +605,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                               <span>
                                 พร้อมเก็บและขาย:{' '}
                                 <strong className="text-emerald-950 font-black underline">
-                                  {itemHarvestDate}
+                                  {formatDateDMY(itemHarvestDate)}
                                 </strong>
                               </span>
                             </div>
@@ -607,7 +635,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     <div className="p-3 bg-white rounded-xl border border-amber-100 text-xs text-amber-900">
                       พร้อมเก็บและขายโดยประมาณ:{' '}
                       <strong className="font-bold underline">
-                        {round.expected_harvest_date || 'ยังไม่มีข้อมูล'}
+                        {round.expected_harvest_date ? formatDateDMY(round.expected_harvest_date) : 'ยังไม่มีข้อมูล'}
                       </strong>
                     </div>
                   )}
@@ -624,7 +652,13 @@ export const AdminRoundDetailPage: React.FC = () => {
 
             {/* Action button to confirm step */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <button
+              {isRoundCompleted ? (
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-purple-200 bg-purple-50 px-5 py-3 text-xs font-bold text-purple-800 sm:text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-purple-600" />
+                  <span>สิ้นสุดรอบการปลูกแล้ว{round.completed_date ? ` เมื่อ ${formatDateDMY(round.completed_date)}` : ''}</span>
+                </div>
+              ) : <>
+              {(activeStepTab !== 4 || isBookingActuallyOpen) && <button
                 type="button"
                 onClick={handleConfirmStepUpdate}
                 disabled={updatingStep || !inputDate}
@@ -641,31 +675,33 @@ export const AdminRoundDetailPage: React.FC = () => {
                     : activeStepTab === 3
                     ? 'กดยืนยันวันปลูกจริง ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)'
                     : activeStepTab === 4
-                    ? 'กดยืนยันบันทึกวันเปิดจอง ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)'
+                    ? 'ยืนยันเปิดจองแล้ว ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)'
                     : activeStepTab === 5
                     ? 'กดยืนยันวันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)'
                     : activeStepTab === 6
                     ? 'กดยืนยันวันที่ขายหมด ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)'
                     : 'กดยืนยันสถานะสิ้นสุดรอบการปลูก'}
                 </span>
-              </button>
+              </button>}
 
               {activeStepTab === 4 && (
-                (round.status === 'booking_closed' || round.status === 'harvested' || round.status === 'completed') ? (
-                  <span className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-slate-100 text-slate-500 font-bold text-xs sm:text-sm border border-slate-200">
-                    <CheckCircle2 className="w-4 h-4 text-slate-400" />
-                    <span>ปิดรับการจองแล้ว</span>
-                  </span>
-                ) : (
+                !isBookingActuallyOpen ? (
                   <Link
                     to="/admin/bookings"
                     className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors"
                   >
                     <BookmarkCheck className="w-4 h-4" />
-                    <span>ไปจัดการเปิดรับจองที่หน้า "การเปิดสั่งจองล่วงหน้า" →</span>
+                    <span>ไปจัดการเปิดรับจองที่หน้า “การเปิดสั่งจองล่วงหน้า”</span>
                   </Link>
-                )
+                ) : <Link
+                  to="/admin/bookings"
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm border border-slate-200 transition-colors"
+                >
+                  <BookmarkCheck className="w-4 h-4" />
+                  <span>จัดการการจอง</span>
+                </Link>
               )}
+              </>}
             </div>
           </div>
 
@@ -708,19 +744,6 @@ export const AdminRoundDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Next Action Suggestion */}
-            {activeStepTab === 4 && (
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs text-emerald-800 flex items-center justify-between gap-2">
-                <span>เมื่อถึงกำหนดเปิดจองแล้ว สามารถกดไปสเต็ป 5 ได้ทันที:</span>
-                <button
-                  type="button"
-                  onClick={() => handleSelectStepTab(5)}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold whitespace-nowrap text-[11px]"
-                >
-                  ไปวันที่พร้อมเก็บและขาย →
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -775,18 +798,62 @@ export const AdminRoundDetailPage: React.FC = () => {
                         <div className="text-[10px] text-slate-400 mt-0.5">
                           <span>ระยะปลูก: {item.growing_days || item.crops?.growing_days || 45} วัน</span>
                           {(() => {
-                            const cropPlots = activePlots.filter((p) => p.crop_id === item.crop_id);
-                            const cropRate = item.crops?.slots_per_kg ? Number(item.crops.slots_per_kg) : 4.0;
-                            let remainingSlots = Math.round(bookable * cropRate);
+                            const itemPlots: Plot[] = (item.plots && item.plots.length > 0)
+                              ? item.plots
+                              : (item.plot_ids && item.plot_ids.length > 0)
+                              ? activePlots.filter((p) => item.plot_ids?.includes(p.id))
+                              : activePlots.filter((p) => p.crop_id === item.crop_id);
 
-                            return cropPlots.length > 0 ? (
-                              <div className="w-full mt-2 space-y-1.5 pt-2 border-t border-slate-100">
-                                <span className="text-[10px] font-bold text-slate-600 flex items-center gap-1">
-                                  <LayoutGrid className="w-3 h-3 text-emerald-600" />
-                                  <span>หลอดแสดงพื้นที่ที่ใช้ไปในแต่ละแปลง ({cropPlots.length} แปลง):</span>
-                                </span>
+                            const cropRate = item.crops?.slots_per_kg ? Number(item.crops.slots_per_kg) : 4.0;
+                            const targetSlots = Math.round(bookable * cropRate);
+                            let remainingSlots = targetSlots;
+                            const totalAssignedSlots = itemPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
+
+                            if (itemPlots.length === 0) {
+                              return (
+                                <div className="w-full mt-2 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-[11px] text-amber-800 space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold flex items-center gap-1 text-amber-900">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>ยังไม่ได้ระบุแปลงปลูกสำหรับรายการนี้</span>
+                                    </span>
+                                    <Link to="/admin/plots" className="text-amber-950 font-bold underline hover:text-amber-800">
+                                      จัดการแปลง
+                                    </Link>
+                                  </div>
+                                  <p className="text-[10px] text-amber-700">
+                                    เป้าหมาย {bookable} กก. ต้องใช้พื้นที่ประมาณ {targetSlots.toLocaleString()} ช่องปลูก
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="w-full mt-2 space-y-2 pt-2 border-t border-slate-100">
+                                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                                    <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>แปลงปลูกที่ใช้ ({itemPlots.length} แปลง รวม {totalAssignedSlots.toLocaleString()} ช่อง):</span>
+                                  </span>
+                                  {targetSlots > totalAssignedSlots ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                      <AlertCircle className="w-3 h-3 text-rose-600" />
+                                      <span>พื้นที่ไม่พอ ขาดอีก {(targetSlots - totalAssignedSlots).toLocaleString()} ช่อง</span>
+                                    </span>
+                                  ) : totalAssignedSlots > targetSlots ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                                      <Info className="w-3 h-3 text-sky-600" />
+                                      <span>ความจุเหลือ {(totalAssignedSlots - targetSlots).toLocaleString()} ช่อง</span>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      <span>ความจุพอดี</span>
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {cropPlots.map((plot) => {
+                                  {itemPlots.map((plot) => {
                                     const cap = Number(plot.slot_capacity || 0);
                                     const usedInPlot = Math.min(cap, Math.max(0, remainingSlots));
                                     remainingSlots -= usedInPlot;
@@ -834,7 +901,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                   })}
                                 </div>
                               </div>
-                            ) : null;
+                            );
                           })()}
                         </div>
                       </div>

@@ -2,10 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { CartProvider } from './context/CartContext.js';
+import { EquipmentCartProvider } from './context/EquipmentCartContext.js';
 
 // Layouts
 import { CustomerLayout } from './components/layout/CustomerLayout.js';
 import { AdminLayout } from './components/layout/AdminLayout.js';
+import { EquipmentAdminLayout } from './components/layout/EquipmentAdminLayout.js';
 
 // Customer Pages
 import { HomePage } from './pages/customer/HomePage.js';
@@ -13,8 +15,11 @@ import { RoundDetailPage } from './pages/customer/RoundDetailPage.js';
 import { CheckoutPage } from './pages/customer/CheckoutPage.js';
 import { OrdersPage } from './pages/customer/OrdersPage.js';
 import { OrderDetailPage } from './pages/customer/OrderDetailPage.js';
+import { EquipmentOrderDetailPage } from './pages/customer/EquipmentOrderDetailPage.js';
 import { ProfilePage } from './pages/customer/ProfilePage.js';
 import { LoginPage } from './pages/customer/LoginPage.js';
+import { EquipmentShopPage } from './pages/customer/EquipmentShopPage.js';
+import { EquipmentCheckoutPage } from './pages/customer/EquipmentCheckoutPage.js';
 
 // Admin Pages
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage.js';
@@ -31,6 +36,12 @@ import { AdminCustomersPage } from './pages/admin/AdminCustomersPage.js';
 import { AdminFarmPage } from './pages/admin/AdminFarmPage.js';
 import { AdminPlotsPage } from './pages/admin/AdminPlotsPage.js';
 import { AdminBookingsPage } from './pages/admin/AdminBookingsPage.js';
+import { AdminReportsPage } from './pages/admin/AdminReportsPage.js';
+import { AdminEquipmentPage } from './pages/admin/AdminEquipmentPage.js';
+import { AdminEquipmentDashboardPage } from './pages/admin/AdminEquipmentDashboardPage.js';
+import { AdminEquipmentOrdersPage } from './pages/admin/AdminEquipmentOrdersPage.js';
+import { AdminEquipmentReportsPage } from './pages/admin/AdminEquipmentReportsPage.js';
+import { AdminEquipmentShippingPage } from './pages/admin/AdminEquipmentShippingPage.js';
 
 // Route Guard for authenticated customers
 const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -50,20 +61,32 @@ const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ child
 
 export const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <CartProvider>
+        <EquipmentCartProvider>
           <Routes>
             {/* Customer Routes */}
             <Route element={<CustomerLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/rounds/:id" element={<RoundDetailPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/equipment" element={<EquipmentShopPage />} />
+              <Route path="/equipment/:id" element={<EquipmentShopPage />} />
+              <Route path="/equipment/checkout" element={<EquipmentCheckoutPage />} />
               <Route
                 path="/orders"
                 element={
                   <ProtectedCustomerRoute>
                     <OrdersPage />
+                  </ProtectedCustomerRoute>
+                }
+              />
+              <Route
+                path="/orders/equipment/:id"
+                element={
+                  <ProtectedCustomerRoute>
+                    <EquipmentOrderDetailPage />
                   </ProtectedCustomerRoute>
                 }
               />
@@ -102,11 +125,22 @@ export const App: React.FC = () => {
               <Route path="settings" element={<AdminSettingsPage />} />
               <Route path="admins" element={<AdminAdminsPage />} />
               <Route path="audit" element={<AdminAuditPage />} />
+              <Route path="reports" element={<AdminReportsPage />} />
+            </Route>
+
+            {/* Dedicated admin area for the equipment shop */}
+            <Route path="/admin/equipment" element={<EquipmentAdminLayout />}>
+              <Route index element={<AdminEquipmentDashboardPage />} />
+              <Route path="products" element={<AdminEquipmentPage />} />
+              <Route path="orders" element={<AdminEquipmentOrdersPage />} />
+              <Route path="reports" element={<AdminEquipmentReportsPage />} />
+              <Route path="settings/shipping" element={<AdminEquipmentShippingPage />} />
             </Route>
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+        </EquipmentCartProvider>
         </CartProvider>
       </AuthProvider>
     </BrowserRouter>

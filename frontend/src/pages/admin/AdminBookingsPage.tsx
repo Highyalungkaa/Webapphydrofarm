@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { PlantingRound } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -35,10 +36,20 @@ interface EditableCropItem {
   booked_qty_kg: number;
 }
 
+const formatBangkokDateTimeInput = (value: Date | string) => {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(date).replace(' ', 'T');
+};
+
+const parseBangkokDateTime = (value: string) => new Date(`${value}:00+07:00`);
+
 export const AdminBookingsPage: React.FC = () => {
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterTab, setFilterTab] = useState<'all' | 'open' | 'closed'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'open'>('all');
 
   // Modal State for Opening / Editing Booking Window
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,7 +57,6 @@ export const AdminBookingsPage: React.FC = () => {
   const [selectedRoundId, setSelectedRoundId] = useState<string>('');
   const [roundName, setRoundName] = useState('');
   const [bookingOpensAt, setBookingOpensAt] = useState('');
-  const [bookingClosesAt, setBookingClosesAt] = useState('');
   const [fulfillmentDate, setFulfillmentDate] = useState('');
   const [pickupStartTime, setPickupStartTime] = useState('09:00');
   const [pickupEndTime, setPickupEndTime] = useState('17:00');
@@ -60,6 +70,8 @@ export const AdminBookingsPage: React.FC = () => {
 
   // Close Booking Confirmation Modal
   const [closingRound, setClosingRound] = useState<PlantingRound | null>(null);
+  const [closingAt, setClosingAt] = useState('');
+  const [closingError, setClosingError] = useState<string | null>(null);
   const [closingSaving, setClosingSaving] = useState(false);
 
   useEffect(() => {
@@ -97,9 +109,6 @@ export const AdminBookingsPage: React.FC = () => {
     const opensAtDefault = new Date(today);
     opensAtDefault.setHours(8, 0, 0, 0);
 
-    const closesAtDefault = new Date(today.getTime() + 7 * 86400000);
-    closesAtDefault.setHours(18, 0, 0, 0);
-
     const activePlantingRounds = rounds.filter(
       (r) => r.status !== 'completed' && r.status !== 'cancelled'
     );
@@ -112,8 +121,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSelectedRoundId(targetRound.id);
       setRoundName(targetRound.name || '');
       setFulfillmentDate(targetRound.expected_harvest_date || targetRound.fulfillment_date || '');
-      setBookingOpensAt(targetRound.booking_opens_at ? targetRound.booking_opens_at.slice(0, 16) : opensAtDefault.toISOString().slice(0, 16));
-      setBookingClosesAt(targetRound.booking_closes_at ? targetRound.booking_closes_at.slice(0, 16) : closesAtDefault.toISOString().slice(0, 16));
+      setBookingOpensAt(targetRound.booking_opens_at ? formatBangkokDateTimeInput(targetRound.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
       setPickupStartTime(targetRound.pickup_start_time ? targetRound.pickup_start_time.slice(0, 5) : '09:00');
       setPickupEndTime(targetRound.pickup_end_time ? targetRound.pickup_end_time.slice(0, 5) : '17:00');
       setDeliveryStartTime(targetRound.delivery_start_time ? targetRound.delivery_start_time.slice(0, 5) : '13:00');
@@ -123,8 +131,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSelectedRoundId('');
       setRoundName('');
       setFulfillmentDate('');
-      setBookingOpensAt(opensAtDefault.toISOString().slice(0, 16));
-      setBookingClosesAt(closesAtDefault.toISOString().slice(0, 16));
+      setBookingOpensAt(formatBangkokDateTimeInput(opensAtDefault));
       setEditableItems([]);
     }
 
@@ -141,11 +148,7 @@ export const AdminBookingsPage: React.FC = () => {
     const today = new Date();
     const opensAtDefault = new Date(today);
     opensAtDefault.setHours(8, 0, 0, 0);
-    const closesAtDefault = new Date(today.getTime() + 7 * 86400000);
-    closesAtDefault.setHours(18, 0, 0, 0);
-
-    setBookingOpensAt(round.booking_opens_at ? round.booking_opens_at.slice(0, 16) : opensAtDefault.toISOString().slice(0, 16));
-    setBookingClosesAt(round.booking_closes_at ? round.booking_closes_at.slice(0, 16) : closesAtDefault.toISOString().slice(0, 16));
+    setBookingOpensAt(round.booking_opens_at ? formatBangkokDateTimeInput(round.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
     setPickupStartTime(round.pickup_start_time ? round.pickup_start_time.slice(0, 5) : '09:00');
     setPickupEndTime(round.pickup_end_time ? round.pickup_end_time.slice(0, 5) : '17:00');
     setDeliveryStartTime(round.delivery_start_time ? round.delivery_start_time.slice(0, 5) : '13:00');
@@ -164,12 +167,7 @@ export const AdminBookingsPage: React.FC = () => {
       if (chosen.expected_harvest_date || chosen.fulfillment_date) {
         setFulfillmentDate(chosen.expected_harvest_date || chosen.fulfillment_date);
       }
-      if (chosen.booking_opens_at) {
-        setBookingOpensAt(chosen.booking_opens_at.slice(0, 16));
-      }
-      if (chosen.booking_closes_at) {
-        setBookingClosesAt(chosen.booking_closes_at.slice(0, 16));
-      }
+      if (chosen.booking_opens_at) setBookingOpensAt(formatBangkokDateTimeInput(chosen.booking_opens_at));
       setEditableItems(mapItemsToEditable(chosen));
     } else {
       setEditableItems([]);
@@ -192,13 +190,8 @@ export const AdminBookingsPage: React.FC = () => {
       return;
     }
 
-    if (!bookingOpensAt || !bookingClosesAt) {
-      setModalError('กรุณาระบุวัน-เวลาเปิดจอง และวัน-เวลาปิดจอง');
-      return;
-    }
-
-    if (new Date(bookingClosesAt) <= new Date(bookingOpensAt)) {
-      setModalError('วัน-เวลาปิดจอง ต้องอยู่หลังวัน-เวลาเปิดจอง');
+    if (!bookingOpensAt || Number.isNaN(parseBangkokDateTime(bookingOpensAt).getTime())) {
+      setModalError('กรุณาระบุวัน-เวลาเปิดจองให้ถูกต้อง');
       return;
     }
 
@@ -206,8 +199,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSaving(true);
       const payload: Record<string, any> = {
         name: roundName,
-        booking_opens_at: new Date(bookingOpensAt).toISOString(),
-        booking_closes_at: new Date(bookingClosesAt).toISOString(),
+        booking_opens_at: parseBangkokDateTime(bookingOpensAt).toISOString(),
         fulfillment_date: fulfillmentDate,
         pickup_start_time: pickupStartTime ? pickupStartTime + ':00' : '09:00:00',
         pickup_end_time: pickupEndTime ? pickupEndTime + ':00' : '17:00:00',
@@ -222,17 +214,15 @@ export const AdminBookingsPage: React.FC = () => {
 
       if (openImmediately) {
         payload.status = 'booking_open';
-        // If bookingOpensAt was set to a future date, set to now so customers can see it immediately
-        if (new Date(bookingOpensAt) > new Date()) {
-          payload.booking_opens_at = new Date().toISOString();
-        }
       }
 
       await api.put(`/admin/rounds/${selectedRoundId}/booking`, payload);
       setIsModalOpen(false);
 
       if (openImmediately) {
-        setActionSuccess('เปิดรอบสั่งจองล่วงหน้าสำเร็จ! ลูกค้าสามารถสั่งจองได้แล้ว');
+        setActionSuccess(parseBangkokDateTime(bookingOpensAt) > new Date()
+          ? `บันทึกรอบแล้ว ลูกค้าจะเริ่มจองได้ตั้งแต่ ${formatDateTimeDMY(parseBangkokDateTime(bookingOpensAt).toISOString())}`
+          : 'เปิดรอบสั่งจองล่วงหน้าสำเร็จ! ลูกค้าสามารถสั่งจองได้แล้ว');
       } else {
         setActionSuccess('บันทึกข้อมูลและกำหนดการรอบจองเรียบร้อยแล้ว (ยังไม่เปิดรับจอง)');
       }
@@ -247,15 +237,25 @@ export const AdminBookingsPage: React.FC = () => {
 
   const handleCloseBookingConfirm = async () => {
     if (!closingRound) return;
+    const closeDate = parseBangkokDateTime(closingAt);
+    if (!closingAt || Number.isNaN(closeDate.getTime())) {
+      setClosingError('กรุณาระบุวัน-เวลาปิดจองให้ถูกต้อง');
+      return;
+    }
+    if (closeDate.getTime() > Date.now()) {
+      setClosingError('วัน-เวลาปิดจองต้องไม่เป็นเวลาในอนาคต');
+      return;
+    }
 
     try {
       setClosingSaving(true);
-      await api.post(`/admin/rounds/${closingRound.id}/close-booking`, {});
+      setClosingError(null);
+      await api.post(`/admin/rounds/${closingRound.id}/close-booking`, { booking_closes_at: closeDate.toISOString() });
       setClosingRound(null);
       setActionSuccess(`ปิดการจองรอบ "${closingRound.name}" เรียบร้อยแล้ว`);
       await loadRounds();
     } catch (err: any) {
-      alert(err.message || 'ไม่สามารถปิดการจองได้');
+      setClosingError(err.message || 'ไม่สามารถปิดการจองได้');
     } finally {
       setClosingSaving(false);
     }
@@ -266,7 +266,8 @@ export const AdminBookingsPage: React.FC = () => {
 
   // Filter only rounds that have an active or created booking window
   const bookingRounds = rounds.filter((r) => {
-    return Boolean(r.is_booking_created || r.status === 'booking_open' || r.status === 'booking_closed');
+    const isClosed = Boolean(r.booking_closes_at) || ['booking_closed', 'harvested', 'completed', 'cancelled'].includes(r.status);
+    return !isClosed && Boolean(r.is_booking_created || r.status === 'booking_open');
   });
 
   // Active planting rounds available to be picked for booking (exclude completed / finished rounds)
@@ -277,7 +278,6 @@ export const AdminBookingsPage: React.FC = () => {
   // Filtered rounds
   const filteredRounds = bookingRounds.filter((r) => {
     if (filterTab === 'open') return r.status === 'booking_open';
-    if (filterTab === 'closed') return r.status === 'booking_closed' || r.status === 'harvested' || r.status === 'completed';
     return true;
   });
 
@@ -335,16 +335,9 @@ export const AdminBookingsPage: React.FC = () => {
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>กำลังเปิดรับจอง ({bookingRounds.filter((r) => r.status === 'booking_open').length})</span>
         </button>
-        <button
-          onClick={() => setFilterTab('closed')}
-          className={`px-3 py-1.5 rounded-xl transition-colors ${
-            filterTab === 'closed'
-              ? 'bg-slate-700 text-white'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          ปิดรับจองแล้ว ({bookingRounds.filter((r) => r.status === 'booking_closed' || r.status === 'harvested' || r.status === 'completed').length})
-        </button>
+        <Link to="/admin/rounds/history" className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900">
+          <Clock className="h-3.5 w-3.5" /> ดูประวัติรอบที่ปิดจองแล้ว <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
       {/* Rounds List Cards */}
@@ -400,7 +393,11 @@ export const AdminBookingsPage: React.FC = () => {
                           <span>แก้ไขข้อมูล</span>
                         </button>
                         <button
-                          onClick={() => setClosingRound(round)}
+                          onClick={() => {
+                            setClosingRound(round);
+                            setClosingAt(formatBangkokDateTimeInput(new Date()));
+                            setClosingError(null);
+                          }}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors"
                           title="กดปิดการจองรอบนี้ทันที"
                         >
@@ -452,20 +449,21 @@ export const AdminBookingsPage: React.FC = () => {
                       วันเปิดรอบจอง
                     </span>
                     <p className="font-bold text-slate-900">
-                      {round.booking_opens_at ? new Date(round.booking_opens_at).toLocaleString('th-TH') : '-'}
+                      {formatDateTimeDMY(round.booking_opens_at)}
                     </p>
                   </div>
 
-                  {/* Booking Closes At */}
-                  <div className="p-3 rounded-2xl bg-white border border-slate-200/80 space-y-1">
-                    <span className="text-slate-400 font-medium flex items-center gap-1 text-[11px]">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" />
-                      วันปิดจอง
-                    </span>
-                    <p className="font-bold text-slate-900">
-                      {round.booking_closes_at ? new Date(round.booking_closes_at).toLocaleString('th-TH') : '-'}
-                    </p>
-                  </div>
+                  {round.booking_closes_at && (
+                    <div className="p-3 rounded-2xl bg-white border border-slate-200/80 space-y-1">
+                      <span className="text-slate-400 font-medium flex items-center gap-1 text-[11px]">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        วันปิดจอง
+                      </span>
+                      <p className="font-bold text-slate-900">
+                        {formatDateTimeDMY(round.booking_closes_at)}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Fulfillment Date */}
                   <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-1">
@@ -474,7 +472,7 @@ export const AdminBookingsPage: React.FC = () => {
                       วันเก็บเกี่ยว & ส่งมอบผักสด
                     </span>
                     <p className="font-bold text-emerald-950">
-                      {round.fulfillment_date || round.expected_harvest_date || '-'}
+                      {formatDateDMY(round.fulfillment_date || round.expected_harvest_date)}
                     </p>
                   </div>
                 </div>
@@ -673,7 +671,7 @@ export const AdminBookingsPage: React.FC = () => {
                     ) : (
                       activePlantingRounds.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} (เก็บเกี่ยว {r.expected_harvest_date || r.fulfillment_date || 'ตามกำหนด'} • {r.round_items?.length || 0} ชนิดผัก)
+                          {r.name} (เก็บเกี่ยว {formatDateDMY(r.expected_harvest_date || r.fulfillment_date)} • {r.round_items?.length || 0} ชนิดผัก)
                         </option>
                       ))
                     )}
@@ -694,9 +692,8 @@ export const AdminBookingsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 2. Booking Opens At & Closes At */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              {/* 2. Booking Opens At */}
+              <div>
                   <label className="font-bold text-slate-800 block mb-1">
                     วัน-เวลาเปิดรอบจอง <span className="text-rose-500">*</span>
                   </label>
@@ -707,22 +704,7 @@ export const AdminBookingsPage: React.FC = () => {
                     required
                     className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">เวลาที่ระบบจะเริ่มแสดงให้ลูกค้ากดจองได้</p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-800 block mb-1">
-                    วัน-เวลาปิดจอง <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={bookingClosesAt}
-                    onChange={(e) => setBookingClosesAt(e.target.value)}
-                    required
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">เวลาสิ้นสุดการสั่งจองก่อนเริ่มเก็บเกี่ยว</p>
-                </div>
+                  <p className="text-[10px] text-slate-400 mt-1">ลูกค้าจะเริ่มเห็นรอบและสั่งจองได้ตั้งแต่เวลานี้</p>
               </div>
 
               {/* 3. Fulfillment Date & Hours */}
@@ -914,10 +896,22 @@ export const AdminBookingsPage: React.FC = () => {
               คุณต้องการปิดรับจองสำหรับรอบ <strong>"{closingRound.name}"</strong> ใช่หรือไม่?
               เมื่อปิดแล้ว ลูกค้าจะไม่สามารถสั่งจองเพิ่มในรอบนี้ได้อีก
             </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">วัน-เวลาปิดจอง</label>
+              <input
+                type="datetime-local"
+                value={closingAt}
+                max={formatBangkokDateTimeInput(new Date())}
+                onChange={(e) => { setClosingAt(e.target.value); setClosingError(null); }}
+                className="w-full p-2.5 rounded-xl border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">ตั้งต้นเป็นเวลาปัจจุบัน แก้เป็นเวลาในอดีตได้</p>
+              {closingError && <p className="text-xs text-rose-600 mt-2">{closingError}</p>}
+            </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setClosingRound(null)}
+                onClick={() => { setClosingRound(null); setClosingError(null); }}
                 className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
               >
                 ยกเลิก

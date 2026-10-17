@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   Sprout,
   BookmarkCheck,
+  BarChart3,
 } from 'lucide-react';
 
 export const AdminLayout: React.FC = () => {
@@ -64,19 +65,19 @@ export const AdminLayout: React.FC = () => {
   }
 
   const navItems = [
-    { to: '/admin', label: 'ภาพรวมระบบ', icon: LayoutDashboard, end: true },
-    { to: '/admin/plots', label: 'จัดการแปลงปลูก', icon: LayoutGrid },
-    { to: '/admin/rounds', label: 'รอบการปลูก', icon: CalendarDays },
-    { to: '/admin/rounds/history', label: 'ประวัติรอบปลูก', icon: History },
+    { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/admin/rounds', label: 'สร้างรอบการปลูก', icon: CalendarDays, dividerBefore: true },
     { to: '/admin/bookings', label: 'เปิดสั่งจองล่วงหน้า', icon: BookmarkCheck },
     { to: '/admin/orders', label: 'คำสั่งจอง', icon: ShoppingBag },
-    { to: '/admin/crops', label: 'แคตตาล็อกผัก', icon: Leaf },
-    { to: '/admin/districts', label: 'อำเภอ/ตำบลส่งฟรี', icon: MapPin },
-    { to: '/admin/customers', label: 'รายชื่อลูกค้า', icon: Users },
+    { to: '/admin/rounds/history', label: 'ประวัติต่างๆ', icon: History },
+    { to: '/admin/crops', label: 'แคตตาล็อกผัก', icon: Leaf, dividerBefore: true },
+    { to: '/admin/plots', label: 'จัดการแปลงปลูก', icon: LayoutGrid },
     { to: '/admin/farm', label: 'ตั้งค่าฟาร์ม & ความจุ', icon: Sprout },
-    { to: '/admin/settings', label: 'ตั้งค่าระบบ', icon: Settings },
+    { to: '/admin/customers', label: 'รายชื่อลูกค้า', icon: Users, dividerBefore: true },
     { to: '/admin/admins', label: 'ผู้ดูแลระบบ', icon: ShieldAlert },
+    { to: '/admin/settings', label: 'ตั้งค่าระบบ', icon: Settings, dividerBefore: true },
     { to: '/admin/audit', label: 'บันทึกการแก้ไข', icon: History },
+    { to: '/admin/reports', label: 'รายงาน', icon: BarChart3, dividerBefore: true },
   ];
 
   return (
@@ -100,21 +101,22 @@ export const AdminLayout: React.FC = () => {
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    isActive
+              <React.Fragment key={item.to}>
+                {item.dividerBefore && <div className="my-3 border-t border-slate-800" />}
+                <NavLink
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive
                       ? 'bg-emerald-600 text-white font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                  }`
-                }
-              >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </NavLink>
+                    }`
+                  }
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                </NavLink>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -174,20 +176,21 @@ export const AdminLayout: React.FC = () => {
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
-                      isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'
-                    }`
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </NavLink>
+                <React.Fragment key={item.to}>
+                  {item.dividerBefore && <div className="my-3 border-t border-slate-800" />}
+                  <NavLink
+                    to={item.to}
+                    end={item.end}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'
+                      }`
+                    }
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </React.Fragment>
               );
             })}
           </div>

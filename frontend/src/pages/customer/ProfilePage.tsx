@@ -1,32 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
-import { District } from '../../types/index.js';
 import { User, Phone, MapPin, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
-  const [districts, setDistricts] = useState<District[]>([]);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
-  const [districtId, setDistrictId] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<District[]>('/districts').then(setDistricts).catch(console.error);
-  }, []);
-
-  useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
       setAddressDetail(profile.address_detail || '');
-      setDistrictId(profile.district_id || '');
     }
   }, [profile]);
 
@@ -41,7 +33,6 @@ export const ProfilePage: React.FC = () => {
         full_name: fullName.trim(),
         phone: phone.trim(),
         address_detail: addressDetail.trim() || null,
-        district_id: districtId || null,
       });
 
       await refreshProfile();
@@ -137,36 +128,21 @@ export const ProfilePage: React.FC = () => {
 
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1">
-              อำเภอ / ตำบล เริ่มต้น (ถ้าเลือกให้จัดส่ง)
-            </label>
-            <select
-              value={districtId}
-              onChange={(e) => setDistrictId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500 bg-white"
-            >
-              <option value="">-- ไม่ระบุ (มารับเองเป็นหลัก) --</option>
-              {districts.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-700 block mb-1">
-              ที่อยู่จัดส่งเริ่มต้น
+              ที่อยู่จัดส่งสินค้า (สำหรับนำไปใช้จัดส่งเมื่อสั่งจอง)
             </label>
             <div className="relative">
               <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <textarea
-                rows={2}
+                rows={3}
                 value={addressDetail}
                 onChange={(e) => setAddressDetail(e.target.value)}
-                placeholder="บ้านเลขที่, ถนน, ซอย, จุดสังเกต..."
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500"
+                placeholder="บ้านเลขที่, ถนน, ซอย, ตำบล/แขวง, อำเภอ/เขต, จังหวัด, รหัสไปรษณีย์ หรือจุดสังเกต..."
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500 leading-relaxed"
               />
             </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              💡 เมื่อคุณเลือกวิธีรับของแบบ "จัดส่งสินค้า" ในการสั่งจอง ระบบจะใช้ที่อยู่นี้เป็นค่าเริ่มต้นโดยอัตโนมัติ
+            </p>
           </div>
 
           <div className="pt-2">

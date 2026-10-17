@@ -48,20 +48,15 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
       accepted_substitution_terms,
     } = parseResult.data;
 
-    // Check round status & auto-heal booking_opens_at if round is open for booking
-    const { data: roundData } = await supabaseAdmin
-      .from('planting_rounds')
-      .select('id, status, booking_opens_at, booking_closes_at')
-      .eq('id', round_id)
-      .maybeSingle();
-
-    if (roundData && roundData.status === 'booking_open') {
-      const now = new Date();
-      if (roundData.booking_opens_at && new Date(roundData.booking_opens_at) > now) {
-        await supabaseAdmin
-          .from('planting_rounds')
-          .update({ booking_opens_at: now.toISOString(), updated_at: now.toISOString() })
-          .eq('id', round_id);
+    let finalDeliveryAddress = delivery_address;
+    if (fulfillment_method === 'delivery' && (!finalDeliveryAddress || !finalDeliveryAddress.trim())) {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('address_detail')
+        .eq('id', req.user!.id)
+        .maybeSingle();
+      if (profile?.address_detail) {
+        finalDeliveryAddress = profile.address_detail;
       }
     }
 
@@ -71,7 +66,7 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
       p_customer_id: req.user!.id,
       p_items: items,
       p_fulfillment_method: fulfillment_method,
-      p_delivery_address: delivery_address || null,
+      p_delivery_address: finalDeliveryAddress || null,
       p_district_id: district_id || null,
       p_contact_phone: contact_phone,
       p_note: note || null,

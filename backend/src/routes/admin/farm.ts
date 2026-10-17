@@ -97,8 +97,8 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     // Upsert settings
     await db.from('app_settings').upsert([
-      { key: 'farm_name', value: JSON.stringify(farm_name), updated_at: new Date().toISOString() },
-      { key: 'farm_total_slots', value: JSON.stringify(farm_total_slots), updated_at: new Date().toISOString() },
+      { key: 'farm_name', value: farm_name, updated_at: new Date().toISOString() },
+      { key: 'farm_total_slots', value: farm_total_slots, updated_at: new Date().toISOString() },
     ]);
 
     await recordAuditLog({

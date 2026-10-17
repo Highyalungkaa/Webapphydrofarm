@@ -87,7 +87,7 @@ export const AdminSettingsPage: React.FC = () => {
         {/* Delivery Min Total Kg */}
         <div className="space-y-1.5 border-b border-slate-100 pb-5">
           <label className="font-bold text-sm text-slate-900 block">
-            ยอดสั่งซื้อขั้นต่ำสำหรับการจัดส่งฟรีในตัวเมือง (กิโลกรัม)
+            ยอดสั่งซื้อขั้นต่ำสำหรับการจัดส่ง (กิโลกรัม)
           </label>
           <p className="text-xs text-slate-500">
             หากออเดอร์ของลูกค้ารวมกันแล้วไม่ถึงจำนวนนี้ จะเลือกได้เฉพาะ "มารับเองที่ฟาร์ม" (ใส่ 0 เพื่อปิดการจำกัด)

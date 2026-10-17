@@ -13,6 +13,11 @@ const updateOrderSchema = z.object({
   payment_method: z.enum(['cash', 'transfer']).optional().nullable(),
   cancel_reason: z.string().optional().nullable(),
   note: z.string().optional().nullable(),
+  substitute_items: z.array(z.object({
+    id: z.string().uuid(),
+    qty_kg: z.number().min(0).max(100000),
+    total_cost: z.number().min(0).max(100000000),
+  })).optional(),
 });
 
 // GET /api/admin/orders - List all orders with multi-parameter filtering
@@ -44,6 +49,12 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           id,
           qty_kg,
           price_per_kg,
+          fulfilled_qty_kg,
+          fulfillment_source,
+          substitute_supplier,
+          substitute_cost_per_kg,
+          substitute_total_cost,
+          substitute_note,
           round_items (
             id,
             crops (
@@ -135,6 +146,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           fulfillment_source,
           substitute_supplier,
           substitute_cost_per_kg,
+          substitute_total_cost,
           substitute_note,
           round_items (
             id,
@@ -180,6 +192,28 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
     if (!currentOrder) {
       res.status(404).json({ error: 'ไม่พบคำสั่งจองที่ระบุ' });
       return;
+    }
+
+    let substituteItemsById: Map<string, { id: string; qty_kg: number }> | undefined;
+    if (parsed.data.substitute_items) {
+      const { data: orderItems, error: itemsError } = await supabaseAdmin
+        .from('order_items')
+        .select('id, qty_kg')
+        .eq('order_id', id);
+
+      if (itemsError || !orderItems) {
+        res.status(400).json({ error: itemsError?.message || 'ไม่สามารถอ่านรายการผักในออเดอร์ได้' });
+        return;
+      }
+
+      substituteItemsById = new Map(orderItems.map((item: any) => [item.id, item]));
+      for (const substitute of parsed.data.substitute_items) {
+        const item = substituteItemsById.get(substitute.id);
+        if (!item || substitute.qty_kg > Number(item.qty_kg)) {
+          res.status(400).json({ error: 'จำนวนผักทดแทนต้องไม่เกินจำนวนที่ลูกค้าสั่ง' });
+          return;
+        }
+      }
     }
 
     const updates: any = {
@@ -243,6 +277,28 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
     if (error) {
       res.status(400).json({ error: error.message });
       return;
+    }
+
+    if (parsed.data.substitute_items) {
+      for (const substitute of parsed.data.substitute_items) {
+        const item = substituteItemsById!.get(substitute.id)!;
+        const hasSubstitute = substitute.qty_kg > 0;
+        const { error: substituteError } = await supabaseAdmin
+          .from('order_items')
+          .update({
+            fulfilled_qty_kg: hasSubstitute ? substitute.qty_kg : null,
+            fulfillment_source: hasSubstitute ? 'substitute' : null,
+            substitute_cost_per_kg: hasSubstitute ? Number((substitute.total_cost / substitute.qty_kg).toFixed(2)) : null,
+            substitute_total_cost: hasSubstitute ? Number(substitute.total_cost.toFixed(2)) : null,
+          })
+          .eq('id', item.id)
+          .eq('order_id', id);
+
+        if (substituteError) {
+          res.status(400).json({ error: substituteError.message });
+          return;
+        }
+      }
     }
 
     await recordAuditLog({

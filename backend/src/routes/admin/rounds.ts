@@ -15,6 +15,7 @@ const roundItemInputSchema = z.object({
   price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ต่ำกว่า 0'),
   growing_days: z.number().int().min(1).optional().nullable(),
   max_qty_per_order_kg: z.number().min(0.5, 'เพดานต่อออเดอร์ต้องไม่ต่ำกว่า 0.5 กก.').optional().nullable(),
+  plot_ids: z.array(z.string().uuid()).optional().nullable(),
 });
 
 const roundSchema = z.object({
@@ -23,7 +24,6 @@ const roundSchema = z.object({
   growing_days: z.number().int().min(1, 'ระยะเวลาปลูกต้องมากกว่า 0 วัน').optional(),
   expected_harvest_date: z.string().optional(),
   booking_opens_at: z.string().optional(),
-  booking_closes_at: z.string().optional(),
   fulfillment_date: z.string().optional(),
   pickup_start_time: z.string().optional(),
   pickup_end_time: z.string().optional(),
@@ -60,6 +60,19 @@ export function extractCropGrowingDays(roundNotes: string | null | undefined): R
     const parsed = JSON.parse(roundNotes);
     if (parsed && typeof parsed.cropGrowingDays === 'object') {
       return parsed.cropGrowingDays;
+    }
+  } catch {
+    // plain text note
+  }
+  return {};
+}
+
+export function extractCropPlotIds(roundNotes: string | null | undefined): Record<string, string[]> {
+  if (!roundNotes) return {};
+  try {
+    const parsed = JSON.parse(roundNotes);
+    if (parsed && typeof parsed.cropPlotIds === 'object') {
+      return parsed.cropPlotIds;
     }
   } catch {
     // plain text note
@@ -281,16 +294,27 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       }
     }
 
+    // Fetch all plots to enrich round items with plot details
+    const { data: allPlots } = await db
+      .from('plots')
+      .select('id, name, zone_name, slot_capacity, is_active, crop_id');
+    const plotMap = new Map((allPlots || []).map((p: any) => [p.id, p]));
+
     const cropDaysMap = extractCropGrowingDays(round.notes);
+    const cropPlotIdsMap = extractCropPlotIds(round.notes);
     const items = (round.round_items || []).map((it: any) => {
       const bookedKg = bookedMap[it.id] || 0;
       const itemDays = cropDaysMap[it.crop_id] || it.crops?.growing_days || round.growing_days || 45;
+      const assignedPlotIds = cropPlotIdsMap[it.crop_id] || (Array.isArray(it.plot_ids) ? it.plot_ids : []);
+      const assignedPlots = assignedPlotIds.map((pid: string) => plotMap.get(pid)).filter(Boolean);
       return {
         ...it,
         crop_name: it.crops?.name,
         growing_days: itemDays,
         booked_qty_kg: bookedKg,
         available_qty_kg: Math.max(0, Number(it.bookable_qty_kg) - bookedKg),
+        plot_ids: assignedPlotIds,
+        plots: assignedPlots,
       };
     });
 
@@ -326,6 +350,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     const { items, ...inputRoundData } = parsed.data;
     const db = getSupabaseClient(req);
 
+    if (items?.length) {
+      const cropIds = [...new Set(items.map((item) => item.crop_id))];
+      const { data: activeCropRows, error: cropError } = await db
+        .from('crops')
+        .select('id')
+        .in('id', cropIds)
+        .eq('is_active', true);
+      if (cropError || (activeCropRows || []).length !== cropIds.length) {
+        res.status(400).json({ error: 'มีชนิดผักที่ปิดใช้งานหรือไม่พบในระบบ กรุณาเลือกเฉพาะผักที่เปิดใช้งาน' });
+        return;
+      }
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
     const initialSeedDate = inputRoundData.seed_date || todayStr;
     const initialGrowingDays = inputRoundData.growing_days || 45;
@@ -345,7 +382,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       growing_days: initialGrowingDays,
       expected_harvest_date: initialHarvestDate,
       booking_opens_at: inputRoundData.booking_opens_at || new Date().toISOString(),
-      booking_closes_at: inputRoundData.booking_closes_at || new Date(Date.now() + initialGrowingDays * 86400000).toISOString(),
+      booking_closes_at: null,
       fulfillment_date: inputRoundData.fulfillment_date || initialHarvestDate,
       pickup_start_time: inputRoundData.pickup_start_time || '09:00:00',
       pickup_end_time: inputRoundData.pickup_end_time || '17:00:00',
@@ -353,17 +390,22 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       delivery_end_time: inputRoundData.delivery_end_time || '16:30:00',
       notes: (() => {
         const cropGrowingDaysMap: Record<string, number> = {};
+        const cropPlotIdsMap: Record<string, string[]> = {};
         if (items && items.length > 0) {
           for (const it of items) {
             if (it.growing_days) {
               cropGrowingDaysMap[it.crop_id] = it.growing_days;
             }
+            if (it.plot_ids && it.plot_ids.length > 0) {
+              cropPlotIdsMap[it.crop_id] = it.plot_ids;
+            }
           }
         }
-        if (Object.keys(cropGrowingDaysMap).length > 0) {
+        if (Object.keys(cropGrowingDaysMap).length > 0 || Object.keys(cropPlotIdsMap).length > 0) {
           return JSON.stringify({
             note: inputRoundData.notes?.trim() || '',
             cropGrowingDays: cropGrowingDaysMap,
+            cropPlotIds: cropPlotIdsMap,
           });
         }
         return inputRoundData.notes?.trim() || null;
@@ -447,6 +489,21 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
+    const currentStep = Number(currentRound.current_step || 1);
+    if (step > currentStep && !(step === 7 && currentStep === 6)) {
+      res.status(400).json({ error: 'กรุณายืนยันสถานะก่อนหน้าให้ครบก่อนจึงจะไปสถานะถัดไปได้' });
+      return;
+    }
+    if (step === 4 && (
+      currentRound.status !== 'booking_open'
+      || !currentRound.booking_opens_at
+      || new Date(currentRound.booking_opens_at).getTime() > Date.now()
+      || !!currentRound.booking_closes_at
+    )) {
+      res.status(400).json({ error: 'กรุณาเปิดรับจองก่อน และรอจนถึงเวลาเปิดจริงก่อนยืนยันไปสถานะถัดไป' });
+      return;
+    }
+
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
@@ -501,14 +558,8 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
         break;
       }
       case 4: {
-        // Step 4: เปิดสั่งจองล่วงหน้า ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)
-        const bookingDate = new Date(date);
-        const now = new Date();
-        updatePayload.booking_opens_at = bookingDate.toISOString();
+        // The booking page owns the opening schedule; this confirmation advances after booking is live.
         updatePayload.current_step = 5;
-        if (bookingDate <= now) {
-          updatePayload.status = 'booking_open';
-        }
         break;
       }
       case 5: {
@@ -528,7 +579,7 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
       case 7: {
         // Step 7: สถานะสิ้นสุด ➔ ปิดรอบสมบูรณ์
         updatePayload.completed_date = date;
-        updatePayload.current_step = 6;
+        updatePayload.current_step = 7;
         updatePayload.status = 'completed';
         break;
       }
@@ -592,10 +643,32 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
+    // Update notes with cropPlotIds if items are provided
+    let finalNotes = roundData.notes;
+    if (items && items.length > 0) {
+      let notesJson: any = {};
+      try {
+        notesJson = JSON.parse(roundData.notes || currentRound.notes || '{}');
+      } catch {
+        notesJson = { note: roundData.notes || currentRound.notes || '' };
+      }
+      const cropPlotIdsMap: Record<string, string[]> = notesJson.cropPlotIds || {};
+      for (const it of items) {
+        if (it.plot_ids && it.plot_ids.length > 0) {
+          cropPlotIdsMap[it.crop_id] = it.plot_ids;
+        }
+      }
+      if (Object.keys(cropPlotIdsMap).length > 0) {
+        notesJson.cropPlotIds = cropPlotIdsMap;
+        finalNotes = JSON.stringify(notesJson);
+      }
+    }
+
     const { data: updatedRound, error: updateError } = await db
       .from('planting_rounds')
       .update({
         ...roundData,
+        notes: finalNotes,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -735,7 +808,6 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
     const id = req.params.id as string;
     const {
       booking_opens_at,
-      booking_closes_at,
       fulfillment_date,
       pickup_start_time,
       pickup_end_time,
@@ -743,8 +815,9 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
       delivery_end_time,
     } = req.body;
 
-    if (!booking_opens_at || !booking_closes_at) {
-      res.status(400).json({ error: 'กรุณาระบุวัน-เวลาเปิดจอง และวัน-เวลาปิดจอง' });
+    const opensAt = new Date(booking_opens_at);
+    if (!booking_opens_at || Number.isNaN(opensAt.getTime())) {
+      res.status(400).json({ error: 'กรุณาระบุวัน-เวลาเปิดจองให้ถูกต้อง' });
       return;
     }
 
@@ -758,8 +831,8 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
     const updatePayload: Record<string, any> = {
       status: 'booking_open',
       current_step: currentRound.current_step || 4,
-      booking_opens_at: new Date(booking_opens_at) > new Date() ? new Date().toISOString() : new Date(booking_opens_at).toISOString(),
-      booking_closes_at: new Date(booking_closes_at).toISOString(),
+      booking_opens_at: opensAt.toISOString(),
+      booking_closes_at: null,
       updated_at: new Date().toISOString(),
     };
 
@@ -788,7 +861,7 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
       entityId: id,
       action: 'status_change',
       oldData: { status: currentRound.status, booking_opens_at: currentRound.booking_opens_at },
-      newData: { status: 'booking_open', booking_opens_at: updatePayload.booking_opens_at, booking_closes_at: updatePayload.booking_closes_at },
+      newData: { status: 'booking_open', booking_opens_at: updatePayload.booking_opens_at, booking_closes_at: null },
     });
 
     res.json(updatedRound);
@@ -801,6 +874,15 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
 router.post('/:id/close-booking', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
+    const closeDate = new Date(req.body?.booking_closes_at);
+    if (!req.body?.booking_closes_at || Number.isNaN(closeDate.getTime())) {
+      res.status(400).json({ error: 'กรุณาระบุวัน-เวลาปิดจองให้ถูกต้อง' });
+      return;
+    }
+    if (closeDate.getTime() > Date.now()) {
+      res.status(400).json({ error: 'วัน-เวลาปิดจองต้องไม่เป็นเวลาในอนาคต' });
+      return;
+    }
 
     const db = getSupabaseClient(req);
     const { data: currentRound } = await db.from('planting_rounds').select('*').eq('id', id).single();
@@ -808,10 +890,14 @@ router.post('/:id/close-booking', async (req: AuthenticatedRequest, res: Respons
       res.status(404).json({ error: 'ไม่พบรอบการปลูกที่ระบุ' });
       return;
     }
+    if (currentRound.status !== 'booking_open') {
+      res.status(400).json({ error: 'รอบนี้ไม่ได้อยู่ในสถานะเปิดรับจอง' });
+      return;
+    }
 
     const updatePayload = {
       status: 'booking_closed',
-      booking_closes_at: new Date().toISOString(),
+      booking_closes_at: closeDate.toISOString(),
       updated_at: new Date().toISOString(),
     };
 
@@ -850,7 +936,6 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
     const {
       name,
       booking_opens_at,
-      booking_closes_at,
       fulfillment_date,
       pickup_start_time,
       pickup_end_time,
@@ -873,10 +958,12 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
 
     if (name !== undefined) updatePayload.name = name;
     if (booking_opens_at !== undefined) {
-      updatePayload.booking_opens_at = booking_opens_at ? new Date(booking_opens_at).toISOString() : null;
-    }
-    if (booking_closes_at !== undefined) {
-      updatePayload.booking_closes_at = booking_closes_at ? new Date(booking_closes_at).toISOString() : null;
+      const opensAt = new Date(booking_opens_at);
+      if (!booking_opens_at || Number.isNaN(opensAt.getTime())) {
+        res.status(400).json({ error: 'กรุณาระบุวัน-เวลาเปิดจองให้ถูกต้อง' });
+        return;
+      }
+      updatePayload.booking_opens_at = opensAt.toISOString();
     }
     if (fulfillment_date !== undefined) updatePayload.fulfillment_date = fulfillment_date;
     if (pickup_start_time !== undefined) updatePayload.pickup_start_time = pickup_start_time;
@@ -901,12 +988,7 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
     }
 
     const effectiveStatus = updatePayload.status || currentRound.status;
-    if (effectiveStatus === 'booking_open') {
-      const checkOpensAt = updatePayload.booking_opens_at !== undefined ? updatePayload.booking_opens_at : currentRound.booking_opens_at;
-      if (checkOpensAt && new Date(checkOpensAt) > new Date()) {
-        updatePayload.booking_opens_at = new Date().toISOString();
-      }
-    }
+    if (effectiveStatus === 'booking_open') updatePayload.booking_closes_at = null;
 
     const { data: updatedRound, error: updateErr } = await db
       .from('planting_rounds')

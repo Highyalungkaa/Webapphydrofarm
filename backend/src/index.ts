@@ -20,6 +20,7 @@ import adminAuditRouter from './routes/admin/audit.js';
 import adminCustomersRouter from './routes/admin/customers.js';
 import adminFarmRouter from './routes/admin/farm.js';
 import adminPlotsRouter from './routes/admin/plots.js';
+import equipmentRouter from './routes/equipment.js';
 
 dotenv.config();
 
@@ -42,7 +43,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '8mb' }));
 
 // Health Check
 app.get('/health', (_req, res) => {
@@ -58,6 +59,7 @@ app.use('/api/districts', districtsRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/rounds', roundsRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/equipment', equipmentRouter);
 
 // Admin API Routes
 app.use('/api/admin/crops', adminCropsRouter);

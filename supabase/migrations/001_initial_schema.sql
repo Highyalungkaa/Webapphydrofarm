@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS planting_rounds (
     growing_days INTEGER NOT NULL CHECK (growing_days > 0),
     expected_harvest_date DATE NOT NULL,
     booking_opens_at TIMESTAMPTZ NOT NULL,
-    booking_closes_at TIMESTAMPTZ NOT NULL,
+    booking_closes_at TIMESTAMPTZ,
     fulfillment_date DATE NOT NULL,
     pickup_start_time TIME NOT NULL,
     pickup_end_time TIME NOT NULL,
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS planting_rounds (
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('Asia/Bangkok'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('Asia/Bangkok'::text, now()),
-    CONSTRAINT check_booking_window CHECK (booking_closes_at > booking_opens_at)
+    CONSTRAINT check_booking_window CHECK (booking_closes_at IS NULL OR booking_closes_at > booking_opens_at OR status = 'booking_closed')
 );
 
 -- 6. Round Items (รายการผักในแต่ละรอบการปลูก)

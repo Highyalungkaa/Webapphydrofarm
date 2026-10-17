@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { formatDateDMY } from '../../lib/dateFormat.js';
 import { ShieldAlert, Plus, Trash2, AlertCircle, X } from 'lucide-react';
 
 interface AdminUser {
@@ -60,13 +61,7 @@ export const AdminAdminsPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('th-TH');
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateDMY;
 
   return (
     <div className="space-y-6">

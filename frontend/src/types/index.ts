@@ -76,6 +76,8 @@ export interface RoundItem {
   booked_qty_kg?: number;
   available_qty_kg?: number;
   is_sold_out?: boolean;
+  plot_ids?: string[];
+  plots?: Plot[];
   crops?: Crop;
 }
 
@@ -86,7 +88,7 @@ export interface PlantingRound {
   growing_days: number;
   expected_harvest_date: string;
   booking_opens_at: string;
-  booking_closes_at: string;
+  booking_closes_at: string | null;
   fulfillment_date: string;
   pickup_start_time: string;
   pickup_end_time: string;
@@ -123,6 +125,7 @@ export interface OrderItem {
   fulfillment_source?: 'own' | 'substitute' | null;
   substitute_supplier?: string | null;
   substitute_cost_per_kg?: number | null;
+  substitute_total_cost?: number | null;
   substitute_note?: string | null;
   round_items?: {
     id: string;
@@ -187,4 +190,50 @@ export interface CartItem {
   qty_kg: number;
   max_qty_per_order_kg?: number | null;
   available_qty_kg: number;
+}
+
+export interface EquipmentProduct {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  image_url?: string | null;
+  description?: string | null;
+  price: number;
+  stock_quantity: number;
+  low_stock_threshold: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface EquipmentOrderItem {
+  id: string;
+  order_id: string;
+  product_id?: string | null;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export type EquipmentOrderStatus = 'pending_confirmation' | 'confirmed' | 'processing' | 'shipped' | 'completed' | 'cancelled';
+export interface EquipmentOrder {
+  id: string;
+  customer_id: string;
+  status: EquipmentOrderStatus;
+  payment_status: PaymentStatus;
+  payment_method: 'transfer' | 'cash_on_delivery';
+  shipping_method: 'standard';
+  shipping_address: string;
+  contact_phone: string;
+  tracking_number?: string | null;
+  note?: string | null;
+  total_amount: number;
+  shipping_fee?: number;
+  delivery_update_image_url?: string | null;
+  delivery_update_message?: string | null;
+  created_at: string;
+  equipment_order_items?: EquipmentOrderItem[];
+  profiles?: { full_name?: string; email?: string; phone?: string };
 }

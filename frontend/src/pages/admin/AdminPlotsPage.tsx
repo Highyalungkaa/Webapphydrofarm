@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { Plot, Crop } from '../../types/index.js';
+import { Plot, Crop, PlantingRound } from '../../types/index.js';
 import {
   LayoutGrid,
   Plus,
   Edit2,
   Trash2,
   Leaf,
+  MapPin,
+  Sprout,
   AlertCircle,
   X,
   Settings,
@@ -15,8 +17,9 @@ import {
 } from 'lucide-react';
 
 export const AdminPlotsPage: React.FC = () => {
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const [allPlots, setAllPlots] = useState<Plot[]>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
+  const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [farmTotalSlots, setFarmTotalSlots] = useState<number>(5000);
   const [totalAllocatedSlots, setTotalAllocatedSlots] = useState<number>(0);
   const [availableSlots, setAvailableSlots] = useState<number>(5000);
@@ -43,27 +46,25 @@ export const AdminPlotsPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [zoneFilter, activeFilter]);
+  }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (zoneFilter) params.append('zone_name', zoneFilter);
-      if (activeFilter) params.append('is_active', activeFilter);
-
-      const [plotsRes, cropsData] = await Promise.all([
+      const [plotsRes, cropsData, roundsData] = await Promise.all([
         api.get<{ plots: Plot[]; farm_total_slots: number; total_allocated_slots: number; available_slots: number }>(
-          `/admin/plots?${params.toString()}`
+          '/admin/plots'
         ),
         api.get<Crop[]>('/admin/crops'),
+        api.get<PlantingRound[]>('/admin/rounds'),
       ]);
 
-      setPlots(plotsRes.plots || []);
+      setAllPlots(plotsRes.plots || []);
       setFarmTotalSlots(plotsRes.farm_total_slots || 5000);
       setTotalAllocatedSlots(plotsRes.total_allocated_slots || 0);
       setAvailableSlots(plotsRes.available_slots || 0);
       setCrops(cropsData || []);
+      setRounds(roundsData || []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -71,15 +72,66 @@ export const AdminPlotsPage: React.FC = () => {
     }
   };
 
+  const plots = allPlots.filter((plot) =>
+    (!zoneFilter || plot.zone_name === zoneFilter) &&
+    (!activeFilter || String(plot.is_active) === activeFilter)
+  );
+  const activeCrops = crops.filter((crop) => crop.is_active !== false);
+
   // Get unique zone names from existing plots
-  const existingZones = Array.from(new Set(plots.map((p) => p.zone_name).filter(Boolean)));
+  const existingZones = Array.from(new Set(allPlots.map((p) => p.zone_name).filter(Boolean)));
+
+  const plotUsage = React.useMemo(() => {
+    const usage: Record<string, { usedSlots: number; cropNames: string[] }> = {};
+    allPlots.forEach((plot) => { usage[plot.id] = { usedSlots: 0, cropNames: [] }; });
+
+    const growingRounds = rounds.filter((round) =>
+      round.status !== 'completed' && round.status !== 'cancelled' &&
+      (round.current_step ?? 1) < 7 && !round.completed_date
+    );
+
+    growingRounds.forEach((round) => {
+      let cropPlotIds: Record<string, string[]> = {};
+      try {
+        const parsed = JSON.parse(round.notes || '{}');
+        if (parsed && typeof parsed.cropPlotIds === 'object') cropPlotIds = parsed.cropPlotIds;
+      } catch {
+        // Older rounds may store plain-text notes.
+      }
+
+      (round.round_items || []).forEach((item) => {
+        const crop = crops.find((entry) => entry.id === item.crop_id) || item.crops;
+        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4;
+        let slotsNeeded = Math.round((Number(item.bookable_qty_kg) || 0) * rate);
+        const assignedIds = cropPlotIds[item.crop_id] || item.plot_ids || [];
+        const assignedPlots = assignedIds.length > 0
+          ? allPlots.filter((plot) => assignedIds.includes(plot.id))
+          : allPlots.filter((plot) => plot.crop_id === item.crop_id);
+
+        assignedPlots.forEach((plot) => {
+          if (slotsNeeded <= 0) return;
+          const plotUsage = usage[plot.id];
+          if (!plotUsage) return;
+          const available = Math.max(0, Number(plot.slot_capacity || 0) - plotUsage.usedSlots);
+          const usedHere = Math.min(slotsNeeded, available);
+          if (usedHere <= 0) return;
+          plotUsage.usedSlots += usedHere;
+          const cropName = crop?.name || 'ผัก';
+          if (!plotUsage.cropNames.includes(cropName)) plotUsage.cropNames.push(cropName);
+          slotsNeeded -= usedHere;
+        });
+      });
+    });
+
+    return usage;
+  }, [allPlots, rounds, crops]);
 
   const openCreateModal = () => {
     setEditingPlotId(null);
-    setName(`แปลงที่ ${plots.length + 1}`);
+    setName(`แปลงที่ ${allPlots.length + 1}`);
     setZoneName(existingZones.length > 0 ? existingZones[0] : 'โซน A (โรงเรือน 1)');
     setSlotCapacity(Math.min(200, Math.max(1, availableSlots)));
-    setCropId(crops.length > 0 ? crops[0].id : '');
+    setCropId(activeCrops.length > 0 ? activeCrops[0].id : '');
     setIsActive(true);
     setNotes('');
     setError(null);
@@ -277,116 +329,100 @@ export const AdminPlotsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Plots Table */}
+      {/* Plot cards */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
         {loading ? (
           <div className="py-16 text-center text-slate-500 text-sm">กำลังโหลดข้อมูลแปลงปลูก...</div>
         ) : plots.length === 0 ? (
           <div className="py-16 text-center text-slate-500 text-sm space-y-3">
             <p>ยังไม่มีแปลงปลูกในระบบ หรือไม่พบแปลงตามเงื่อนไขที่เลือก</p>
-            <button
-              onClick={openCreateModal}
-              className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs"
-            >
+            <button onClick={openCreateModal} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs">
               + สร้างแปลงแรกของฟาร์ม
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs sm:text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase text-[11px] font-semibold">
-                  <th className="py-3 px-4">ชื่อแปลง</th>
-                  <th className="py-3 px-4">โซน / พื้นที่</th>
-                  <th className="py-3 px-4">จำนวนช่องปลูก (Slots)</th>
-                  <th className="py-3 px-4">ชนิดผักที่ปลูก</th>
-                  <th className="py-3 px-4">สถานะแปลง</th>
-                  <th className="py-3 px-4 text-right">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {plots.map((plot) => (
-                  <tr key={plot.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs">
-                          <LayoutGrid className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span>{plot.name}</span>
-                          {plot.notes && (
-                            <span className="block text-[11px] text-slate-400 font-normal truncate max-w-xs">
-                              {plot.notes}
-                            </span>
-                          )}
+          <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {plots.map((plot) => {
+              const usage = plotUsage[plot.id] || { usedSlots: 0, cropNames: [] };
+              const capacity = Number(plot.slot_capacity || 0);
+              const used = Math.min(capacity, usage.usedSlots);
+              const free = Math.max(0, capacity - used);
+              const usagePercent = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
+              const barColor = usagePercent >= 90 ? 'bg-amber-500' : usagePercent > 0 ? 'bg-emerald-500' : 'bg-slate-300';
+
+              return (
+                <article key={plot.id} className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${plot.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        <LayoutGrid className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-black text-slate-900">{plot.name}</h3>
+                        <div className="mt-1 flex items-center gap-1 text-xs font-medium text-slate-500">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span className="truncate">{plot.zone_name}</span>
                         </div>
                       </div>
-                    </td>
+                    </div>
+                    <button
+                      onClick={() => togglePlotActive(plot)}
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold transition ${plot.is_active ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                      title="คลิกเพื่อเปลี่ยนสถานะ"
+                    >
+                      {plot.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'}
+                    </button>
+                  </div>
 
-                    <td className="py-3.5 px-4 text-slate-700">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium text-xs">
-                        {plot.zone_name}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <span className="font-extrabold text-slate-900 text-sm">
-                        {plot.slot_capacity.toLocaleString()}
-                      </span>{' '}
-                      <span className="text-xs text-slate-500">ช่อง</span>
-                    </td>
-
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">
-                      {plot.crops ? (
-                        <div className="flex items-center gap-1.5">
-                          <Leaf className="w-4 h-4 text-emerald-600" />
-                          <span>{plot.crops.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic font-normal">ยังไม่ได้ระบุชนิดผัก</span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <button
-                        onClick={() => togglePlotActive(plot)}
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
-                          plot.is_active
-                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}
-                        title="คลิกเพื่อเปลี่ยนสถานะ"
-                      >
-                        {plot.is_active ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
-                      </button>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditModal(plot)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors"
-                          title="แก้ไขแปลง"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(plot)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-slate-100 transition-colors"
-                          title="ลบแปลง"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+                    <div className="mb-2 flex items-end justify-between gap-2">
+                      <div>
+                        <p className="text-[11px] font-semibold text-slate-500">พื้นที่ปลูกที่ใช้งาน</p>
+                        <p className="mt-0.5 text-xl font-black leading-none text-slate-900">
+                          {used.toLocaleString()} <span className="text-xs font-semibold text-slate-500">/ {capacity.toLocaleString()} ช่อง</span>
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <span className={`text-sm font-black ${usagePercent >= 90 ? 'text-amber-700' : 'text-emerald-700'}`}>{usagePercent}%</span>
+                    </div>
+                    <div role="progressbar" aria-label={`การใช้งานแปลง ${plot.name}`} aria-valuemin={0} aria-valuemax={capacity} aria-valuenow={used} className="h-2.5 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
+                      <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${usagePercent}%` }} />
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-500">เหลือพื้นที่ {free.toLocaleString()} ช่อง</p>
+                  </div>
+
+                  <div className="mt-4 min-h-[68px]">
+                    <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                      <Sprout className="h-3.5 w-3.5 text-emerald-600" />ผักที่กำลังปลูก
+                    </div>
+                    {usage.cropNames.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {usage.cropNames.map((cropName) => (
+                          <span key={cropName} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                            <Leaf className="h-3 w-3" />{cropName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-400">ยังไม่มีผักปลูกในแปลงนี้</p>
+                    )}
+                  </div>
+
+                  {plot.notes && <p className="mt-3 truncate border-t border-slate-100 pt-3 text-[11px] text-slate-400" title={plot.notes}>{plot.notes}</p>}
+
+                  <div className="mt-4 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button onClick={() => openEditModal(plot)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700" title="แก้ไขแปลง">
+                      <Edit2 className="h-3.5 w-3.5" />แก้ไข
+                    </button>
+                    <button onClick={() => handleDelete(plot)} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700" title="ลบแปลง">
+                      <Trash2 className="h-3.5 w-3.5" />ลบ
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
-
       {/* Create / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
@@ -479,11 +515,14 @@ export const AdminPlotsPage: React.FC = () => {
                   className="w-full p-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="">-- ยังไม่ระบุชนิดผัก --</option>
-                  {crops.map((c) => (
+                  {activeCrops.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} (฿{Number(c.default_price_per_kg).toFixed(0)}/กก. • {c.slots_per_kg || 4} ช่อง/กก.)
                     </option>
                   ))}
+                  {cropId && !activeCrops.some((crop) => crop.id === cropId) && crops.find((crop) => crop.id === cropId) && (
+                    <option value={cropId} disabled>{crops.find((crop) => crop.id === cropId)?.name} (ปิดใช้งานแล้ว · รายการเดิม)</option>
+                  )}
                 </select>
                 {cropId && (() => {
                   const sel = crops.find(c => c.id === cropId);

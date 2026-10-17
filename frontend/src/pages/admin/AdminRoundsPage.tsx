@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatDateDMY } from '../../lib/dateFormat.js';
 import { PlantingRound, Crop, Plot } from '../../types/index.js';
 import {
   CalendarDays,
@@ -9,6 +10,7 @@ import {
   AlertCircle,
   X,
   Leaf,
+  Sprout,
   Layers,
   ArrowRight,
   Clock,
@@ -17,6 +19,10 @@ import {
   CheckCircle2,
   ExternalLink,
   History,
+  AlertTriangle,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface RoundItemForm {
@@ -40,6 +46,7 @@ export const AdminRoundsPage: React.FC = () => {
   const [seedDate, setSeedDate] = useState('');
   const [items, setItems] = useState<RoundItemForm[]>([]);
   const [notes, setNotes] = useState('');
+  const [expandedOtherPlots, setExpandedOtherPlots] = useState<Record<number, boolean>>({});
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,14 +59,14 @@ export const AdminRoundsPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [roundsData, cropsData, plotsRes] = await Promise.all([
+      const [roundsRes, cropsRes, plotsRes] = await Promise.allSettled([
         api.get<PlantingRound[]>('/admin/rounds'),
         api.get<Crop[]>('/admin/crops'),
         api.get<{ plots: Plot[] }>('/admin/plots'),
       ]);
-      setRounds(roundsData || []);
-      setCrops(cropsData || []);
-      setPlots(plotsRes?.plots || []);
+      if (roundsRes.status === 'fulfilled') setRounds(roundsRes.value || []);
+      if (cropsRes.status === 'fulfilled') setCrops(cropsRes.value || []);
+      if (plotsRes.status === 'fulfilled') setPlots(plotsRes.value?.plots || []);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -68,6 +75,77 @@ export const AdminRoundsPage: React.FC = () => {
   };
 
   const activePlots = plots.filter((p) => p.is_active);
+  const activeCrops = crops.filter((crop) => crop.is_active !== false);
+
+  // Active ongoing rounds that are currently occupying farm plots (step 1 to 6, not completed or cancelled)
+  const activeOngoingRounds = React.useMemo(() => {
+    return rounds.filter(
+      (r) => r.status !== 'completed' && r.status !== 'cancelled' && (r.current_step ?? 1) < 7 && !r.completed_date
+    );
+  }, [rounds]);
+
+  // Calculate used slots per plot from active ongoing rounds
+  const plotOccupancyMap = React.useMemo(() => {
+    const map: Record<
+      string,
+      {
+        occupiedSlots: number;
+        occupyingRounds: Array<{ roundId: string; roundName: string; cropName: string; usedSlots: number; step: number }>;
+      }
+    > = {};
+
+    activePlots.forEach((p) => {
+      map[p.id] = { occupiedSlots: 0, occupyingRounds: [] };
+    });
+
+    activeOngoingRounds.forEach((r) => {
+      let rCropPlotIds: Record<string, string[]> = {};
+      try {
+        const parsed = JSON.parse(r.notes || '{}');
+        if (parsed && typeof parsed.cropPlotIds === 'object') {
+          rCropPlotIds = parsed.cropPlotIds;
+        }
+      } catch {}
+
+      (r.round_items || []).forEach((item: any) => {
+        const crop = crops.find((c) => c.id === item.crop_id) || item.crops;
+        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
+        let slotsNeeded = Math.round((Number(item.bookable_qty_kg) || 0) * rate);
+
+        // Plots assigned to this item
+        const itemPlotIds: string[] = rCropPlotIds[item.crop_id] || (Array.isArray(item.plot_ids) ? item.plot_ids : []);
+        const itemPlots = itemPlotIds.length > 0
+          ? activePlots.filter((p) => itemPlotIds.includes(p.id))
+          : activePlots.filter((p) => p.crop_id === item.crop_id);
+
+        itemPlots.forEach((plot) => {
+          if (slotsNeeded <= 0) return;
+          const occ = map[plot.id];
+          if (!occ) return;
+          const cap = Number(plot.slot_capacity || 0);
+          const currentOcc = occ.occupiedSlots;
+          const remainingInPlot = Math.max(0, cap - currentOcc);
+          const usedInThisPlot = Math.min(slotsNeeded, remainingInPlot > 0 ? remainingInPlot : cap);
+          occ.occupiedSlots += usedInThisPlot;
+          occ.occupyingRounds.push({
+            roundId: r.id,
+            roundName: r.name,
+            cropName: crop?.name || 'ผัก',
+            usedSlots: usedInThisPlot,
+            step: r.current_step || 1,
+          });
+          slotsNeeded -= usedInThisPlot;
+        });
+      });
+    });
+
+    return map;
+  }, [rounds, activePlots, crops, activeOngoingRounds]);
+
+  const farmTotalSlots = activePlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
+  const farmOccupiedSlots = Object.values(plotOccupancyMap).reduce((s, o) => s + o.occupiedSlots, 0);
+  const farmAvailableSlots = Math.max(0, farmTotalSlots - farmOccupiedSlots);
+  const isFarmFullyOccupied = farmTotalSlots > 0 && farmAvailableSlots === 0;
 
   const openCreateModal = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -78,52 +156,46 @@ export const AdminRoundsPage: React.FC = () => {
     setSeedDate(today);
     setNotes('');
 
-    // Prepopulate with active crops and their designated plots
-    const activeCrops = crops.filter((c) => c.is_active);
-    if (activeCrops.length > 0) {
-      setItems(
-        activeCrops.map((c) => {
-          // Find plots designated for this crop
-          const cropPlots = activePlots.filter((p) => p.crop_id === c.id);
-          const plotIds = cropPlots.map((p) => p.id);
-          const totalSlots = cropPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-          const rate = c.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
-          const defaultKg = totalSlots > 0 ? Math.round(totalSlots / rate) : 25;
-
-          return {
-            crop_id: c.id,
-            selected_plot_ids: plotIds,
-            bookable_qty_kg: defaultKg,
-            price_per_kg: Number(c.default_price_per_kg) || 130,
-            growing_days: Number(c.growing_days) || 45,
-          };
-        })
-      );
-    } else {
-      setItems([]);
-    }
+    // Let the administrator choose which crops to include in this round.
+    setItems([]);
 
     setFormError(null);
+    setExpandedOtherPlots({});
     setIsModalOpen(true);
   };
 
-  const handleAddItem = () => {
-    if (crops.length === 0) return;
-    const firstCrop = crops[0];
-    const cropPlots = activePlots.filter((p) => p.crop_id === firstCrop.id);
-    const plotIds = cropPlots.map((p) => p.id);
-    const totalSlots = cropPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-    const rate = firstCrop.slots_per_kg ? Number(firstCrop.slots_per_kg) : 4.0;
-    const defaultKg = totalSlots > 0 ? Math.round(totalSlots / rate) : 25;
+  const toggleOtherPlots = (idx: number) => {
+    setExpandedOtherPlots((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
 
-    setItems([
-      ...items,
+  const handleAddItem = () => {
+    if (activeCrops.length === 0) {
+      alert('ไม่มีชนิดผักที่เปิดใช้งาน กรุณาเปิดใช้งานผักในแคตตาล็อกก่อน');
+      return;
+    }
+    // Prefer crop that is not yet added in current items
+    const availableCrop = activeCrops.find((c) => !items.some((it) => it.crop_id === c.id)) || activeCrops[0];
+    const cropPlots = activePlots.filter((p) => p.crop_id === availableCrop.id);
+    const availableCropPlots = cropPlots.filter((p) => {
+      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      return Number(p.slot_capacity || 0) - occ > 0;
+    });
+    const plotIds = availableCropPlots.map((p) => p.id);
+    const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
+      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+    }, 0);
+    const rate = availableCrop.slots_per_kg ? Number(availableCrop.slots_per_kg) : 4.0;
+    const defaultKg = totalAvailableSlots > 0 ? Math.floor(totalAvailableSlots / rate) : 0;
+
+    setItems((prev) => [
+      ...prev,
       {
-        crop_id: firstCrop.id,
+        crop_id: availableCrop.id,
         selected_plot_ids: plotIds,
         bookable_qty_kg: defaultKg,
-        price_per_kg: Number(firstCrop.default_price_per_kg) || 130,
-        growing_days: Number(firstCrop.growing_days) || 45,
+        price_per_kg: Number(availableCrop.default_price_per_kg) || 130,
+        growing_days: Number(availableCrop.growing_days) || 45,
       },
     ]);
   };
@@ -133,12 +205,23 @@ export const AdminRoundsPage: React.FC = () => {
   };
 
   const handleItemCropChange = (index: number, cropId: string) => {
-    const selected = crops.find((c) => c.id === cropId);
+    const selected = activeCrops.find((c) => c.id === cropId);
+    if (!selected) {
+      setFormError('ชนิดผักนี้ปิดใช้งานอยู่ กรุณาเลือกผักที่เปิดใช้งาน');
+      return;
+    }
     const cropPlots = activePlots.filter((p) => p.crop_id === cropId);
-    const plotIds = cropPlots.map((p) => p.id);
-    const totalSlots = cropPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
+    const availableCropPlots = cropPlots.filter((p) => {
+      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      return Number(p.slot_capacity || 0) - occ > 0;
+    });
+    const plotIds = availableCropPlots.map((p) => p.id);
+    const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
+      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+    }, 0);
     const rate = selected?.slots_per_kg ? Number(selected.slots_per_kg) : 4.0;
-    const defaultKg = totalSlots > 0 ? Math.round(totalSlots / rate) : 25;
+    const defaultKg = totalAvailableSlots > 0 ? Math.floor(totalAvailableSlots / rate) : 0;
 
     setItems(
       items.map((it, i) => {
@@ -156,26 +239,97 @@ export const AdminRoundsPage: React.FC = () => {
   };
 
   const handleTogglePlot = (itemIndex: number, plotId: string) => {
+    const occ = plotOccupancyMap[plotId];
+    const plot = activePlots.find((p) => p.id === plotId);
+    const cap = Number(plot?.slot_capacity || 0);
+    const available = Math.max(0, cap - (occ?.occupiedSlots || 0));
+
     setItems((prevItems) =>
       prevItems.map((it, idx) => {
         if (idx !== itemIndex) return it;
 
         const currentSelected = it.selected_plot_ids || [];
         const isSelected = currentSelected.includes(plotId);
+
+        // If plot is 100% full by other active rounds and user tries to select it
+        if (!isSelected && available === 0) {
+          const roundNames = occ?.occupyingRounds?.map((r) => r.roundName).join(', ') || 'รอบที่กำลังปลูกอยู่';
+          alert(`⚠️ แปลง "${plot?.name}" ถูกใช้งานเต็ม 100% โดย ${roundNames} แล้ว ไม่สามารถเลือกปลูกในรอบนี้ได้`);
+          return it;
+        }
+
         const newSelected = isSelected
           ? currentSelected.filter((id) => id !== plotId)
           : [...currentSelected, plotId];
 
+        // Recalculate available slots from chosen plots
         const crop = crops.find((c) => c.id === it.crop_id);
         const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const chosenPlots = activePlots.filter((p) => newSelected.includes(p.id));
-        const newSlots = chosenPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-        const newKg = newSlots > 0 ? Math.round(newSlots / rate) : 0;
+        const newAvailableSlots = chosenPlots.reduce((sum, p) => {
+          const pOcc = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          return sum + Math.max(0, Number(p.slot_capacity || 0) - pOcc);
+        }, 0);
+        const calculatedKg = newAvailableSlots > 0 ? Math.floor(newAvailableSlots / rate) : 0;
 
         return {
           ...it,
           selected_plot_ids: newSelected,
+          bookable_qty_kg: it.bookable_qty_kg === 0 ? calculatedKg : it.bookable_qty_kg,
+        };
+      })
+    );
+  };
+
+  const handleSelectAllPlotsForCrop = (itemIndex: number) => {
+    setItems((prevItems) =>
+      prevItems.map((it, idx) => {
+        if (idx !== itemIndex) return it;
+        const designatedPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
+        // Only select plots that have available space > 0
+        const availablePlots = (designatedPlots.length > 0 ? designatedPlots : activePlots).filter((p) => {
+          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          return Number(p.slot_capacity || 0) - occ > 0;
+        });
+        const plotIds = availablePlots.map((p) => p.id);
+        const crop = crops.find((c) => c.id === it.crop_id);
+        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
+        const newSlots = availablePlots.reduce((sum, p) => {
+          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+        }, 0);
+        const newKg = newSlots > 0 ? Math.floor(newSlots / rate) : 0;
+
+        return {
+          ...it,
+          selected_plot_ids: plotIds,
           bookable_qty_kg: newKg,
+        };
+      })
+    );
+  };
+
+  const handleDeselectAllPlots = (itemIndex: number) => {
+    setItems((prevItems) =>
+      prevItems.map((it, idx) => (idx === itemIndex ? { ...it, selected_plot_ids: [], bookable_qty_kg: 0 } : it))
+    );
+  };
+
+  const handleMatchCapacityKg = (itemIndex: number) => {
+    setItems((prevItems) =>
+      prevItems.map((it, idx) => {
+        if (idx !== itemIndex) return it;
+        const crop = crops.find((c) => c.id === it.crop_id);
+        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
+        const chosenPlots = activePlots.filter((p) => (it.selected_plot_ids || []).includes(p.id));
+        const availableSlotsInChosen = chosenPlots.reduce((sum, p) => {
+          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+        }, 0);
+        const matchedKg = Math.max(0, Math.floor(availableSlotsInChosen / rate));
+        return {
+          ...it,
+          bookable_qty_kg: matchedKg,
         };
       })
     );
@@ -201,6 +355,61 @@ export const AdminRoundsPage: React.FC = () => {
       return;
     }
 
+    // 1. Check if whole farm is full
+    if (isFarmFullyOccupied) {
+      const roundNames = activeOngoingRounds.map((r) => r.name).join(', ');
+      setFormError(
+        `ไม่สามารถสร้างรอบปลูกใหม่ได้: แปลงปลูกในฟาร์มทั้งหมดถูกใช้งานเต็ม 100% แล้ว (${roundNames}) กรุณารอให้รอบเดิมสิ้นสุดก่อน`
+      );
+      return;
+    }
+
+    // 2. Strict validation: check each item against actual remaining plot space
+    for (const it of items) {
+      const crop = crops.find((c) => c.id === it.crop_id);
+      const cropName = crop?.name || 'ผัก';
+      const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
+      const targetKg = Number(it.bookable_qty_kg) || 0;
+      const requiredSlots = Math.round(targetKg * rate);
+      const chosenPlots = activePlots.filter((p) => (it.selected_plot_ids || []).includes(p.id));
+
+      if (chosenPlots.length === 0) {
+        setFormError(`กรุณาเลือกแปลงปลูกสำหรับ ${cropName} อย่างน้อย 1 แปลง`);
+        return;
+      }
+
+      // Calculate REAL available slots in chosen plots (deducting other active rounds)
+      let availableSlotsInChosen = 0;
+      let occupiedInChosen = 0;
+      const occupyingRoundNames: string[] = [];
+
+      chosenPlots.forEach((p) => {
+        const occ = plotOccupancyMap[p.id];
+        const pOccupied = occ?.occupiedSlots || 0;
+        const pCap = Number(p.slot_capacity || 0);
+        occupiedInChosen += pOccupied;
+        availableSlotsInChosen += Math.max(0, pCap - pOccupied);
+        occ?.occupyingRounds.forEach((r) => {
+          if (!occupyingRoundNames.includes(r.roundName)) occupyingRoundNames.push(r.roundName);
+        });
+      });
+
+      if (availableSlotsInChosen === 0) {
+        setFormError(
+          `แปลงที่เลือกสำหรับ ${cropName} ถูกใช้งานเต็ม 100% แล้วในรอบ ${occupyingRoundNames.join(', ')} จึงไม่สามารถสร้างรอบใหม่ได้ กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง`
+        );
+        return;
+      }
+
+      if (requiredSlots > availableSlotsInChosen) {
+        const maxKg = Math.floor(availableSlotsInChosen / rate);
+        setFormError(
+          `พื้นที่แปลงสำหรับ ${cropName} ไม่เพียงพอ! แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง ${availableSlotsInChosen.toLocaleString()} ช่อง (~${maxKg} กก.) แต่เป้าหมายต้องการ ${requiredSlots.toLocaleString()} ช่อง (มีรอบเดิมใช้อยู่ ${occupiedInChosen.toLocaleString()} ช่อง) กรุณาปรับลดเป้าหมายไม่ให้เกิน ${maxKg} กก.`
+        );
+        return;
+      }
+    }
+
     try {
       setSaving(true);
       const maxGrowingDays = items.length > 0
@@ -218,6 +427,7 @@ export const AdminRoundsPage: React.FC = () => {
           bookable_qty_kg: it.bookable_qty_kg,
           price_per_kg: it.price_per_kg,
           growing_days: it.growing_days,
+          plot_ids: it.selected_plot_ids || [],
         })),
       };
 
@@ -252,37 +462,37 @@ export const AdminRoundsPage: React.FC = () => {
       case 1:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
-            🌱 สเต็ป 1: ปักเม็ด ({round.seed_date || 'ยังไม่ระบุ'})
+            🌱 สเต็ป 1: ปักเม็ด ({formatDateDMY(round.seed_date)})
           </span>
         );
       case 2:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs font-bold border border-sky-200">
-            🧪 สเต็ป 2: ใส่ปุ๋ย ({round.fertilizing_date || 'ยังไม่ระบุ'})
+            🧪 สเต็ป 2: ใส่ปุ๋ย ({formatDateDMY(round.fertilizing_date)})
           </span>
         );
       case 3:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200">
-            🌿 สเต็ป 3: ปลูกจริง ({round.transplant_date || round.planted_at || 'ยังไม่ระบุ'})
+            🌿 สเต็ป 3: ปลูกจริง ({formatDateDMY(round.transplant_date || round.planted_at)})
           </span>
         );
       case 4:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
-            🛒 สเต็ป 4: เปิดสั่งจองล่วงหน้า ({round.booking_opens_at ? round.booking_opens_at.slice(0, 10) : ''})
+            🛒 สเต็ป 4: เปิดสั่งจองล่วงหน้า ({formatDateDMY(round.booking_opens_at)})
           </span>
         );
       case 5:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-300">
-            🧺 สเต็ป 5: วันที่พร้อมเก็บและขาย ({round.harvest_sale_date || round.expected_harvest_date || ''})
+            🧺 สเต็ป 5: วันที่พร้อมเก็บและขาย ({formatDateDMY(round.harvest_sale_date || round.expected_harvest_date)})
           </span>
         );
       case 6:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
-            🏷️ สเต็ป 6: ขายหมดแล้ว ({round.sold_out_date || ''})
+            🏷️ สเต็ป 6: ขายหมดแล้ว ({formatDateDMY(round.sold_out_date)})
           </span>
         );
       case 7:
@@ -399,7 +609,7 @@ export const AdminRoundsPage: React.FC = () => {
                         </Link>
                         <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                           <Clock className="w-3 h-3" />
-                          สร้างเมื่อ: {new Date(round.created_at).toLocaleDateString('th-TH')}
+                          สร้างเมื่อ: {formatDateDMY(round.created_at)}
                         </span>
                       </td>
 
@@ -485,8 +695,8 @@ export const AdminRoundsPage: React.FC = () => {
 
       {/* Create Round Modal - Organised by Crop & Designated Plots */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl space-y-5 my-8">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl space-y-5 my-1 sm:my-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">สร้างรอบการปลูกใหม่</h2>
@@ -504,9 +714,31 @@ export const AdminRoundsPage: React.FC = () => {
             </div>
 
             {formError && (
-              <div className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{formError}</span>
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 shadow-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
+                <span className="font-semibold leading-relaxed">{formError}</span>
+              </div>
+            )}
+
+            {isFarmFullyOccupied && (
+              <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-400 text-rose-900 space-y-2 shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-sm text-rose-800">
+                      🚨 แปลงปลูกในฟาร์มถูกใช้งานเต็ม 100% แล้ว (ไม่มีพื้นที่ว่างสำหรับสร้างรอบใหม่)
+                    </h3>
+                    <p className="text-xs text-rose-700 leading-relaxed">
+                      ฟาร์มมีความจุทั้งหมด <strong>{farmTotalSlots.toLocaleString()} ช่อง</strong> ถูกใช้งานไปแล้ว <strong>{farmOccupiedSlots.toLocaleString()} ช่อง</strong>
+                      {activeOngoingRounds.length > 0 && (
+                        <span> โดยรอบที่กำลังดำเนินการ: <strong>{activeOngoingRounds.map((r) => r.name).join(', ')}</strong></span>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-rose-600">
+                      💡 หากต้องการสร้างรอบใหม่ กรุณารอให้รอบที่กำลังดำเนินการจบขั้นตอนและบันทึกสิ้นสุดรอบ หรือไปจัดการเพิ่มแปลงปลูกใหม่ในหน้า "จัดการแปลงปลูก"
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -544,57 +776,245 @@ export const AdminRoundsPage: React.FC = () => {
               </div>
 
               {/* Vegetables to plant in this round */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <label className="font-bold text-slate-800 block text-sm">
-                      รายการผักและแปลงปลูกในรอบนี้ <span className="text-rose-500">*</span>
-                    </label>
-                    <span className="text-[11px] text-slate-500">
-                      ระบบแสดงแปลงปลูกที่กำหนดไว้สำหรับผักแต่ละชนิด ให้ติ๊กเลือกแปลงที่จะใช้ปลูกในรอบนี้
-                    </span>
+              <div className="rounded-3xl border-2 border-emerald-400 bg-emerald-100 shadow-sm">
+                <div className="flex flex-col gap-3 rounded-t-3xl border-b-2 border-emerald-300 bg-emerald-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
+                      <Leaf className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-black text-emerald-950">
+                        ผักที่จะปลูกในรอบนี้ <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
+                        เพิ่มชนิดผัก แล้วเลือกแปลงและเป้าหมายผลผลิต ระบบจะคำนวณพื้นที่ว่างให้อัตโนมัติ
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleAddItem}
-                    className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors"
+                    disabled={isFarmFullyOccupied || activeCrops.length === 0}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>เพิ่มผัก</span>
+                    <Plus className="h-4 w-4" />
+                    <span>เพิ่มชนิดผัก</span>
                   </button>
                 </div>
 
+                <div className="space-y-4 p-3 sm:p-5">
+
+                {/* Overall Round Farm Capacity & Alert Summary Banner */}
+                {items.length > 0 && (() => {
+                  const allChosenPlotIds = Array.from(new Set(items.flatMap((it) => it.selected_plot_ids || [])));
+                  const totalChosenPlotsSlots = activePlots
+                    .filter((p) => allChosenPlotIds.includes(p.id))
+                    .reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
+                  const totalAvailableInChosenPlots = activePlots
+                    .filter((p) => allChosenPlotIds.includes(p.id))
+                    .reduce((s, p) => {
+                      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                      return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
+                    }, 0);
+                  const totalTargetKg = items.reduce((s, it) => s + (Number(it.bookable_qty_kg) || 0), 0);
+                  const totalRequiredSlots = items.reduce((s, it) => {
+                    const c = crops.find((cr) => cr.id === it.crop_id);
+                    const r = c?.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
+                    return s + Math.round((Number(it.bookable_qty_kg) || 0) * r);
+                  }, 0);
+
+                  const itemsWithoutPlots = items.filter((it) => (it.selected_plot_ids || []).length === 0);
+                  const itemsOvercapacity = items.filter((it) => {
+                    const c = crops.find((cr) => cr.id === it.crop_id);
+                    const r = c?.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
+                    const req = Math.round((Number(it.bookable_qty_kg) || 0) * r);
+                    const avail = activePlots
+                      .filter((p) => (it.selected_plot_ids || []).includes(p.id))
+                      .reduce((sum, p) => {
+                        const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                        return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+                      }, 0);
+                    return req > avail;
+                  });
+
+                  const plotUsageCounts: Record<string, number> = {};
+                  items.forEach((it) => {
+                    (it.selected_plot_ids || []).forEach((pid) => {
+                      plotUsageCounts[pid] = (plotUsageCounts[pid] || 0) + 1;
+                    });
+                  });
+                  const duplicatePlotIds = Object.keys(plotUsageCounts).filter((pid) => plotUsageCounts[pid] > 1);
+
+                  return (
+                    <div className="mb-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-slate-50 border border-emerald-100/90 shadow-2xs space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-lg text-white ${isFarmFullyOccupied ? 'bg-rose-600' : 'bg-emerald-600'}`}>
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800">
+                              สรุปพื้นที่แปลงปลูก (คำนวณจากรอบเดิมที่กำลังดำเนินการ)
+                            </h4>
+                            <p className="text-[10px] text-slate-500">
+                              ความจุฟาร์มรวม: {activePlots.length} แปลง ({farmTotalSlots.toLocaleString()} ช่อง) • รอบเดิมใช้ไป: {farmOccupiedSlots.toLocaleString()} ช่อง • 
+                              <strong className={farmAvailableSlots > 0 ? 'text-emerald-700 ml-1' : 'text-rose-600 ml-1'}>
+                                {farmAvailableSlots > 0 ? `พื้นที่ว่างในฟาร์มเหลือ: ${farmAvailableSlots.toLocaleString()} ช่อง` : 'แปลงในฟาร์มเต็มแล้ว (เหลือ 0 ช่อง)'}
+                              </strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-semibold text-slate-600">
+                            เป้าหมายรอบนี้: <strong className="text-emerald-800">{totalTargetKg.toLocaleString()} กก.</strong> (~{totalRequiredSlots.toLocaleString()} ช่อง)
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="font-semibold text-slate-600">
+                            แปลงที่เลือกรอบนี้: <strong className="text-slate-900">{allChosenPlotIds.length} แปลง</strong> (พื้นที่ว่างในแปลงที่เลือก: {totalAvailableInChosenPlots.toLocaleString()} ช่อง)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Overall farm capacity bar: Occupied vs Free */}
+                      <div className="space-y-1">
+                        <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden flex">
+                          {/* Segment 1: Occupied by other rounds */}
+                          <div
+                            className="h-full bg-rose-500 transition-all duration-300"
+                            style={{
+                              width: `${farmTotalSlots > 0 ? Math.min(100, (farmOccupiedSlots / farmTotalSlots) * 100) : 0}%`,
+                            }}
+                            title={`รอบเดิมใช้ไป: ${farmOccupiedSlots} ช่อง`}
+                          />
+                          {/* Segment 2: Allocated in this new round */}
+                          <div
+                            className="h-full bg-emerald-500 transition-all duration-300"
+                            style={{
+                              width: `${farmTotalSlots > 0 ? Math.min(100 - (farmOccupiedSlots / farmTotalSlots) * 100, (totalRequiredSlots / farmTotalSlots) * 100) : 0}%`,
+                            }}
+                            title={`รอบนี้ต้องการ: ${totalRequiredSlots} ช่อง`}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-slate-500">
+                          <span className="flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+                              รอบเดิมใช้: {farmOccupiedSlots.toLocaleString()} ช่อง ({farmTotalSlots > 0 ? Math.round((farmOccupiedSlots / farmTotalSlots) * 100) : 0}%)
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                              รอบนี้เลือก: {totalRequiredSlots.toLocaleString()} ช่อง
+                            </span>
+                          </span>
+                          <span>
+                            {farmAvailableSlots > 0 ? (
+                              <span className="text-emerald-700 font-semibold">
+                                เหลือพื้นที่ว่างในฟาร์ม: {farmAvailableSlots.toLocaleString()} ช่อง
+                              </span>
+                            ) : (
+                              <strong className="text-rose-600">แปลงในฟาร์มเต็ม 100%</strong>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Alert Badges */}
+                      {(itemsWithoutPlots.length > 0 || itemsOvercapacity.length > 0 || duplicatePlotIds.length > 0 || isFarmFullyOccupied) ? (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-emerald-100/60">
+                          {isFarmFullyOccupied && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                              <AlertCircle className="w-3 h-3 text-rose-600" />
+                              <span>แปลงในฟาร์มถูกใช้งานเต็มทั้งหมดแล้ว</span>
+                            </span>
+                          )}
+                          {itemsWithoutPlots.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span>มี {itemsWithoutPlots.length} ผักยังไม่ได้เลือกแปลงปลูก</span>
+                            </span>
+                          )}
+                          {itemsOvercapacity.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                              <AlertCircle className="w-3 h-3 text-rose-600" />
+                              <span>มี {itemsOvercapacity.length} ผักที่พื้นที่ว่างในแปลงไม่พอ</span>
+                            </span>
+                          )}
+                          {duplicatePlotIds.length > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                              <AlertCircle className="w-3 h-3 text-rose-600" />
+                              <span>มีแปลงถูกเลือกซ้ำ {duplicatePlotIds.length} แปลง</span>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-emerald-100/60 text-[10px] font-bold text-emerald-700">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>เลือกแปลงปลูกครบถ้วนและพื้นที่เพียงพอกับเป้าหมาย</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {items.length === 0 ? (
-                  <div className="p-6 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 space-y-1">
-                    <Leaf className="w-8 h-8 mx-auto text-slate-300" />
-                    <p className="font-semibold text-slate-600">ยังไม่มีรายการผักในรอบนี้</p>
-                    <p>กดปุ่ม "+ เพิ่มผัก" ด้านบน เพื่อระบุผักที่จะปลูก</p>
+                  <div className="rounded-2xl border-2 border-dashed border-emerald-300 bg-white px-5 py-8 text-center">
+                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                      <Sprout className="h-5 w-5" />
+                    </div>
+                    <p className="mt-3 text-xs font-bold text-slate-700">ยังไม่ได้เพิ่มผักในรอบนี้</p>
+                    <p className="mt-1 text-[11px] text-slate-500">เริ่มต้นโดยกด “เพิ่มชนิดผัก” แล้วเลือกผักที่ต้องการปลูก</p>
                   </div>
                 ) : (
-                  <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">
+                  <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
                     {items.map((it, idx) => {
                       const selectedCrop = crops.find((c) => c.id === it.crop_id);
                       const cropRate = selectedCrop?.slots_per_kg ? Number(selectedCrop.slots_per_kg) : 4.0;
+                      const targetKg = Number(it.bookable_qty_kg) || 0;
+                      const requiredSlots = Math.round(targetKg * cropRate);
 
-                      // Matching plots designated specifically for this crop
-                      const cropPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
-                      const totalCropSlots = cropPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
+                      // Designated plots vs Other active plots
+                      const designatedPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
+                      const otherPlots = activePlots.filter((p) => p.crop_id !== it.crop_id);
 
-                      // Selected vs Remaining plots for THIS crop
+                      // Selected plots for this item
                       const selectedPlotIds = it.selected_plot_ids || [];
-                      const selectedPlotsOfCrop = cropPlots.filter((p) => selectedPlotIds.includes(p.id));
-                      const remainingPlotsOfCrop = cropPlots.filter((p) => !selectedPlotIds.includes(p.id));
+                      const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
+                      const totalSelectedRawCapacity = selectedPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
+                      const totalSelectedOccupied = selectedPlots.reduce((sum, p) => sum + (plotOccupancyMap[p.id]?.occupiedSlots || 0), 0);
+                      const totalSelectedAvailableSlots = selectedPlots.reduce((sum, p) => {
+                        const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                        return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
+                      }, 0);
 
-                      const selectedSlots = selectedPlotsOfCrop.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-                      const remainingSlotsOfCrop = remainingPlotsOfCrop.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-                      const remainingKgOfCrop = (remainingSlotsOfCrop / cropRate).toFixed(1);
+                      // Conflict detection: plot selected in another item
+                      const conflictingPlotIds = selectedPlotIds.filter((pid) =>
+                        items.some((otherIt, otherIdx) => otherIdx !== idx && (otherIt.selected_plot_ids || []).includes(pid))
+                      );
+                      const conflictingPlotNames = activePlots.filter((p) => conflictingPlotIds.includes(p.id)).map((p) => p.name);
+
+                      // Capacity checks based on REAL remaining available slots
+                      const isNoPlot = selectedPlots.length === 0;
+                      const isSelectedPlotsZeroFree = selectedPlots.length > 0 && totalSelectedAvailableSlots === 0;
+                      const isOverCapacity = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && requiredSlots > totalSelectedAvailableSlots;
+                      const isUnderCapacity = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots > requiredSlots;
+                      const isOptimal = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots === requiredSlots;
+
+                      const missingSlots = Math.max(0, requiredSlots - totalSelectedAvailableSlots);
+                      const extraSlots = Math.max(0, totalSelectedAvailableSlots - requiredSlots);
+                      const missingKg = (missingSlots / cropRate).toFixed(1);
+                      const extraKg = (extraSlots / cropRate).toFixed(1);
+                      const matchCapacityKg = Math.floor(totalSelectedAvailableSlots / cropRate);
+
+                      // Gauge bar calculation
+                      const usagePercent = totalSelectedAvailableSlots > 0 ? Math.min(100, Math.round((requiredSlots / totalSelectedAvailableSlots) * 100)) : (isSelectedPlotsZeroFree ? 100 : 0);
 
                       return (
                         <div
                           key={idx}
-                          className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3 shadow-2xs"
+                          className="rounded-2xl border-2 border-emerald-300 border-l-4 border-l-emerald-700 bg-emerald-50 p-4 shadow-md transition-shadow hover:shadow-lg sm:p-5"
                         >
-                          {/* Top inputs: Crop, Target kg, Price, Growing days */}
+                          {/* Top inputs: Crop, Target kg, Price, Growing days, Delete */}
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                             {/* Crop select */}
                             <div className="flex-1">
@@ -606,14 +1026,17 @@ export const AdminRoundsPage: React.FC = () => {
                                 onChange={(e) => handleItemCropChange(idx, e.target.value)}
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 text-slate-900"
                               >
-                                {crops.map((c) => {
+                                {activeCrops.map((c) => {
                                   const plotsCount = activePlots.filter((p) => p.crop_id === c.id).length;
                                   return (
                                     <option key={c.id} value={c.id}>
-                                      {c.name} (มี {plotsCount} แปลง • ฿{Number(c.default_price_per_kg).toFixed(0)}/กก.)
+                                      {c.name} {plotsCount > 0 ? `(มีแปลงประจำ ${plotsCount} แปลง)` : '(ไม่มีแปลงประจำ)'}
                                     </option>
                                   );
                                 })}
+                                {!activeCrops.some((crop) => crop.id === it.crop_id) && crops.find((crop) => crop.id === it.crop_id) && (
+                                  <option value={it.crop_id} disabled>{crops.find((crop) => crop.id === it.crop_id)?.name} (ปิดใช้งานแล้ว)</option>
+                                )}
                               </select>
                             </div>
 
@@ -631,21 +1054,6 @@ export const AdminRoundsPage: React.FC = () => {
                                   handleItemFieldChange(idx, 'bookable_qty_kg', parseFloat(e.target.value) || 0)
                                 }
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500"
-                              />
-                            </div>
-
-                            {/* Price per Kg */}
-                            <div className="w-24">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-0.5">฿/กก.</label>
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={it.price_per_kg}
-                                onChange={(e) =>
-                                  handleItemFieldChange(idx, 'price_per_kg', parseFloat(e.target.value) || 0)
-                                }
-                                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500"
                               />
                             </div>
 
@@ -675,243 +1083,454 @@ export const AdminRoundsPage: React.FC = () => {
                             </button>
                           </div>
 
-                          {/* DESIGNATED PLOTS BOX FOR THIS SPECIFIC CROP WITH PROGRESS BARS */}
+                          {/* PROMINENT REAL-TIME WARNING & NOTIFICATION ALERT BOX */}
+                          <div className="space-y-2">
+                            {/* 1. Conflict Warning */}
+                            {conflictingPlotNames.length > 0 && (
+                              <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 shadow-2xs">
+                                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="font-bold">⚠️ แปลงปลูกถูกเลือกซ้ำข้ามรายการผัก!</p>
+                                  <p className="text-[11px] text-rose-700 mt-0.5">
+                                    แปลง <strong>{conflictingPlotNames.join(', ')}</strong> ถูกเลือกในผักชนิดอื่นด้วย กรุณาตรวจสอบเพื่อไม่ให้ปลูกทับซ้อนกันในรอบเดียวกัน
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 2. No Plot Selected Alert */}
+                            {isNoPlot && (
+                              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-bold">⚠️ ยังไม่ได้เลือกแปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}!</p>
+                                    <p className="text-[11px] text-amber-800 mt-0.5">
+                                      เป้าหมาย <strong>{targetKg} กก.</strong> ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ช่องปลูก</strong> (อัตรา ~{cropRate} ช่อง/กก.) กรุณาเลือกแปลงปลูกด้านล่าง
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {designatedPlots.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectAllPlotsForCrop(idx)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition-colors shadow-2xs"
+                                    >
+                                      ⚡ เลือกทุกแปลงของผักนี้ ({designatedPlots.length} แปลง)
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 3. Selected Plots Are Fully Occupied By Other Active Rounds */}
+                            {isSelectedPlotsZeroFree && (
+                              <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-bold">🚨 แปลงที่เลือกถูกรอบอื่นใช้งานเต็ม 100% แล้ว (ไม่มีพื้นที่ว่าง)!</p>
+                                    <p className="text-[11px] text-rose-800 mt-0.5">
+                                      แปลงที่เลือก ({selectedPlots.map((p) => p.name).join(', ')}) ถูกรอบเดิมที่กำลังดำเนินการใช้งานเต็มความจุ {totalSelectedRawCapacity.toLocaleString()} ช่อง ไม่สามารถปลูกในรอบนี้ได้ กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 4. Overcapacity Warning (Target > Remaining Available Space) */}
+                            {isOverCapacity && (
+                              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
+                                <div className="flex items-start gap-2">
+                                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-bold">🚨 พื้นที่ว่างในแปลงที่เลือกไม่เพียงพอสำหรับเป้าหมาย {targetKg} กก.!</p>
+                                    <p className="text-[11px] text-rose-800 mt-0.5">
+                                      ต้องการ <strong>{requiredSlots.toLocaleString()} ช่อง</strong> แต่แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง <strong>{totalSelectedAvailableSlots.toLocaleString()} ช่อง</strong>
+                                      {totalSelectedOccupied > 0 && ` (รอบเดิมใช้ไป ${totalSelectedOccupied.toLocaleString()} ช่อง)`}
+                                      {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ช่อง</strong> หรือ ~{missingKg} กก.)
+                                    </p>
+                                  </div>
+                                </div>
+                                {matchCapacityKg > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMatchCapacityKg(idx)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors whitespace-nowrap shadow-2xs"
+                                  >
+                                    ⚡ ปรับเป้าหมายเป็น {matchCapacityKg} กก. (ตามพื้นที่ว่างที่เหลือ)
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 5. Undercapacity Info (Available Space > Target) */}
+                            {isUnderCapacity && (
+                              <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-300 text-sky-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
+                                <div className="flex items-start gap-2">
+                                  <Info className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="font-bold">ℹ️ แปลงที่เลือกมีพื้นที่ว่างเหลือ!</p>
+                                    <p className="text-[11px] text-sky-800 mt-0.5">
+                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ช่อง</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ช่อง</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ช่อง</strong> หรือ ~{extraKg} กก.)
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMatchCapacityKg(idx)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] transition-colors whitespace-nowrap shadow-2xs"
+                                >
+                                  ⚡ ปรับเป้าหมายเป็น {matchCapacityKg} กก. (เต็มพื้นที่ว่าง)
+                                </button>
+                              </div>
+                            )}
+
+                            {/* 6. Optimal Capacity */}
+                            {isOptimal && (
+                              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                  <span className="font-bold">
+                                    ✓ พื้นที่ว่างในแปลงที่เลือกพอดีกับเป้าหมายผลผลิต ({totalSelectedAvailableSlots.toLocaleString()} ช่องปลูก)
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* PLOTS MANAGEMENT BOX */}
                           <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
-                            {/* Header: Plots info and remaining badge */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs border-b border-slate-100 pb-2">
-                              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                            {/* Toolbar: Stats & Action Buttons */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs border-b border-slate-100 pb-2.5">
+                              <div className="flex items-center gap-2 font-bold text-slate-800">
                                 <LayoutGrid className="w-4 h-4 text-emerald-600" />
-                                <span>แปลงที่กำหนดไว้สำหรับ {selectedCrop?.name || 'ผักนี้'}:</span>
+                                <span>แปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}:</span>
                                 <span className="text-slate-500 font-normal">
-                                  {cropPlots.length > 0
-                                    ? `(${cropPlots.length} แปลง รวม ${totalCropSlots.toLocaleString()} ช่อง)`
-                                    : '(ยังไม่ได้กำหนดแปลง)'}
+                                  (เลือก {selectedPlots.length} แปลง • พื้นที่ว่างรวม {totalSelectedAvailableSlots.toLocaleString()} ช่อง)
                                 </span>
                               </div>
 
-                              {/* Remaining Plots Badge for THIS crop */}
-                              <div>
-                                {cropPlots.length > 0 && remainingPlotsOfCrop.length === 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    <span>เลือกปลูกครบทุกแปลงของผักนี้แล้ว (เหลือ 0 แปลง)</span>
-                                  </span>
-                                ) : remainingPlotsOfCrop.length > 0 ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
-                                    <span>
-                                      🟢 เหลือแปลงที่ปลูกได้อีก: <strong>{remainingPlotsOfCrop.length} แปลง</strong> ({remainingSlotsOfCrop.toLocaleString()} ช่อง)
-                                    </span>
-                                  </span>
-                                ) : null}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {designatedPlots.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectAllPlotsForCrop(idx)}
+                                    className="px-2 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
+                                  >
+                                    เลือกแปลงประจำ ({designatedPlots.length})
+                                  </button>
+                                )}
+                                {totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots !== requiredSlots && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMatchCapacityKg(idx)}
+                                    className="px-2 py-1 text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors"
+                                  >
+                                    ปรับ กก. ตามพื้นที่ว่าง ({matchCapacityKg} กก.)
+                                  </button>
+                                )}
+                                {selectedPlotIds.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeselectAllPlots(idx)}
+                                    className="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 rounded-lg transition-colors"
+                                  >
+                                    ล้างการเลือก
+                                  </button>
+                                )}
                               </div>
                             </div>
 
-                            {/* CROP TOTAL AREA GAUGE BAR */}
-                            {cropPlots.length > 0 && (() => {
-                              const targetSlots = Math.round((Number(it.bookable_qty_kg) || 0) * cropRate);
-                              const cropUsagePercent = totalCropSlots > 0 ? Math.min(100, (targetSlots / totalCropSlots) * 100) : 0;
+                            {/* CROP TOTAL CAPACITY GAUGE BAR */}
+                            {selectedPlots.length > 0 && (
+                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
+                                <div className="flex justify-between text-[11px]">
+                                  <span className="font-semibold text-slate-700">
+                                    การใช้พื้นที่แปลงที่เลือกของ {selectedCrop?.name}:
+                                  </span>
+                                  <span className="font-bold text-slate-800">
+                                    {isSelectedPlotsZeroFree ? (
+                                      <span className="text-rose-600">รอบเดิมใช้เต็ม 100% (ว่าง 0 ช่อง)</span>
+                                    ) : (
+                                      <span>ใช้ {requiredSlots.toLocaleString()} / พื้นที่ว่าง {totalSelectedAvailableSlots.toLocaleString()} ช่อง ({usagePercent}%)</span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden flex">
+                                  {/* Occupied by other rounds in these plots */}
+                                  <div
+                                    className="h-full bg-rose-500 transition-all duration-300"
+                                    style={{
+                                      width: `${totalSelectedRawCapacity > 0 ? Math.min(100, (totalSelectedOccupied / totalSelectedRawCapacity) * 100) : 0}%`,
+                                    }}
+                                    title={`รอบเดิมใช้: ${totalSelectedOccupied} ช่อง`}
+                                  />
+                                  {/* Used by this crop in this round */}
+                                  <div
+                                    className={`h-full transition-all duration-300 ${
+                                      isOverCapacity ? 'bg-rose-500' : usagePercent >= 100 ? 'bg-emerald-600' : 'bg-sky-500'
+                                    }`}
+                                    style={{
+                                      width: `${totalSelectedRawCapacity > 0 ? Math.min(100 - (totalSelectedOccupied / totalSelectedRawCapacity) * 100, (requiredSlots / totalSelectedRawCapacity) * 100) : 0}%`,
+                                    }}
+                                    title={`รอบนี้ใช้: ${requiredSlots} ช่อง`}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-500">
+                                  <span>เป้าหมายผลผลิต: {it.bookable_qty_kg} กก.</span>
+                                  <span>
+                                    {isSelectedPlotsZeroFree ? (
+                                      <strong className="text-rose-600">รอบอื่นใช้งานเต็มแล้ว</strong>
+                                    ) : isOverCapacity ? (
+                                      <strong className="text-rose-600">เกินพื้นที่ว่าง {missingSlots.toLocaleString()} ช่อง</strong>
+                                    ) : extraSlots > 0 ? (
+                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ช่อง (~{extraKg} กก.)</strong>
+                                    ) : (
+                                      <strong className="text-emerald-700">เต็มพื้นที่ว่างพอดี 100%</strong>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* PLOT CARDS RENDERER HELPER */}
+                            {(() => {
+                              let remainingToAllocate = requiredSlots;
+
+                              const renderPlotCard = (plot: Plot, isDesignated: boolean) => {
+                                const isChecked = selectedPlotIds.includes(plot.id);
+                                const cap = Number(plot.slot_capacity || 0);
+                                const occ = plotOccupancyMap[plot.id];
+                                const occupiedByOtherRounds = occ?.occupiedSlots || 0;
+                                const occupyingRoundNames = occ?.occupyingRounds.map((r) => r.roundName) || [];
+                                const availableInPlot = Math.max(0, cap - occupiedByOtherRounds);
+                                const isPlotFull = availableInPlot === 0;
+
+                                let usedInPlot = 0;
+                                if (isChecked) {
+                                  usedInPlot = Math.min(availableInPlot, Math.max(0, remainingToAllocate));
+                                  remainingToAllocate -= usedInPlot;
+                                }
+
+                                const remainingFreeInPlot = isChecked ? Math.max(0, availableInPlot - usedInPlot) : availableInPlot;
+
+                                // Other item using this plot?
+                                const otherItemUsing = items.find(
+                                  (otherIt, otherIdx) => otherIdx !== idx && (otherIt.selected_plot_ids || []).includes(plot.id)
+                                );
+                                const otherCropUsing = otherItemUsing ? crops.find((c) => c.id === otherItemUsing.crop_id) : null;
+
+                                return (
+                                  <div
+                                    key={plot.id}
+                                    onClick={() => {
+                                      if (isPlotFull && !isChecked) {
+                                        alert(`แปลง "${plot.name}" ถูกใช้งานเต็ม 100% แล้วโดย: ${occupyingRoundNames.join(', ')}\nไม่สามารถเลือกใช้ในรอบนี้ได้`);
+                                        return;
+                                      }
+                                      handleTogglePlot(idx, plot.id);
+                                    }}
+                                    className={`p-2.5 rounded-xl border transition-all cursor-pointer select-none space-y-1.5 ${
+                                      isPlotFull && !isChecked
+                                        ? 'bg-rose-50/50 border-rose-300 opacity-80'
+                                        : isChecked
+                                        ? 'bg-white border-emerald-500 shadow-2xs ring-1 ring-emerald-400'
+                                        : otherItemUsing
+                                        ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
+                                        : 'bg-slate-50 border-slate-200/80 hover:border-slate-300 opacity-90'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span
+                                          className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] font-bold flex-shrink-0 ${
+                                            isChecked
+                                              ? 'bg-emerald-600 border-emerald-600 text-white'
+                                              : isPlotFull
+                                              ? 'border-rose-400 bg-rose-100 text-rose-600 font-bold'
+                                              : 'border-slate-300 bg-white text-transparent'
+                                          }`}
+                                        >
+                                          {isChecked ? '✓' : isPlotFull ? '✕' : ''}
+                                        </span>
+                                        <span className="font-bold text-slate-800 text-xs truncate">
+                                          {plot.name}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 flex-shrink-0">
+                                          ({plot.zone_name})
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        {isPlotFull ? (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                                            🔴 เต็ม (ติด {occupyingRoundNames[0] || 'รอบอื่น'})
+                                          </span>
+                                        ) : otherItemUsing ? (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                                            เลือกใน {otherCropUsing?.name || 'ผักอื่น'}
+                                          </span>
+                                        ) : isChecked ? (
+                                          <span
+                                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                              usedInPlot >= availableInPlot
+                                                ? 'bg-emerald-100 text-emerald-800'
+                                                : 'bg-sky-100 text-sky-800'
+                                            }`}
+                                          >
+                                            {usedInPlot >= availableInPlot ? 'เต็มโควตาว่าง' : `ใช้ ${usedInPlot} ช่อง`}
+                                          </span>
+                                        ) : occupiedByOtherRounds > 0 ? (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                                            🟠 ว่าง {availableInPlot}/{cap} ช่อง
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                            🟢 ว่าง {cap} ช่อง
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Per-plot capacity bar */}
+                                    <div className="space-y-0.5">
+                                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200 flex">
+                                        {/* Occupied by other rounds */}
+                                        <div
+                                          className="h-full bg-rose-500 transition-all duration-300"
+                                          style={{ width: `${cap > 0 ? Math.min(100, (occupiedByOtherRounds / cap) * 100) : 0}%` }}
+                                        />
+                                        {/* Used in this round */}
+                                        {isChecked && (
+                                          <div
+                                            className="h-full bg-emerald-500 transition-all duration-300"
+                                            style={{
+                                              width: `${cap > 0 ? Math.min(100 - (occupiedByOtherRounds / cap) * 100, (usedInPlot / cap) * 100) : 0}%`,
+                                            }}
+                                          />
+                                        )}
+                                      </div>
+
+                                      <div className="flex justify-between text-[10px] text-slate-500">
+                                        <span>
+                                          {isPlotFull ? (
+                                            <span className="text-rose-600 font-bold">รอบเดิมใช้เต็ม {cap} ช่อง</span>
+                                          ) : isChecked ? (
+                                            <>
+                                              รอบนี้ใช้ <strong className="text-slate-800">{usedInPlot}</strong> / ว่าง {availableInPlot} ช่อง
+                                            </>
+                                          ) : occupiedByOtherRounds > 0 ? (
+                                            <>รอบเดิมใช้ {occupiedByOtherRounds} / {cap} ช่อง</>
+                                          ) : (
+                                            <>ความจุ {cap} ช่อง (ว่าง 100%)</>
+                                          )}
+                                        </span>
+                                        <span>
+                                          {isPlotFull ? (
+                                            <span className="text-rose-600 font-semibold">สร้างรอบทับไม่ได้</span>
+                                          ) : isChecked ? (
+                                            remainingFreeInPlot > 0 ? (
+                                              <span className="text-sky-700 font-semibold">เหลือ {remainingFreeInPlot} ช่อง</span>
+                                            ) : (
+                                              <span className="text-emerald-700 font-semibold">เต็มพื้นที่ว่าง</span>
+                                            )
+                                          ) : (
+                                            <span className="text-emerald-600 font-medium">ว่าง {availableInPlot} ช่อง</span>
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              };
+
                               return (
-                                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
-                                  <div className="flex justify-between text-[11px]">
-                                    <span className="font-semibold text-slate-700">
-                                      หลอดพื้นที่รวมของ {selectedCrop?.name}:
-                                    </span>
-                                    <span className="font-bold text-slate-800">
-                                      ใช้ {targetSlots.toLocaleString()} / {totalCropSlots.toLocaleString()} ช่อง ({cropUsagePercent.toFixed(0)}%)
-                                    </span>
-                                  </div>
-                                  <div className="w-full h-2.5 bg-slate-200/70 rounded-full overflow-hidden p-0.5">
-                                    <div
-                                      className={`h-full rounded-full transition-all duration-300 ${
-                                        targetSlots > totalCropSlots
-                                          ? 'bg-rose-500'
-                                          : cropUsagePercent >= 100
-                                          ? 'bg-emerald-600'
-                                          : cropUsagePercent >= 75
-                                          ? 'bg-teal-500'
-                                          : 'bg-emerald-500'
-                                      }`}
-                                      style={{ width: `${Math.min(100, cropUsagePercent)}%` }}
-                                    />
-                                  </div>
-                                  <div className="flex justify-between text-[10px] text-slate-500">
-                                    <span>เป้าหมายผลผลิต: {it.bookable_qty_kg} กก.</span>
-                                    <span>
-                                      {remainingSlotsOfCrop > 0
-                                        ? `คงเหลือพื้นที่แปลงผักนี้: ${remainingSlotsOfCrop.toLocaleString()} ช่อง (~${remainingKgOfCrop} กก.)`
-                                        : 'ใช้พื้นที่แปลงผักนี้เต็ม 100%'}
-                                    </span>
-                                  </div>
+                                <div className="space-y-3">
+                                  {/* SECTION 1: Designated plots (if any) */}
+                                  {designatedPlots.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                                        <span>🌱 แปลงที่กำหนดไว้สำหรับ {selectedCrop?.name} ({designatedPlots.length} แปลง):</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">
+                                          ความจุรวม: {designatedPlots.reduce((s, p) => s + p.slot_capacity, 0).toLocaleString()} ช่อง
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {designatedPlots.map((plot) => renderPlotCard(plot, true))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* If no designated plots at all, notify and show all farm plots */}
+                                  {designatedPlots.length === 0 && (
+                                    <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-800 text-[11px] flex items-center justify-between">
+                                      <span>
+                                        ผักนี้ยังไม่ได้กำหนดแปลงประจำไว้ใน "จัดการแปลงปลูก" — สามารถเลือกจากแปลงทั้งหมดในฟาร์มด้านล่างได้ทันที
+                                      </span>
+                                      <Link
+                                        to="/admin/plots"
+                                        target="_blank"
+                                        className="inline-flex items-center gap-1 font-bold text-amber-900 underline whitespace-nowrap ml-2"
+                                      >
+                                        <span>จัดการแปลง</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </Link>
+                                    </div>
+                                  )}
+
+                                  {/* SECTION 2: Other Farm Plots */}
+                                  {otherPlots.length > 0 && (
+                                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                                      {designatedPlots.length > 0 ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleOtherPlots(idx)}
+                                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors border border-slate-200/80"
+                                          >
+                                            <span className="flex items-center gap-1.5">
+                                              <LayoutGrid className="w-3.5 h-3.5 text-slate-500" />
+                                              <span>
+                                                {expandedOtherPlots[idx] ? 'ซ่อน' : 'แสดง'} แปลงอื่นๆ ในฟาร์ม ({otherPlots.length} แปลง)
+                                              </span>
+                                            </span>
+                                            {expandedOtherPlots[idx] ? (
+                                              <ChevronUp className="w-4 h-4 text-slate-400" />
+                                            ) : (
+                                              <ChevronDown className="w-4 h-4 text-slate-400" />
+                                            )}
+                                          </button>
+
+                                          {expandedOtherPlots[idx] && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 animate-fadeIn">
+                                              {otherPlots.map((plot) => renderPlotCard(plot, false))}
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="space-y-1.5">
+                                          <span className="text-[11px] font-bold text-slate-700 block">
+                                            แปลงทั้งหมดในฟาร์ม ({otherPlots.length} แปลง):
+                                          </span>
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {otherPlots.map((plot) => renderPlotCard(plot, false))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })()}
-
-                            {/* Clickable Per-Plot Cards with Area Progress Bars */}
-                            {cropPlots.length > 0 ? (() => {
-                              // Distribute target slots across the plots
-                              const targetSlots = Math.round((Number(it.bookable_qty_kg) || 0) * cropRate);
-                              let remainingToAllocate = targetSlots;
-
-                              return (
-                                <div className="space-y-2">
-                                  <p className="text-[10px] text-slate-500 font-medium">
-                                    หลอดแสดงพื้นที่ที่ใช้ไปในแต่ละแปลง (คลิกที่แปลงเพื่อเลือก/ยกเลิกการใช้แปลงในรอบนี้):
-                                  </p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    {cropPlots.map((plot) => {
-                                      const isChecked = selectedPlotIds.includes(plot.id);
-                                      const cap = Number(plot.slot_capacity || 0);
-
-                                      let usedInPlot = 0;
-                                      if (isChecked) {
-                                        usedInPlot = Math.min(cap, Math.max(0, remainingToAllocate));
-                                        remainingToAllocate -= usedInPlot;
-                                      }
-
-                                      const plotPercent = cap > 0 ? Math.min(100, Math.round((usedInPlot / cap) * 100)) : 0;
-                                      const remainingInPlot = isChecked ? Math.max(0, cap - usedInPlot) : cap;
-
-                                      return (
-                                        <div
-                                          key={plot.id}
-                                          onClick={() => handleTogglePlot(idx, plot.id)}
-                                          className={`p-3 rounded-2xl border transition-all cursor-pointer select-none space-y-2 ${
-                                            isChecked
-                                              ? 'bg-white border-emerald-500 shadow-xs ring-1 ring-emerald-400'
-                                              : 'bg-slate-50 border-slate-200/90 hover:border-slate-300 opacity-75'
-                                          }`}
-                                        >
-                                          {/* Card Top: Checkbox, Name, Zone, Badge */}
-                                          <div className="flex items-center justify-between gap-1.5">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                              <span
-                                                className={`w-4 h-4 rounded-md flex items-center justify-center border text-[11px] font-bold flex-shrink-0 ${
-                                                  isChecked
-                                                    ? 'bg-emerald-600 border-emerald-600 text-white'
-                                                    : 'border-slate-300 bg-white text-transparent'
-                                                }`}
-                                              >
-                                                ✓
-                                              </span>
-                                              <span className="font-bold text-slate-800 text-xs truncate">
-                                                {plot.name}
-                                              </span>
-                                              <span className="text-[10px] text-slate-400 flex-shrink-0">
-                                                ({plot.zone_name})
-                                              </span>
-                                            </div>
-
-                                            <span
-                                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                                                !isChecked
-                                                  ? 'bg-slate-100 text-slate-500'
-                                                  : plotPercent >= 100
-                                                  ? 'bg-emerald-100 text-emerald-800'
-                                                  : plotPercent > 0
-                                                  ? 'bg-sky-100 text-sky-800'
-                                                  : 'bg-amber-100 text-amber-800'
-                                              }`}
-                                            >
-                                              {!isChecked
-                                                ? 'ว่าง (ไม่ใช้)'
-                                                : plotPercent >= 100
-                                                ? 'เต็มแปลง (100%)'
-                                                : `ใช้ไป ${plotPercent}%`}
-                                            </span>
-                                          </div>
-
-                                          {/* Per-Plot Capacity Bar */}
-                                          <div className="space-y-1">
-                                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                              <div
-                                                className={`h-full rounded-full transition-all duration-300 ${
-                                                  !isChecked
-                                                    ? 'bg-slate-200'
-                                                    : plotPercent >= 100
-                                                    ? 'bg-emerald-500'
-                                                    : 'bg-sky-500'
-                                                }`}
-                                                style={{ width: `${isChecked ? plotPercent : 0}%` }}
-                                              />
-                                            </div>
-
-                                            <div className="flex justify-between text-[10px] text-slate-500">
-                                              <span>
-                                                {isChecked ? (
-                                                  <>
-                                                    ใช้ไป{' '}
-                                                    <strong className="text-slate-800">{usedInPlot}</strong> / {cap} ช่อง
-                                                  </>
-                                                ) : (
-                                                  <>0 / {cap} ช่อง</>
-                                                )}
-                                              </span>
-                                              <span>
-                                                {isChecked ? (
-                                                  remainingInPlot > 0 ? (
-                                                    <span className="text-sky-700 font-semibold">
-                                                      เหลือ {remainingInPlot} ช่อง
-                                                    </span>
-                                                  ) : (
-                                                    <span className="text-emerald-700 font-semibold">
-                                                      เต็มแปลง
-                                                    </span>
-                                                  )
-                                                ) : (
-                                                  <span className="text-slate-400 font-medium">
-                                                    ว่างทั้งแปลง ({cap} ช่อง)
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-
-                                  {/* Bottom helper text */}
-                                  <div className="text-[11px] pt-1 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1">
-                                    <span className="text-slate-600">
-                                      เลือกปลูก: <strong>{selectedPlotsOfCrop.length}/{cropPlots.length} แปลง</strong> ({selectedSlots.toLocaleString()} ช่องปลูก)
-                                    </span>
-                                    {remainingPlotsOfCrop.length > 0 ? (
-                                      <span className="text-sky-700 font-medium">
-                                        แปลงที่ยังว่างสำหรับผักนี้:{' '}
-                                        <strong>
-                                          {remainingPlotsOfCrop.map((p) => `${p.name} (${p.slot_capacity} ช่อง)`).join(', ')}
-                                        </strong>
-                                        {' '}(ปลูกเพิ่มได้อีก ~{remainingKgOfCrop} กก.)
-                                      </span>
-                                    ) : (
-                                      <span className="text-emerald-700 font-medium">
-                                        ✓ ปลูกครบทุกแปลงของผักนี้ในรอบนี้แล้ว
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })() : (
-                              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <span>
-                                  ⚠️ ยังไม่มีแปลงที่กำหนดไว้สำหรับ <strong>{selectedCrop?.name}</strong> ในหน้า "จัดการแปลงปลูก"
-                                </span>
-                                <Link
-                                  to="/admin/plots"
-                                  target="_blank"
-                                  className="inline-flex items-center gap-1 font-bold text-amber-900 hover:text-amber-950 underline whitespace-nowrap"
-                                >
-                                  <span>ไปกำหนดแปลงปลูก</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </Link>
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* Crop-Specific Summary Table with Area Progress Bars */}
@@ -919,61 +1538,83 @@ export const AdminRoundsPage: React.FC = () => {
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2.5">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>สรุปหลอดพื้นที่แปลงปลูกแยกตามชนิดผัก (อ้างอิงจากแปลงที่กำหนดไว้):</span>
+                    <span>สรุปพื้นที่แปลงปลูกแยกตามชนิดผัก:</span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-[11px]">
                       <thead>
                         <tr className="text-slate-400 border-b border-slate-200 pb-1.5 font-semibold">
                           <th className="py-1 px-1">ชนิดผัก</th>
-                          <th className="py-1 px-2">แปลงที่กำหนดไว้</th>
-                          <th className="py-1 px-2 min-w-[150px]">หลอดพื้นที่ที่ใช้ไป</th>
+                          <th className="py-1 px-2">เป้าหมาย (กก. / ช่อง)</th>
                           <th className="py-1 px-2">แปลงที่เลือกปลูก</th>
-                          <th className="py-1 px-2">ปริมาณแปลงที่เหลือที่จะปลูกได้</th>
+                          <th className="py-1 px-2 min-w-[140px]">หลอดความจุแปลง</th>
+                          <th className="py-1 px-2">สถานะพื้นที่</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {items.map((it, idx) => {
                           const crop = crops.find((c) => c.id === it.crop_id);
                           const cropRate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-                          const cropPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
-                          const totalSlots = cropPlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
-                          const targetSlots = Math.round((Number(it.bookable_qty_kg) || 0) * cropRate);
-                          const usedPercent = totalSlots > 0 ? Math.min(100, Math.round((targetSlots / totalSlots) * 100)) : 0;
+                          const targetKg = Number(it.bookable_qty_kg) || 0;
+                          const requiredSlots = Math.round(targetKg * cropRate);
 
                           const selectedPlotIds = it.selected_plot_ids || [];
-                          const selectedPlots = cropPlots.filter((p) => selectedPlotIds.includes(p.id));
-                          const remainingPlots = cropPlots.filter((p) => !selectedPlotIds.includes(p.id));
-                          const remainingSlots = remainingPlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
+                          const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
+                          const rawSelectedSlots = selectedPlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
+                          const availableSelectedSlots = selectedPlots.reduce((s, p) => {
+                            const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                            return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
+                          }, 0);
+                          const usedPercent = availableSelectedSlots > 0 ? Math.min(100, Math.round((requiredSlots / availableSelectedSlots) * 100)) : 0;
+
+                          const isNoPlot = selectedPlots.length === 0;
+                          const isZeroAvail = selectedPlots.length > 0 && availableSelectedSlots === 0;
+                          const isOver = selectedPlots.length > 0 && availableSelectedSlots > 0 && requiredSlots > availableSelectedSlots;
+                          const isUnder = selectedPlots.length > 0 && availableSelectedSlots > 0 && availableSelectedSlots > requiredSlots;
 
                           return (
                             <tr key={idx} className="hover:bg-white/60">
                               <td className="py-2 px-1 font-bold text-slate-800 whitespace-nowrap">
                                 {crop?.name || 'ผัก'}
                               </td>
-                              <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
-                                {cropPlots.length > 0 ? `${cropPlots.length} แปลง (${totalSlots.toLocaleString()} ช่อง)` : '-'}
+                              <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
+                                <strong className="text-emerald-800">{targetKg} กก.</strong>
+                                <span className="text-[10px] text-slate-400 block">({requiredSlots.toLocaleString()} ช่อง)</span>
                               </td>
-                              {/* Mini Gauge Bar */}
+                              <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
+                                {selectedPlots.length > 0 ? (
+                                  <div>
+                                    <span className="font-bold text-slate-900">{selectedPlots.length} แปลง</span>
+                                    <span className="text-[10px] text-slate-400 block">
+                                      {selectedPlots.map((p) => p.name).join(', ')} (ว่าง {availableSelectedSlots.toLocaleString()}/{rawSelectedSlots.toLocaleString()} ช่อง)
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-amber-700 font-semibold italic">ยังไม่ได้เลือกแปลง</span>
+                                )}
+                              </td>
+                              {/* Gauge Bar */}
                               <td className="py-2 px-2">
-                                {cropPlots.length > 0 ? (
+                                {selectedPlots.length > 0 ? (
                                   <div className="space-y-1">
                                     <div className="flex justify-between text-[10px]">
                                       <span className="font-semibold text-slate-700">
-                                        {targetSlots} / {totalSlots} ช่อง
+                                        {requiredSlots.toLocaleString()} / ว่าง {availableSelectedSlots.toLocaleString()} ช่อง
                                       </span>
-                                      <span className="font-bold text-slate-700">{usedPercent}%</span>
+                                      <span className={`font-bold ${isZeroAvail || isOver ? 'text-rose-600' : 'text-slate-700'}`}>
+                                        {isZeroAvail ? 'เต็ม 100%' : `${usedPercent}%`}
+                                      </span>
                                     </div>
                                     <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                       <div
                                         className={`h-full rounded-full ${
-                                          usedPercent >= 100
+                                          isZeroAvail || isOver
+                                            ? 'bg-rose-500'
+                                            : usedPercent >= 100
                                             ? 'bg-emerald-600'
-                                            : usedPercent >= 75
-                                            ? 'bg-teal-500'
-                                            : 'bg-emerald-500'
+                                            : 'bg-sky-500'
                                         }`}
-                                        style={{ width: `${usedPercent}%` }}
+                                        style={{ width: `${isZeroAvail ? 100 : usedPercent}%` }}
                                       />
                                     </div>
                                   </div>
@@ -981,17 +1622,26 @@ export const AdminRoundsPage: React.FC = () => {
                                   <span className="text-slate-400">-</span>
                                 )}
                               </td>
-                              <td className="py-2 px-2 font-semibold text-emerald-700 whitespace-nowrap">
-                                {selectedPlots.length} แปลง ({it.bookable_qty_kg} กก.)
-                              </td>
-                              <td className="py-2 px-2">
-                                {cropPlots.length === 0 ? (
-                                  <span className="text-slate-400 italic">- ไม่ได้ระบุแปลง -</span>
-                                ) : remainingPlots.length === 0 ? (
-                                  <span className="text-emerald-700 font-bold">✓ เต็มแล้ว (เหลือ 0 แปลง)</span>
+                              <td className="py-2 px-2 whitespace-nowrap">
+                                {isNoPlot ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                    ⚠️ ยังไม่เลือกแปลง
+                                  </span>
+                                ) : isZeroAvail ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                    🔴 ติดรอบอื่น (เต็ม)
+                                  </span>
+                                ) : isOver ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                    🚨 ขาด {(requiredSlots - availableSelectedSlots).toLocaleString()} ช่อง
+                                  </span>
+                                ) : isUnder ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                                    ℹ️ ว่าง {(availableSelectedSlots - requiredSlots).toLocaleString()} ช่อง
+                                  </span>
                                 ) : (
-                                  <span className="text-sky-700 font-bold">
-                                    🟢 เหลือ {remainingPlots.length} แปลง ({remainingPlots.map((p) => p.name).join(', ')} • {remainingSlots.toLocaleString()} ช่อง)
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                    ✓ พอดีพื้นที่ว่าง
                                   </span>
                                 )}
                               </td>
@@ -1027,11 +1677,21 @@ export const AdminRoundsPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors disabled:opacity-50"
+                  disabled={saving || isFarmFullyOccupied}
+                  className={`inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold transition-colors ${
+                    isFarmFullyOccupied
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                  } disabled:opacity-60`}
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>{saving ? 'กำลังสร้างรอบ...' : 'สร้างรอบปลูก ➔ เข้าสู่หน้าจัดการ'}</span>
+                  <span>
+                    {saving
+                      ? 'กำลังสร้างรอบ...'
+                      : isFarmFullyOccupied
+                      ? '❌ แปลงในฟาร์มเต็มแล้ว (สร้างรอบใหม่ไม่ได้)'
+                      : 'สร้างรอบปลูก ➔ เข้าสู่หน้าจัดการ'}
+                  </span>
                 </button>
               </div>
             </form>

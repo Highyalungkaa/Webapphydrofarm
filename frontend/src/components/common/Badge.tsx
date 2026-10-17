@@ -88,7 +88,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, type = 'custom', label, cl
         colorClasses = 'bg-indigo-50 text-indigo-700 border-indigo-200';
         break;
       case 'delivery':
-        text = 'จัดส่งในเมือง (ส่งฟรี)';
+        text = 'จัดส่งปกติ';
         colorClasses = 'bg-purple-50 text-purple-700 border-purple-200';
         break;
     }

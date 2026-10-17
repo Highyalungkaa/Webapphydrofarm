@@ -69,6 +69,7 @@ router.get('/open', async (_req: Request, res: Response): Promise<void> => {
       .from('planting_rounds')
       .select('*')
       .eq('status', 'booking_open')
+      .lte('booking_opens_at', new Date().toISOString())
       .order('expected_harvest_date', { ascending: true });
 
     if (error) {
@@ -110,6 +111,11 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
 
     if (error || !round) {
       res.status(404).json({ error: 'ไม่พบข้อมูลรอบการปลูกที่ระบุ' });
+      return;
+    }
+
+    if (round.status === 'booking_open' && new Date(round.booking_opens_at) > new Date()) {
+      res.status(404).json({ error: 'รอบการจองนี้ยังไม่เปิดให้ลูกค้าเข้าชม' });
       return;
     }
 

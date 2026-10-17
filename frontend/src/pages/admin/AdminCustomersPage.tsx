@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { formatDateDMY } from '../../lib/dateFormat.js';
 import { Users, AlertTriangle } from 'lucide-react';
 
 interface CustomerItem {
@@ -7,6 +8,7 @@ interface CustomerItem {
   email: string;
   full_name: string;
   phone?: string;
+  address_detail?: string;
   no_show_count: number;
   created_at: string;
   districts?: {
@@ -35,13 +37,7 @@ export const AdminCustomersPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('th-TH');
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateDMY;
 
   return (
     <div className="space-y-6">
@@ -64,7 +60,7 @@ export const AdminCustomersPage: React.FC = () => {
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase text-[11px] font-semibold">
                   <th className="py-3 px-4">ชื่อลูกค้า / อีเมล</th>
                   <th className="py-3 px-4">เบอร์โทรศัพท์</th>
-                  <th className="py-3 px-4">อำเภอ/ตำบลเริ่มต้น</th>
+                  <th className="py-3 px-4">ที่อยู่จัดส่งเริ่มต้น</th>
                   <th className="py-3 px-4">ประวัติไม่มารับ (No-show)</th>
                   <th className="py-3 px-4 text-right">วันที่ลงทะเบียน</th>
                 </tr>
@@ -77,7 +73,9 @@ export const AdminCustomersPage: React.FC = () => {
                       <span className="text-[11px] font-normal text-slate-400">{c.email}</span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-700">{c.phone || '-'}</td>
-                    <td className="py-3.5 px-4 text-slate-600">{c.districts?.name || '-'}</td>
+                    <td className="py-3.5 px-4 text-slate-600 max-w-[200px] truncate" title={c.address_detail || ''}>
+                      {c.address_detail || c.districts?.name || '-'}
+                    </td>
                     <td className="py-3.5 px-4">
                       {c.no_show_count > 0 ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">

@@ -2,13 +2,13 @@
 
 -- 1. App Settings
 INSERT INTO app_settings (key, value, description) VALUES
-    ('delivery_min_total_kg', '0'::jsonb, 'ยอดสั่งซื้อขั้นต่ำสำหรับบริการจัดส่งฟรีในตัวเมือง (กก.) 0 = ไม่จำกัด'),
+    ('delivery_min_total_kg', '0'::jsonb, 'ยอดสั่งซื้อขั้นต่ำสำหรับบริการจัดส่ง (กก.) 0 = ไม่จำกัด'),
     ('large_order_threshold_kg', '10'::jsonb, 'เกณฑ์ออเดอร์ขนาดใหญ่ที่ต้องรอแอดมินโทรยืนยัน (กก.)'),
     ('cancellation_deadline_hours_before_harvest', '24'::jsonb, 'เส้นตายเวลายกเลิกออเดอร์ของลูกค้าก่อนถึงกำหนดเวลาส่งมอบ (ชั่วโมง)'),
     ('no_show_limit', '0'::jsonb, 'จำนวนครั้งไม่มารับของสูงสุดก่อนถูกระงับการจอง (0 = ไม่จำกัด)')
 ON CONFLICT (key) DO NOTHING;
 
--- 2. Districts (อำเภอ/ตำบล ในตัวเมืองที่บริการส่งฟรี)
+-- 2. Districts (พื้นที่ให้บริการจัดส่ง)
 INSERT INTO districts (id, name, is_active) VALUES
     ('11111111-1111-1111-1111-111111111101', 'อำเภอเมือง - ตำบลในเมือง', TRUE),
     ('11111111-1111-1111-1111-111111111102', 'อำเภอเมือง - ตำบลรอบเมือง', TRUE),

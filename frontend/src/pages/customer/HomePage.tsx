@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { PlantingRound } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import { Calendar, Clock, Truck, Store, ArrowRight, Sprout, AlertCircle } from 'lucide-react';
@@ -37,18 +38,7 @@ export const HomePage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateDMY;
 
   return (
     <div className="space-y-8">
@@ -73,7 +63,7 @@ export const HomePage: React.FC = () => {
             </div>
             <div className="flex items-center gap-1.5">
               <Truck className="w-4 h-4 text-emerald-300" />
-              <span>ส่งฟรีเฉพาะในตัวเมือง</span>
+              <span>จัดส่งปกติ</span>
             </div>
             <div className="flex items-center gap-1.5 font-medium text-white">
               <span>💵 ชำระเงินเมื่อได้รับสินค้า</span>
@@ -144,7 +134,7 @@ export const HomePage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span>
-                        ปิดรับจอง: <strong>{formatDate(round.booking_closes_at)}</strong>
+                        เปิดจอง: <strong>{formatDateTimeDMY(round.booking_opens_at)}</strong>
                       </span>
                     </div>
                   </div>

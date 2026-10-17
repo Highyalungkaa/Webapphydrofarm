@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { Order } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -63,20 +64,7 @@ export const OrderDetailPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr?: string | null) => {
-    if (!dateStr) return '-';
-    try {
-      return new Date(dateStr).toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateDMY;
 
   if (loading) {
     return (
@@ -185,7 +173,7 @@ export const OrderDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 text-slate-700">
               <Calendar className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span>
-                วันส่งมอบ: <strong>{order.planting_rounds?.fulfillment_date || '-'}</strong>
+                วันส่งมอบ: <strong>{formatDateDMY(order.planting_rounds?.fulfillment_date)}</strong>
               </span>
             </div>
 
@@ -204,9 +192,9 @@ export const OrderDetailPage: React.FC = () => {
                 <Truck className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-slate-900">
-                    พื้นที่ส่ง: {order.districts?.name || 'ในตัวเมือง'}
+                    ที่อยู่จัดส่ง:
                   </p>
-                  <p className="text-slate-600">{order.delivery_address || '-'}</p>
+                  <p className="text-slate-600 whitespace-pre-line leading-relaxed">{order.delivery_address || '-'}</p>
                 </div>
               </div>
             )}

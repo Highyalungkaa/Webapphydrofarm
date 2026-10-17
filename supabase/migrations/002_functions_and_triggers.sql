@@ -66,11 +66,11 @@ CREATE OR REPLACE FUNCTION create_order(
     p_customer_id UUID,
     p_items JSONB,
     p_fulfillment_method fulfillment_method,
-    p_delivery_address TEXT,
-    p_district_id UUID,
-    p_contact_phone VARCHAR,
-    p_note TEXT,
-    p_accepted_terms BOOLEAN
+    p_delivery_address TEXT DEFAULT NULL,
+    p_district_id UUID DEFAULT NULL,
+    p_contact_phone VARCHAR DEFAULT NULL,
+    p_note TEXT DEFAULT NULL,
+    p_accepted_terms BOOLEAN DEFAULT TRUE
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -98,6 +98,7 @@ DECLARE
     v_item_id UUID;
     v_item_ids UUID[] := ARRAY[]::UUID[];
     v_result JSONB;
+    v_final_delivery_address TEXT;
 BEGIN
     -- 1. Check accepted substitution terms
     IF NOT p_accepted_terms THEN
@@ -134,6 +135,10 @@ BEGIN
         RAISE EXCEPTION 'รอบการปลูกนี้ยังไม่เปิดให้จอง หรือปิดรับการจองแล้ว (สถานะ: %)', v_round.status;
     END IF;
 
+    IF v_round.booking_opens_at IS NOT NULL AND now() < v_round.booking_opens_at THEN
+        RAISE EXCEPTION 'รอบการปลูกนี้จะเริ่มเปิดจองเมื่อ %', v_round.booking_opens_at;
+    END IF;
+
     IF v_round.booking_closes_at IS NOT NULL AND now() > v_round.booking_closes_at THEN
         RAISE EXCEPTION 'รอบการปลูกนี้ปิดรับการจองไปแล้วเมื่อ %', v_round.booking_closes_at;
     END IF;
@@ -154,23 +159,24 @@ BEGIN
         v_item_ids := array_append(v_item_ids, (v_item->>'round_item_id')::uuid);
     END LOOP;
 
-    -- 6. Validate Delivery Fulfillment
+    -- 6. Validate Delivery Fulfillment (Use provided address or fallback to profile address)
     IF p_fulfillment_method = 'delivery' THEN
-        IF p_district_id IS NULL THEN
-            RAISE EXCEPTION 'กรุณาเลือกอำเภอ/ตำบลสำหรับการจัดส่ง';
+        v_final_delivery_address := NULLIF(trim(p_delivery_address), '');
+
+        -- Fallback to profile address if not provided in order
+        IF v_final_delivery_address IS NULL THEN
+            v_final_delivery_address := NULLIF(trim(v_profile.address_detail), '');
         END IF;
 
-        IF NOT EXISTS (SELECT 1 FROM districts WHERE id = p_district_id AND is_active = TRUE) THEN
-            RAISE EXCEPTION 'อำเภอ/ตำบลที่เลือกไม่เปิดให้บริการจัดส่ง';
-        END IF;
-
-        IF p_delivery_address IS NULL OR trim(p_delivery_address) = '' THEN
-            RAISE EXCEPTION 'กรุณาระบุที่อยู่สำหรับการจัดส่งให้ครบถ้วน';
+        IF v_final_delivery_address IS NULL THEN
+            RAISE EXCEPTION 'กรุณาระบุที่อยู่สำหรับการจัดส่ง หรือบันทึกที่อยู่ในหน้าข้อมูลส่วนตัว';
         END IF;
 
         IF v_delivery_min_kg > 0 AND v_total_kg < v_delivery_min_kg THEN
             RAISE EXCEPTION 'ยอดสั่งซื้อรวมต้องไม่ต่ำกว่า % กก. สำหรับบริการจัดส่ง (ยอดปัจจุบัน % กก.)', v_delivery_min_kg, v_total_kg;
         END IF;
+    ELSE
+        v_final_delivery_address := NULL;
     END IF;
 
     -- Phone number is required
@@ -249,8 +255,8 @@ BEGIN
         p_round_id,
         p_customer_id,
         p_fulfillment_method,
-        CASE WHEN p_fulfillment_method = 'delivery' THEN p_delivery_address ELSE NULL END,
-        CASE WHEN p_fulfillment_method = 'delivery' THEN p_district_id ELSE NULL END,
+        v_final_delivery_address,
+        p_district_id,
         p_contact_phone,
         p_note,
         v_initial_status,

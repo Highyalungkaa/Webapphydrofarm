@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { History, Search } from 'lucide-react';
 
 interface AuditLog {
@@ -36,20 +37,7 @@ export const AdminAuditPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = formatDateTimeDMY;
 
   return (
     <div className="space-y-6">

@@ -83,9 +83,9 @@ export const AdminDistrictsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">อำเภอ/ตำบล ที่บริการส่งฟรี</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">พื้นที่ให้บริการจัดส่ง</h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            กำหนดพื้นที่ในตัวเมืองที่ทางฟาร์มให้บริการจัดส่งฟรีถึงที่
+            กำหนดพื้นที่ที่ทางฟาร์มให้บริการจัดส่งถึงที่
           </p>
         </div>
         <button

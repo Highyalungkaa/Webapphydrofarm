@@ -3,18 +3,17 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { useCart } from '../../context/CartContext.js';
 import { api } from '../../lib/api.js';
-import { District, FulfillmentMethod } from '../../types/index.js';
-import { Store, Truck, ShoppingBag, ArrowLeft, CheckCircle2, AlertCircle, LogIn } from 'lucide-react';
+import { FulfillmentMethod } from '../../types/index.js';
+import { Store, Truck, ShoppingBag, ArrowLeft, CheckCircle2, AlertCircle, LogIn, MapPin } from 'lucide-react';
 
 export const CheckoutPage: React.FC = () => {
   const { user, profile, refreshProfile, signInWithGoogle } = useAuth();
   const { items, roundId, totalKg, totalAmount, clearCart } = useCart();
   const navigate = useNavigate();
 
-  const [districts, setDistricts] = useState<District[]>([]);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('pickup');
-  const [districtId, setDistrictId] = useState<string>('');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
+  const [saveAddressToProfile, setSaveAddressToProfile] = useState<boolean>(true);
   const [contactPhone, setContactPhone] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
@@ -22,22 +21,11 @@ export const CheckoutPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Load districts
-  useEffect(() => {
-    api.get<District[]>('/districts').then((data) => {
-      setDistricts(data);
-      if (data.length > 0 && !districtId) {
-        setDistrictId(data[0].id);
-      }
-    }).catch(console.error);
-  }, []);
-
   // Pre-fill profile info if available
   useEffect(() => {
     if (profile) {
       if (profile.phone && !contactPhone) setContactPhone(profile.phone);
       if (profile.address_detail && !deliveryAddress) setDeliveryAddress(profile.address_detail);
-      if (profile.district_id) setDistrictId(profile.district_id);
     }
   }, [profile]);
 
@@ -79,12 +67,9 @@ export const CheckoutPage: React.FC = () => {
     }
 
     if (fulfillmentMethod === 'delivery') {
-      if (!districtId) {
-        setErrorMessage('กรุณาเลือกอำเภอ/ตำบลสำหรับการจัดส่ง');
-        return;
-      }
-      if (!deliveryAddress.trim()) {
-        setErrorMessage('กรุณาระบุที่อยู่สำหรับการจัดส่ง');
+      const finalAddr = deliveryAddress.trim() || profile?.address_detail?.trim() || '';
+      if (!finalAddr) {
+        setErrorMessage('กรุณาระบุที่อยู่สำหรับการจัดส่ง หรือกรอกที่อยู่ในหน้าข้อมูลส่วนตัว');
         return;
       }
     }
@@ -96,6 +81,26 @@ export const CheckoutPage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
+      const trimmedAddress = deliveryAddress.trim();
+
+      // If user wants to save/update this address to profile
+      if (
+        fulfillmentMethod === 'delivery' &&
+        saveAddressToProfile &&
+        trimmedAddress &&
+        trimmedAddress !== profile?.address_detail
+      ) {
+        try {
+          await api.put('/profile', {
+            full_name: profile?.full_name || user?.email?.split('@')[0] || 'ลูกค้า',
+            phone: contactPhone.trim(),
+            address_detail: trimmedAddress,
+          });
+        } catch (e) {
+          console.warn('Could not auto-save address to profile:', e);
+        }
+      }
+
       const payload = {
         round_id: roundId,
         items: items.map((i) => ({
@@ -103,8 +108,8 @@ export const CheckoutPage: React.FC = () => {
           qty_kg: i.qty_kg,
         })),
         fulfillment_method: fulfillmentMethod,
-        delivery_address: fulfillmentMethod === 'delivery' ? deliveryAddress.trim() : null,
-        district_id: fulfillmentMethod === 'delivery' ? districtId : null,
+        delivery_address: fulfillmentMethod === 'delivery' ? (trimmedAddress || profile?.address_detail || null) : null,
+        district_id: null,
         contact_phone: contactPhone.trim(),
         note: note.trim() || null,
         accepted_substitution_terms: acceptedTerms,
@@ -240,8 +245,8 @@ export const CheckoutPage: React.FC = () => {
               >
                 <Truck className={`w-5 h-5 mb-2 ${fulfillmentMethod === 'delivery' ? 'text-farm-600' : 'text-slate-400'}`} />
                 <div>
-                  <span className="font-bold text-xs sm:text-sm text-slate-900 block">จัดส่งในตัวเมือง</span>
-                  <span className="text-[11px] text-emerald-600 font-medium">ส่งฟรี (เฉพาะเขตที่กำหนด)</span>
+                  <span className="font-bold text-xs sm:text-sm text-slate-900 block">จัดส่งสินค้า</span>
+                  <span className="text-[11px] text-emerald-600 font-medium">ส่งตามที่อยู่ที่ระบุในโปรไฟล์</span>
                 </div>
               </button>
             </div>
@@ -249,38 +254,55 @@ export const CheckoutPage: React.FC = () => {
 
           {/* Delivery Fields if delivery selected */}
           {fulfillmentMethod === 'delivery' && (
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  เลือกอำเภอ / ตำบล (เฉพาะพื้นที่บริการส่งฟรี) *
-                </label>
-                <select
-                  value={districtId}
-                  onChange={(e) => setDistrictId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500"
-                  required
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-900">ที่อยู่สำหรับจัดส่ง</h3>
+                    <p className="text-[11px] text-slate-500">
+                      {profile?.address_detail
+                        ? 'ดึงข้อมูลจากหน้าโปรไฟล์ของคุณโดยอัตโนมัติ'
+                        : 'ยังไม่พบที่อยู่ในโปรไฟล์ กรุณาระบุที่อยู่จัดส่งด้านล่าง'}
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  to="/profile"
+                  target="_blank"
+                  className="text-xs text-farm-600 hover:text-farm-700 font-semibold underline flex-shrink-0"
                 >
-                  <option value="" disabled>-- กรุณาเลือกตำบล/อำเภอ --</option>
-                  {districts.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
+                  แก้ไขในข้อมูลส่วนตัว
+                </Link>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  ที่อยู่จัดส่งโดยละเอียด (บ้านเลขที่, ซอย, จุดสังเกต) *
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  ที่อยู่จัดส่ง (บ้านเลขที่, ถนน, ซอย, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์) *
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={deliveryAddress}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="เช่น บ้านเลขที่ 12/3 ถ.มิตรภาพ ซอย 5 ใกล้เซเว่น"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500"
+                  placeholder="เช่น 123/45 หมู่ 6 ถ.มิตรภาพ ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000 (จุดสังเกต: รั้วสีเขียวติดร้านกาแฟ)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-farm-500 leading-relaxed shadow-xs"
                   required
                 />
+              </div>
+
+              <div className="pt-1">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-700 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={saveAddressToProfile}
+                    onChange={(e) => setSaveAddressToProfile(e.target.checked)}
+                    className="w-4 h-4 text-farm-600 rounded border-slate-300 focus:ring-farm-500"
+                  />
+                  <span>บันทึก/อัปเดตที่อยู่นี้ลงในหน้าข้อมูลส่วนตัวสำหรับรอบการจองถัดไป</span>
+                </label>
               </div>
             </div>
           )}
