@@ -370,6 +370,14 @@ export const AdminPlotsPage: React.FC = () => {
                     </button>
                   </div>
 
+                  <div className={`mt-4 rounded-2xl border px-4 py-3 ${plot.crop_id ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <p className={`text-[11px] font-bold ${plot.crop_id ? 'text-emerald-700' : 'text-amber-700'}`}>ชนิดผักที่กำหนดให้แปลงนี้</p>
+                    <p className={`mt-1 flex items-center gap-2 text-sm font-black ${plot.crop_id ? 'text-emerald-950' : 'text-amber-900'}`}>
+                      <Leaf className="h-4 w-4 shrink-0" />
+                      {plot.crops?.name || crops.find((crop) => crop.id === plot.crop_id)?.name || 'ยังไม่กำหนดชนิดผัก'}
+                    </p>
+                  </div>
+
                   <div className="mt-5 rounded-2xl bg-slate-50 p-4">
                     <div className="mb-2 flex items-end justify-between gap-2">
                       <div>

@@ -9,6 +9,7 @@ import {
   AlertCircle,
   X,
   Image as ImageIcon,
+  ImagePlus,
   Layers,
   Sparkles,
   ExternalLink,
@@ -60,6 +61,13 @@ const PRESET_CROPS: PresetCrop[] = [
   },
 ];
 
+const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+  reader.onerror = () => reject(new Error('อ่านไฟล์รูปภาพไม่สำเร็จ'));
+  reader.readAsDataURL(file);
+});
+
 export const AdminCropsPage: React.FC = () => {
   const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +79,8 @@ export const AdminCropsPage: React.FC = () => {
   const [defaultPrice, setDefaultPrice] = useState<number | string>(120);
   const [slotsPerKg, setSlotsPerKg] = useState<number | string>(4.0);
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
 
@@ -81,6 +91,16 @@ export const AdminCropsPage: React.FC = () => {
   useEffect(() => {
     loadCrops();
   }, []);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview('');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [imageFile]);
 
   const loadCrops = async () => {
     try {
@@ -101,6 +121,7 @@ export const AdminCropsPage: React.FC = () => {
     setDefaultPrice(120);
     setSlotsPerKg(4.0);
     setImageUrl('');
+    setImageFile(null);
     setDescription('');
     setIsActive(true);
     setError(null);
@@ -113,6 +134,7 @@ export const AdminCropsPage: React.FC = () => {
     setDefaultPrice(Number(crop.default_price_per_kg));
     setSlotsPerKg(crop.slots_per_kg ? Number(crop.slots_per_kg) : 4.0);
     setImageUrl(crop.image_url || '');
+    setImageFile(null);
     setDescription(crop.description || '');
     setIsActive(crop.is_active);
     setError(null);
@@ -124,6 +146,7 @@ export const AdminCropsPage: React.FC = () => {
     setDefaultPrice(preset.price);
     setSlotsPerKg(preset.slots);
     setImageUrl(preset.imageUrl);
+    setImageFile(null);
     setDescription(preset.description);
   };
 
@@ -146,11 +169,19 @@ export const AdminCropsPage: React.FC = () => {
 
     try {
       setSaving(true);
+      let savedImageUrl = imageUrl.trim();
+      if (imageFile) {
+        const uploaded = await api.post<{ image_url: string }>('/admin/crops/image', {
+          mime_type: imageFile.type,
+          data: await fileToBase64(imageFile),
+        });
+        savedImageUrl = uploaded.image_url;
+      }
       const payload = {
         name: name.trim(),
         default_price_per_kg: priceNum,
         slots_per_kg: slotsNum,
-        image_url: imageUrl.trim() || null,
+        image_url: savedImageUrl || null,
         description: description.trim() || null,
         is_active: isActive,
       };
@@ -462,11 +493,50 @@ export const AdminCropsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4. Image URL with live preview */}
+              {/* 4. Crop image */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  4. ลิงก์รูปภาพ (Image URL)
+                  4. รูปภาพชนิดผัก
                 </label>
+                <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 font-bold text-white hover:bg-emerald-900">
+                    <ImagePlus className="h-4 w-4" />
+                    เลือกรูปจากอุปกรณ์
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="sr-only"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+                          setError('กรุณาเลือกรูปภาพ JPEG, PNG, WebP หรือ GIF');
+                          e.currentTarget.value = '';
+                          return;
+                        }
+                        if (file.size > 5 * 1024 * 1024) {
+                          setError('ขนาดรูปภาพต้องไม่เกิน 5 MB');
+                          e.currentTarget.value = '';
+                          return;
+                        }
+                        setError(null);
+                        setImageFile(file);
+                        setImageUrl('');
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-700">{imageFile?.name || (imageUrl ? 'กำลังใช้รูปจากลิงก์' : 'เลือกจากคอมพิวเตอร์หรือโทรศัพท์')}</p>
+                    <p className="text-[11px] text-slate-500">JPEG, PNG, WebP หรือ GIF · ไม่เกิน 5 MB</p>
+                  </div>
+                  {(imageFile || imageUrl) && (
+                    <button type="button" onClick={() => { setImageFile(null); setImageUrl(''); }} className="font-bold text-rose-600 hover:text-rose-700">
+                      นำรูปออก
+                    </button>
+                  )}
+                </div>
+                <p className="mb-1 mt-3 text-[11px] font-semibold text-slate-500">หรือใส่ลิงก์รูปภาพ</p>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <span className="absolute left-3 top-2.5 text-slate-400">
@@ -475,7 +545,7 @@ export const AdminCropsPage: React.FC = () => {
                     <input
                       type="url"
                       value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
+                      onChange={(e) => { setImageFile(null); setImageUrl(e.target.value); }}
                       placeholder="https://example.com/salad-image.jpg"
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                     />
@@ -493,10 +563,10 @@ export const AdminCropsPage: React.FC = () => {
                 </div>
 
                 {/* Image Preview Box */}
-                {imageUrl ? (
+                {imagePreview || imageUrl ? (
                   <div className="mt-2.5 p-2 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-3">
                     <img
-                      src={imageUrl}
+                      src={imagePreview || imageUrl}
                       alt="ตัวอย่างรูปภาพ"
                       className="w-16 h-16 rounded-xl object-cover border border-slate-200 bg-white"
                       onError={(e) => {
@@ -505,20 +575,19 @@ export const AdminCropsPage: React.FC = () => {
                     />
                     <div className="text-xs text-slate-500 flex-1 min-w-0">
                       <p className="font-semibold text-slate-700">ตัวอย่างรูปภาพที่จะแสดงผล</p>
-                      <a
-                        href={imageUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-emerald-600 hover:underline flex items-center gap-1 mt-0.5 text-[11px] truncate"
-                      >
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{imageUrl}</span>
-                      </a>
+                      {imageFile ? (
+                        <p className="mt-0.5 truncate text-[11px]">{imageFile.name}</p>
+                      ) : (
+                        <a href={imageUrl} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline flex items-center gap-1 mt-0.5 text-[11px] truncate">
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{imageUrl}</span>
+                        </a>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <p className="text-[10px] text-slate-400 mt-1">
-                    สามารถใส่ URL รูปภาพ หรือกดเลือกเทมเพลตผักด้านบนเพื่อใช้ภาพตัวอย่างได้
+                    สามารถเลือกรูปจากอุปกรณ์ ใส่ลิงก์ หรือเลือกเทมเพลตผักด้านบนได้
                   </p>
                 )}
               </div>

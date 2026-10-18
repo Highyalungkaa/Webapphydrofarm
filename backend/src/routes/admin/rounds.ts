@@ -352,6 +352,10 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
 
     if (items?.length) {
       const cropIds = [...new Set(items.map((item) => item.crop_id))];
+      if (cropIds.length !== items.length) {
+        res.status(400).json({ error: 'ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน' });
+        return;
+      }
       const { data: activeCropRows, error: cropError } = await db
         .from('crops')
         .select('id')
@@ -360,6 +364,31 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       if (cropError || (activeCropRows || []).length !== cropIds.length) {
         res.status(400).json({ error: 'มีชนิดผักที่ปิดใช้งานหรือไม่พบในระบบ กรุณาเลือกเฉพาะผักที่เปิดใช้งาน' });
         return;
+      }
+
+      const selectedPlotIds = items.flatMap((item) => item.plot_ids || []);
+      const uniquePlotIds = [...new Set(selectedPlotIds)];
+      if (items.some((item) => !item.plot_ids?.length) || uniquePlotIds.length !== selectedPlotIds.length) {
+        res.status(400).json({ error: 'กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก โดยไม่ใช้แปลงซ้ำกันในรอบเดียว' });
+        return;
+      }
+      const { data: selectedPlots, error: plotsError } = await db
+        .from('plots')
+        .select('id, crop_id, is_active')
+        .in('id', uniquePlotIds);
+      if (plotsError || (selectedPlots || []).length !== uniquePlotIds.length) {
+        res.status(400).json({ error: 'ไม่พบแปลงปลูกที่เลือก กรุณาโหลดข้อมูลแปลงใหม่' });
+        return;
+      }
+      const selectedPlotMap = new Map((selectedPlots || []).map((plot) => [plot.id, plot]));
+      for (const item of items) {
+        if (!item.plot_ids?.every((plotId) => {
+          const plot = selectedPlotMap.get(plotId);
+          return plot?.is_active && plot.crop_id === item.crop_id;
+        })) {
+          res.status(400).json({ error: 'เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น' });
+          return;
+        }
       }
     }
 

@@ -1,11 +1,46 @@
 import { Router, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { getSupabaseClient } from '../../config/supabase.js';
+import { getSupabaseClient, supabaseAdmin } from '../../config/supabase.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewares/auth.js';
 import { recordAuditLog } from '../../services/audit.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
+
+// POST /api/admin/crops/image - Upload a crop image from an admin device
+router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parsed = z.object({
+    mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+    data: z.string().min(1),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'กรุณาเลือกรูปภาพ JPEG, PNG, WebP หรือ GIF' });
+    return;
+  }
+
+  try {
+    const buffer = Buffer.from(parsed.data.data, 'base64');
+    if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
+      res.status(400).json({ error: 'ขนาดรูปภาพต้องไม่เกิน 5 MB' });
+      return;
+    }
+    const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' } as const)[parsed.data.mime_type];
+    const path = `${randomUUID()}.${extension}`;
+    const { error } = await supabaseAdmin.storage.from('crop-images').upload(path, buffer, {
+      contentType: parsed.data.mime_type,
+      upsert: false,
+    });
+    if (error) {
+      res.status(400).json({ error: `อัปโหลดรูปไม่สำเร็จ: ${error.message}` });
+      return;
+    }
+    const { data } = supabaseAdmin.storage.from('crop-images').getPublicUrl(path);
+    res.status(201).json({ image_url: data.publicUrl });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'อัปโหลดรูปไม่สำเร็จ' });
+  }
+});
 
 const cropSchema = z.object({
   name: z.string().min(1, 'กรุณาระบุชื่อชนิดผัก').max(100),

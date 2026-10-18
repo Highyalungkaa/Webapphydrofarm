@@ -20,7 +20,20 @@ import {
   PackageCheck,
   LockKeyhole,
   CalendarClock,
+  CalendarDays,
 } from 'lucide-react';
+
+const bangkokDateKey = (value?: string | null): string => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
 
 const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
   const isCompleted = order.status === 'completed';
@@ -103,6 +116,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   const [archivedOrders, setArchivedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [activeSection, setActiveSection] = useState<'rounds' | 'orders' | 'bookings'>('rounds');
 
   useEffect(() => {
@@ -128,6 +142,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   };
 
   const filteredRounds = rounds.filter((r) => {
+    if (selectedDate && bangkokDateKey(r.completed_date || r.updated_at) !== selectedDate) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     const nameMatch = r.name?.toLowerCase().includes(query);
@@ -140,17 +155,17 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   });
 
   // Calculate high-level summary KPIs
-  const totalRoundsCompleted = rounds.length;
+  const totalRoundsCompleted = filteredRounds.length;
   const filteredClosedBookingRounds = closedBookingRounds.filter((round) => {
+    if (selectedDate && bangkokDateKey(round.booking_closes_at || round.updated_at) !== selectedDate) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return round.name?.toLowerCase().includes(query) || (round.round_items || []).some((item: any) => (item.crop_name || item.crops?.name || '').toLowerCase().includes(query));
   });
-  const totalKgSold = rounds.reduce((sum, r) => sum + Number(r.total_booked_kg || 0), 0);
-  const totalKgHarvested = rounds.reduce((sum, r) => sum + Number(r.total_bookable_kg || 0), 0);
-  const completedOrders = archivedOrders.filter((order) => order.status === 'completed');
-  const specialOrders = archivedOrders.filter((order) => order.status === 'cancelled' || order.status === 'no_show');
+  const totalKgSold = filteredRounds.reduce((sum, r) => sum + Number(r.total_booked_kg || 0), 0);
+  const totalKgHarvested = filteredRounds.reduce((sum, r) => sum + Number(r.total_bookable_kg || 0), 0);
   const filteredOrders = archivedOrders.filter((order) => {
+    if (selectedDate && bangkokDateKey(order.status === 'cancelled' ? order.cancelled_at || order.updated_at : order.updated_at) !== selectedDate) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return order.id.toLowerCase().includes(query)
@@ -158,6 +173,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
       || order.planting_rounds?.name?.toLowerCase().includes(query)
       || (order.order_items || []).some((item) => item.round_items?.crops?.name?.toLowerCase().includes(query));
   });
+  const completedOrders = filteredOrders.filter((order) => order.status === 'completed');
+  const specialOrders = filteredOrders.filter((order) => order.status === 'cancelled' || order.status === 'no_show');
 
   return (
     <div className="space-y-6">
@@ -175,7 +192,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">ประวัติ</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">{rounds.length + archivedOrders.length + closedBookingRounds.length} รายการ</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">ทั้งหมด {rounds.length + archivedOrders.length + closedBookingRounds.length} รายการ</span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             ดูประวัติรอบการปลูก คำสั่งจอง และรอบที่ปิดรับจองแล้ว
@@ -240,22 +257,22 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             </div>
           </div>
           <p className="text-2xl font-black text-sky-700">
-            {totalKgHarvested > 0 ? ((totalKgSold / totalKgHarvested) * 100).toFixed(0) : 100}%
+            {totalKgHarvested > 0 ? ((totalKgSold / totalKgHarvested) * 100).toFixed(0) : 0}%
           </p>
           <p className="text-[11px] text-slate-400">สัดส่วนผลผลิตที่จำหน่ายได้ตามเป้า</p>
         </div>
       </div> : activeSection === 'orders' ? <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4"><p className="text-xs font-bold text-emerald-800">คำสั่งจองสำเร็จ</p><p className="mt-1 text-2xl font-black text-slate-900">{completedOrders.length}</p><p className="text-[11px] text-slate-500">ส่งมอบให้ลูกค้าเรียบร้อย</p></div>
-        <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-4"><p className="text-xs font-bold text-rose-800">ยกเลิกออเดอร์</p><p className="mt-1 text-2xl font-black text-slate-900">{archivedOrders.filter((order) => order.status === 'cancelled').length}</p><p className="text-[11px] text-slate-500">ปิดรายการโดยการยกเลิก</p></div>
-        <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4"><p className="text-xs font-bold text-amber-800">ไม่มารับสินค้า</p><p className="mt-1 text-2xl font-black text-slate-900">{archivedOrders.filter((order) => order.status === 'no_show').length}</p><p className="text-[11px] text-slate-500">บันทึกเป็นกรณีพิเศษ</p></div>
+        <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-4"><p className="text-xs font-bold text-rose-800">ยกเลิกออเดอร์</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredOrders.filter((order) => order.status === 'cancelled').length}</p><p className="text-[11px] text-slate-500">ปิดรายการโดยการยกเลิก</p></div>
+        <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4"><p className="text-xs font-bold text-amber-800">ไม่มารับสินค้า</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredOrders.filter((order) => order.status === 'no_show').length}</p><p className="text-[11px] text-slate-500">บันทึกเป็นกรณีพิเศษ</p></div>
       </div> : <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 to-white p-4"><p className="text-xs font-bold text-slate-700">รอบที่ปิดรับจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{closedBookingRounds.length}</p><p className="text-[11px] text-slate-500">เก็บประวัติไว้ตรวจสอบย้อนหลัง</p></div>
-        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4"><p className="text-xs font-bold text-blue-800">ปริมาณที่เปิดจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{closedBookingRounds.reduce((sum, round) => sum + Number(round.total_bookable_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">รวมทุกรอบที่ปิดรับจองแล้ว</p></div>
-        <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4"><p className="text-xs font-bold text-emerald-800">ยอดจองรวม</p><p className="mt-1 text-2xl font-black text-slate-900">{closedBookingRounds.reduce((sum, round) => sum + Number(round.total_booked_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">ยอดก่อนปิดรับจองของแต่ละรอบ</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 to-white p-4"><p className="text-xs font-bold text-slate-700">รอบที่ปิดรับจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.length}</p><p className="text-[11px] text-slate-500">เก็บประวัติไว้ตรวจสอบย้อนหลัง</p></div>
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4"><p className="text-xs font-bold text-blue-800">ปริมาณที่เปิดจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.reduce((sum, round) => sum + Number(round.total_bookable_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">รวมจากรอบที่แสดง</p></div>
+        <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4"><p className="text-xs font-bold text-emerald-800">ยอดจองรวม</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.reduce((sum, round) => sum + Number(round.total_booked_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">ยอดก่อนปิดรับจองของแต่ละรอบ</p></div>
       </div>}
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs">
+      <div className="flex flex-col gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs sm:flex-row sm:items-end">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -274,6 +291,14 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             ล้างคำค้น
           </button>
         )}
+        <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-52">
+          <span className="mb-1.5 block">{activeSection === 'rounds' ? 'วันที่สิ้นสุดรอบ' : activeSection === 'bookings' ? 'วันที่ปิดรับจอง' : 'วันที่ปิดรายการ'}</span>
+          <span className="relative block">
+            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-700" />
+            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100" />
+          </span>
+        </label>
+        {selectedDate && <button type="button" onClick={() => setSelectedDate('')} className="self-start rounded-xl px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 sm:self-end">ล้างวันที่</button>}
       </div>
 
       {/* History records */}
@@ -286,14 +311,14 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           <div className="p-16 text-center text-slate-500 bg-white rounded-3xl border border-slate-200 space-y-3">
             <History className="w-12 h-12 mx-auto text-slate-300 stroke-[1.5]" />
             <h3 className="text-base font-bold text-slate-800">
-              {searchQuery ? 'ไม่พบประวัติรอบที่ค้นหา' : 'ยังไม่มีประวัติรอบการปลูกที่สิ้นสุด'}
+              {searchQuery || selectedDate ? 'ไม่พบประวัติรอบตามตัวกรอง' : 'ยังไม่มีประวัติรอบการปลูกที่สิ้นสุด'}
             </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              {searchQuery
-                ? 'ลองเปลี่ยนคำค้นหาใหม่อีกครั้ง'
+              {searchQuery || selectedDate
+                ? 'ลองเปลี่ยนคำค้นหาหรือวันที่อีกครั้ง'
                 : 'เมื่อรอบการปลูกปัจจุบันดำเนินการครบทั้ง 7 สเต็ปและกดยืนยันสถานะ "สิ้นสุดรอบ" ระบบจะย้ายรอบนั้นมาเก็บไว้ที่หน้านี้อัตโนมัติ'}
             </p>
-            {!searchQuery && (
+            {!searchQuery && !selectedDate && (
               <div className="pt-2">
                 <Link
                   to="/admin/rounds"
@@ -444,7 +469,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           })
         )}
       </div> : activeSection === 'orders' ? <div className="space-y-5">
-        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery ? 'ไม่พบออเดอร์ที่ค้นหา' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่สำเร็จ ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
+        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate ? 'ไม่พบออเดอร์ตามตัวกรอง' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่สำเร็จ ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
           {completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length > 0 && <section className="space-y-3">
             <div className="flex items-center gap-2"><CircleCheck className="h-5 w-5 text-emerald-600" /><h2 className="font-extrabold text-slate-900">สำเร็จแล้ว</h2><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length}</span></div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -459,7 +484,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           </section>}
         </>}
       </div> : <div className="space-y-4">
-        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติการเปิดจอง...</div> : filteredClosedBookingRounds.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><LockKeyhole className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery ? 'ไม่พบรอบที่ค้นหา' : 'ยังไม่มีรอบที่ปิดรับจอง'}</p><p className="mt-1 text-xs text-slate-500">เมื่อปิดรับจองแล้ว รอบนั้นจะถูกรวบรวมไว้ในประวัติส่วนนี้</p></div> : <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">{filteredClosedBookingRounds.map((round) => <ClosedBookingCard key={round.id} round={round} />)}</div>}
+        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติการเปิดจอง...</div> : filteredClosedBookingRounds.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><LockKeyhole className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate ? 'ไม่พบรอบตามตัวกรอง' : 'ยังไม่มีรอบที่ปิดรับจอง'}</p><p className="mt-1 text-xs text-slate-500">เมื่อปิดรับจองแล้ว รอบนั้นจะถูกรวบรวมไว้ในประวัติส่วนนี้</p></div> : <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">{filteredClosedBookingRounds.map((round) => <ClosedBookingCard key={round.id} round={round} />)}</div>}
       </div>}
     </div>
   );

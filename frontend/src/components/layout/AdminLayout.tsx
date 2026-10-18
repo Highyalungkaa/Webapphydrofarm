@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import {
   LayoutDashboard,
@@ -25,6 +25,9 @@ export const AdminLayout: React.FC = () => {
   const { user, profile, isAdmin, isLoading, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isNavActive = (to: string, isActive: boolean) =>
+    isActive && !(to === '/admin/rounds' && location.pathname.startsWith('/admin/rounds/history'));
 
   if (isLoading) {
     return (
@@ -107,7 +110,7 @@ export const AdminLayout: React.FC = () => {
                   to={item.to}
                   end={item.end}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive
+                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isNavActive(item.to, isActive)
                       ? 'bg-emerald-600 text-white font-semibold shadow-sm'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                     }`
@@ -183,7 +186,7 @@ export const AdminLayout: React.FC = () => {
                     end={item.end}
                     onClick={() => setMobileMenuOpen(false)}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'
+                      `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isNavActive(item.to, isActive) ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-slate-800'
                       }`
                     }
                   >
