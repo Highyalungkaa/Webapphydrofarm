@@ -30,6 +30,9 @@ export interface Plot {
   created_at: string;
   updated_at: string;
   crops?: Crop | null;
+  used_slots?: number;
+  crop_names?: string[];
+  occupying_rounds?: Array<{ id: string; name: string; crop_name: string; used_slots: number }>;
 }
 
 export interface FarmMetrics {

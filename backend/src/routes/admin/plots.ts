@@ -72,8 +72,83 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       is_active: p.is_active !== undefined ? !!p.is_active : p.status !== 'empty',
     }));
 
+    const usage = new Map<string, {
+      used_slots: number;
+      crop_names: string[];
+      occupying_rounds: Array<{ id: string; name: string; crop_name: string; used_slots: number }>;
+    }>();
+    for (const plot of normalizedPlots) {
+      usage.set(plot.id, { used_slots: 0, crop_names: [], occupying_rounds: [] });
+    }
+    const unassignedRoundItems: Array<{ round_id: string; round_name: string; crop_name: string }> = [];
+
+    const { data: rounds, error: roundsError } = await db
+      .from('planting_rounds')
+      .select(`
+        id, name, status, current_step, completed_date, sold_out_date, notes,
+        round_items (
+          crop_id, estimated_qty_kg, bookable_qty_kg,
+          crops (name, slots_per_kg)
+        )
+      `)
+      .order('created_at', { ascending: true });
+    if (roundsError) {
+      res.status(500).json({ error: roundsError.message });
+      return;
+    }
+
+    for (const round of rounds || []) {
+      if (round.status === 'completed' || round.status === 'cancelled' || round.completed_date ||
+          Number(round.current_step) >= 7 || (round.sold_out_date && Number(round.current_step) >= 6)) continue;
+
+      let notedPlotIds: Record<string, string[]> = {};
+      try {
+        const parsed = JSON.parse(round.notes || '{}');
+        if (parsed?.cropPlotIds && typeof parsed.cropPlotIds === 'object') notedPlotIds = parsed.cropPlotIds;
+      } catch {
+        // Older rounds may have plain-text notes.
+      }
+
+      for (const item of round.round_items || []) {
+        const crop = item.crops as { name?: string; slots_per_kg?: number } | null;
+        const slotsPerKg = Number(crop?.slots_per_kg) > 0 ? Number(crop?.slots_per_kg) : 4;
+        let slotsNeeded = Math.max(0, Math.round(Math.max(Number(item.estimated_qty_kg || 0), Number(item.bookable_qty_kg || 0)) * slotsPerKg));
+        const fromNotes = notedPlotIds[item.crop_id];
+        const assignedIds = Array.isArray(fromNotes) ? fromNotes : [];
+        const assignedPlots = assignedIds.length > 0
+          ? normalizedPlots.filter((plot) => assignedIds.includes(plot.id))
+          : normalizedPlots.filter((plot) => plot.crop_id === item.crop_id);
+        if (slotsNeeded > 0 && assignedPlots.length === 0) {
+          unassignedRoundItems.push({
+            round_id: round.id,
+            round_name: round.name,
+            crop_name: crop?.name || 'ไม่ระบุชนิดผัก',
+          });
+        }
+
+        for (const plot of assignedPlots) {
+          if (slotsNeeded <= 0) break;
+          const plotUsage = usage.get(plot.id)!;
+          const remaining = Math.max(0, Number(plot.slot_capacity || 0) - plotUsage.used_slots);
+          const usedHere = Math.min(slotsNeeded, remaining);
+          if (usedHere <= 0) continue;
+          plotUsage.used_slots += usedHere;
+          const cropName = crop?.name || 'ไม่ระบุชนิดผัก';
+          if (!plotUsage.crop_names.includes(cropName)) plotUsage.crop_names.push(cropName);
+          plotUsage.occupying_rounds.push({ id: round.id, name: round.name, crop_name: cropName, used_slots: usedHere });
+          slotsNeeded -= usedHere;
+        }
+      }
+    }
+
+    const plotsWithUsage = normalizedPlots.map((plot) => ({
+      ...plot,
+      ...usage.get(plot.id),
+    }));
+
     res.json({
-      plots: normalizedPlots,
+      plots: plotsWithUsage,
+      unassigned_round_items: unassignedRoundItems,
       farm_total_slots: farmTotalSlots,
       total_allocated_slots: totalAllocatedSlots,
       available_slots: Math.max(0, farmTotalSlots - totalAllocatedSlots),

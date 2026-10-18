@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { Plot, Crop, PlantingRound } from '../../types/index.js';
+import { Plot, Crop } from '../../types/index.js';
 import {
   LayoutGrid,
   Plus,
@@ -18,12 +18,13 @@ import {
 
 export const AdminPlotsPage: React.FC = () => {
   const [allPlots, setAllPlots] = useState<Plot[]>([]);
+  const [unassignedRoundItems, setUnassignedRoundItems] = useState<Array<{ round_id: string; round_name: string; crop_name: string }>>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
-  const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [farmTotalSlots, setFarmTotalSlots] = useState<number>(5000);
   const [totalAllocatedSlots, setTotalAllocatedSlots] = useState<number>(0);
   const [availableSlots, setAvailableSlots] = useState<number>(5000);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [zoneFilter, setZoneFilter] = useState('');
@@ -51,22 +52,22 @@ export const AdminPlotsPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [plotsRes, cropsData, roundsData] = await Promise.all([
-        api.get<{ plots: Plot[]; farm_total_slots: number; total_allocated_slots: number; available_slots: number }>(
+      setLoadError(null);
+      const [plotsRes, cropsData] = await Promise.all([
+        api.get<{ plots: Plot[]; farm_total_slots: number; total_allocated_slots: number; available_slots: number; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>(
           '/admin/plots'
         ),
         api.get<Crop[]>('/admin/crops'),
-        api.get<PlantingRound[]>('/admin/rounds'),
       ]);
 
       setAllPlots(plotsRes.plots || []);
+      setUnassignedRoundItems(plotsRes.unassigned_round_items || []);
       setFarmTotalSlots(plotsRes.farm_total_slots || 5000);
       setTotalAllocatedSlots(plotsRes.total_allocated_slots || 0);
       setAvailableSlots(plotsRes.available_slots || 0);
       setCrops(cropsData || []);
-      setRounds(roundsData || []);
     } catch (err: any) {
-      console.error(err);
+      setLoadError(err.message || 'ไม่สามารถโหลดข้อมูลการใช้แปลงปลูกได้');
     } finally {
       setLoading(false);
     }
@@ -80,51 +81,6 @@ export const AdminPlotsPage: React.FC = () => {
 
   // Get unique zone names from existing plots
   const existingZones = Array.from(new Set(allPlots.map((p) => p.zone_name).filter(Boolean)));
-
-  const plotUsage = React.useMemo(() => {
-    const usage: Record<string, { usedSlots: number; cropNames: string[] }> = {};
-    allPlots.forEach((plot) => { usage[plot.id] = { usedSlots: 0, cropNames: [] }; });
-
-    const growingRounds = rounds.filter((round) =>
-      round.status !== 'completed' && round.status !== 'cancelled' &&
-      (round.current_step ?? 1) < 7 && !round.completed_date
-    );
-
-    growingRounds.forEach((round) => {
-      let cropPlotIds: Record<string, string[]> = {};
-      try {
-        const parsed = JSON.parse(round.notes || '{}');
-        if (parsed && typeof parsed.cropPlotIds === 'object') cropPlotIds = parsed.cropPlotIds;
-      } catch {
-        // Older rounds may store plain-text notes.
-      }
-
-      (round.round_items || []).forEach((item) => {
-        const crop = crops.find((entry) => entry.id === item.crop_id) || item.crops;
-        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4;
-        let slotsNeeded = Math.round((Number(item.bookable_qty_kg) || 0) * rate);
-        const assignedIds = cropPlotIds[item.crop_id] || item.plot_ids || [];
-        const assignedPlots = assignedIds.length > 0
-          ? allPlots.filter((plot) => assignedIds.includes(plot.id))
-          : allPlots.filter((plot) => plot.crop_id === item.crop_id);
-
-        assignedPlots.forEach((plot) => {
-          if (slotsNeeded <= 0) return;
-          const plotUsage = usage[plot.id];
-          if (!plotUsage) return;
-          const available = Math.max(0, Number(plot.slot_capacity || 0) - plotUsage.usedSlots);
-          const usedHere = Math.min(slotsNeeded, available);
-          if (usedHere <= 0) return;
-          plotUsage.usedSlots += usedHere;
-          const cropName = crop?.name || 'ผัก';
-          if (!plotUsage.cropNames.includes(cropName)) plotUsage.cropNames.push(cropName);
-          slotsNeeded -= usedHere;
-        });
-      });
-    });
-
-    return usage;
-  }, [allPlots, rounds, crops]);
 
   const openCreateModal = () => {
     setEditingPlotId(null);
@@ -222,6 +178,8 @@ export const AdminPlotsPage: React.FC = () => {
   };
 
   const percentUsed = farmTotalSlots > 0 ? Math.min(100, Math.round((totalAllocatedSlots / farmTotalSlots) * 100)) : 0;
+  const occupiedSlots = allPlots.reduce((sum, plot) => sum + Number(plot.used_slots || 0), 0);
+  const occupiedPlots = allPlots.filter((plot) => Number(plot.used_slots || 0) > 0).length;
 
   return (
     <div className="space-y-6">
@@ -250,6 +208,13 @@ export const AdminPlotsPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+          <span>โหลดข้อมูลแปลงปลูกไม่สำเร็จ: {loadError}</span>
+          <button type="button" onClick={() => void loadData()} className="rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-rose-800 shadow-sm">ลองอีกครั้ง</button>
+        </div>
+      )}
 
       {/* Farm Capacity Quota Bar */}
       <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-3">
@@ -285,6 +250,38 @@ export const AdminPlotsPage: React.FC = () => {
           ></div>
         </div>
       </div>
+
+      {!loading && !loadError && allPlots.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-bold text-emerald-800">ช่องปลูกที่กำลังใช้งาน</p>
+            <p className="mt-1 text-xl font-black text-emerald-950">{occupiedSlots.toLocaleString()} <span className="text-xs font-semibold">ช่อง</span></p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs font-bold text-slate-600">ช่องว่างในแปลงที่สร้างแล้ว</p>
+            <p className="mt-1 text-xl font-black text-slate-900">{Math.max(0, totalAllocatedSlots - occupiedSlots).toLocaleString()} <span className="text-xs font-semibold">ช่อง</span></p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs font-bold text-slate-600">แปลงที่มีรอบใช้งาน</p>
+            <p className="mt-1 text-xl font-black text-slate-900">{occupiedPlots.toLocaleString()} <span className="text-xs font-semibold">/ {allPlots.length.toLocaleString()} แปลง</span></p>
+          </div>
+        </div>
+      )}
+
+      {unassignedRoundItems.length > 0 && !loadError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="flex items-center gap-2 font-bold"><AlertCircle className="h-4 w-4" />มี {unassignedRoundItems.length} รายการผักในรอบที่ยังไม่พบแปลงปลูก</p>
+          <p className="mt-1 text-xs text-amber-800">รายการเหล่านี้ยังไม่ถูกนับในพื้นที่ใช้งานของแต่ละแปลง กรุณาตรวจการกำหนดแปลงในรอบปลูก</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {unassignedRoundItems.slice(0, 5).map((item, index) => (
+              <Link key={`${item.round_id}-${item.crop_name}-${index}`} to={`/admin/rounds/${item.round_id}`} className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-sm hover:bg-amber-100">
+                {item.round_name} · {item.crop_name}
+              </Link>
+            ))}
+            {unassignedRoundItems.length > 5 && <span className="px-2 py-1 text-xs">และอีก {unassignedRoundItems.length - 5} รายการ</span>}
+          </div>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 text-xs">
@@ -343,9 +340,8 @@ export const AdminPlotsPage: React.FC = () => {
         ) : (
           <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {plots.map((plot) => {
-              const usage = plotUsage[plot.id] || { usedSlots: 0, cropNames: [] };
               const capacity = Number(plot.slot_capacity || 0);
-              const used = Math.min(capacity, usage.usedSlots);
+              const used = Math.min(capacity, Number(plot.used_slots || 0));
               const free = Math.max(0, capacity - used);
               const usagePercent = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
               const barColor = usagePercent >= 90 ? 'bg-amber-500' : usagePercent > 0 ? 'bg-emerald-500' : 'bg-slate-300';
@@ -377,7 +373,7 @@ export const AdminPlotsPage: React.FC = () => {
                   <div className="mt-5 rounded-2xl bg-slate-50 p-4">
                     <div className="mb-2 flex items-end justify-between gap-2">
                       <div>
-                        <p className="text-[11px] font-semibold text-slate-500">พื้นที่ปลูกที่ใช้งาน</p>
+                        <p className="text-[11px] font-semibold text-slate-500">ช่องปลูกที่รอบปัจจุบันใช้งาน</p>
                         <p className="mt-0.5 text-xl font-black leading-none text-slate-900">
                           {used.toLocaleString()} <span className="text-xs font-semibold text-slate-500">/ {capacity.toLocaleString()} ช่อง</span>
                         </p>
@@ -394,9 +390,9 @@ export const AdminPlotsPage: React.FC = () => {
                     <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
                       <Sprout className="h-3.5 w-3.5 text-emerald-600" />ผักที่กำลังปลูก
                     </div>
-                    {usage.cropNames.length > 0 ? (
+                    {(plot.crop_names || []).length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {usage.cropNames.map((cropName) => (
+                        {(plot.crop_names || []).map((cropName) => (
                           <span key={cropName} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
                             <Leaf className="h-3 w-3" />{cropName}
                           </span>
@@ -406,6 +402,20 @@ export const AdminPlotsPage: React.FC = () => {
                       <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-400">ยังไม่มีผักปลูกในแปลงนี้</p>
                     )}
                   </div>
+
+                  {(plot.occupying_rounds || []).length > 0 && (
+                    <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2.5">
+                      <p className="text-[11px] font-bold text-emerald-900">รอบที่ใช้แปลงนี้</p>
+                      <div className="mt-1.5 space-y-1">
+                        {(plot.occupying_rounds || []).map((round, index) => (
+                          <p key={`${round.id}-${index}`} className="flex items-center justify-between gap-2 text-xs text-emerald-900">
+                            <span className="min-w-0 truncate">{round.name} · {round.crop_name}</span>
+                            <strong className="shrink-0">{round.used_slots.toLocaleString()} ช่อง</strong>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {plot.notes && <p className="mt-3 truncate border-t border-slate-100 pt-3 text-[11px] text-slate-400" title={plot.notes}>{plot.notes}</p>}
 
