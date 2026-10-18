@@ -4,6 +4,7 @@ import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { Order } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
+import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 import {
   Calendar,
   Clock,
@@ -14,6 +15,7 @@ import {
   Phone,
   Ban,
   CheckCircle,
+  ShoppingBag,
 } from 'lucide-react';
 
 export const OrderDetailPage: React.FC = () => {
@@ -95,7 +97,7 @@ export const OrderDetailPage: React.FC = () => {
   const canCancel = order.status !== 'cancelled' && order.status !== 'completed';
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 pb-8">
       <Link
         to="/orders"
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
@@ -103,6 +105,15 @@ export const OrderDetailPage: React.FC = () => {
         <ArrowLeft className="w-4 h-4" />
         <span>กลับหน้ารายการออเดอร์</span>
       </Link>
+
+      <CustomerPageHeader
+        eyebrow={`คำสั่งจอง #${order.id.slice(0, 8)}`}
+        title={order.planting_rounds?.name || 'รายละเอียดคำสั่งจองผัก'}
+        description="ติดตามสถานะ รายการผัก และกำหนดรับสินค้าของคำสั่งจองนี้"
+        icon={<ShoppingBag className="h-7 w-7" />}
+      >
+        <div className="flex flex-wrap gap-2"><Badge status={order.status} type="order" /><Badge status={order.payment_status} type="payment" /></div>
+      </CustomerPageHeader>
 
       {/* Success banner if just cancelled */}
       {cancelSuccess && (
@@ -126,16 +137,16 @@ export const OrderDetailPage: React.FC = () => {
       )}
 
       {/* Main Order Card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+      <div className="bg-white rounded-[1.75rem] p-6 sm:p-8 border border-emerald-100 shadow-sm space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              คำสั่งจอง #{order.id.slice(0, 8)}
+              สรุปคำสั่งจอง
             </span>
-            <h1 className="text-xl font-bold text-slate-900 mt-0.5">
+            <h2 className="text-xl font-bold text-slate-900 mt-0.5">
               {order.planting_rounds?.name || 'รอบการปลูก'}
-            </h1>
+            </h2>
             <span className="text-xs text-slate-500">สั่งเมื่อ: {formatDate(order.created_at)}</span>
           </div>
 
@@ -229,8 +240,10 @@ export const OrderDetailPage: React.FC = () => {
                   </p>
                 </div>
                 <div className="text-right">
+                  {Number(item.discount_amount || 0) > 0 && <p className="text-[11px] text-slate-400 line-through">฿{(Number(item.qty_kg) * Number(item.price_per_kg)).toLocaleString()}</p>}
+                  {Number(item.discount_amount || 0) > 0 && <p className="text-[11px] font-semibold text-emerald-700">ส่วนลด −฿{Number(item.discount_amount).toLocaleString()}</p>}
                   <span className="font-bold text-slate-900">
-                    ฿{(Number(item.qty_kg) * Number(item.price_per_kg)).toLocaleString()}
+                    ฿{Math.max(0, Number(item.qty_kg) * Number(item.price_per_kg) - Number(item.discount_amount || 0)).toLocaleString()}
                   </span>
                 </div>
               </div>

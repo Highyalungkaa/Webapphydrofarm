@@ -18,6 +18,10 @@ const updateOrderSchema = z.object({
     qty_kg: z.number().min(0).max(100000),
     total_cost: z.number().min(0).max(100000000),
   })).optional(),
+  item_discounts: z.array(z.object({
+    id: z.string().uuid(),
+    discount_amount: z.number().min(0).max(100000000),
+  })).optional(),
 });
 
 // GET /api/admin/orders - List all orders with multi-parameter filtering
@@ -49,6 +53,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           id,
           qty_kg,
           price_per_kg,
+          discount_amount,
           fulfilled_qty_kg,
           fulfillment_source,
           substitute_supplier,
@@ -142,6 +147,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           id,
           qty_kg,
           price_per_kg,
+          discount_amount,
           fulfilled_qty_kg,
           fulfillment_source,
           substitute_supplier,
@@ -194,11 +200,11 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
       return;
     }
 
-    let substituteItemsById: Map<string, { id: string; qty_kg: number }> | undefined;
-    if (parsed.data.substitute_items) {
+    let substituteItemsById: Map<string, { id: string; qty_kg: number; price_per_kg: number }> | undefined;
+    if (parsed.data.substitute_items || parsed.data.item_discounts) {
       const { data: orderItems, error: itemsError } = await supabaseAdmin
         .from('order_items')
-        .select('id, qty_kg')
+        .select('id, qty_kg, price_per_kg')
         .eq('order_id', id);
 
       if (itemsError || !orderItems) {
@@ -207,10 +213,17 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
       }
 
       substituteItemsById = new Map(orderItems.map((item: any) => [item.id, item]));
-      for (const substitute of parsed.data.substitute_items) {
+      for (const substitute of parsed.data.substitute_items || []) {
         const item = substituteItemsById.get(substitute.id);
         if (!item || substitute.qty_kg > Number(item.qty_kg)) {
           res.status(400).json({ error: 'จำนวนผักทดแทนต้องไม่เกินจำนวนที่ลูกค้าสั่ง' });
+          return;
+        }
+      }
+      for (const discount of parsed.data.item_discounts || []) {
+        const item = substituteItemsById.get(discount.id);
+        if (!item || discount.discount_amount > Number(item.qty_kg) * Number(item.price_per_kg)) {
+          res.status(400).json({ error: 'ส่วนลดต้องไม่เกินยอดรวมของรายการผัก' });
           return;
         }
       }
@@ -298,6 +311,17 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
           res.status(400).json({ error: substituteError.message });
           return;
         }
+      }
+    }
+
+    if (parsed.data.item_discounts) {
+      const { error: discountError } = await supabaseAdmin.rpc('apply_order_item_discounts', {
+        p_order_id: id,
+        p_discounts: parsed.data.item_discounts,
+      });
+      if (discountError) {
+        res.status(400).json({ error: discountError.message });
+        return;
       }
     }
 

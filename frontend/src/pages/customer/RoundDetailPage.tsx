@@ -6,7 +6,23 @@ import { PlantingRound, RoundItem } from '../../types/index.js';
 import { useCart } from '../../context/CartContext.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { Badge } from '../../components/common/Badge.js';
-import { Calendar, Clock, Store, Truck, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle } from 'lucide-react';
+import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
+import { Calendar, Clock, Store, Truck, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
+
+const getCustomerFarmNote = (notes?: string | null): string => {
+  if (!notes) return '';
+  try {
+    const parsed: unknown = JSON.parse(notes);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const note = (parsed as { note?: unknown }).note;
+      return typeof note === 'string' ? note.trim() : '';
+    }
+    return typeof parsed === 'string' ? parsed.trim() : '';
+  } catch {
+    // Older rounds may store a plain text note rather than a JSON metadata object.
+    return notes.trim();
+  }
+};
 
 export const RoundDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +32,7 @@ export const RoundDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qtyAlert, setQtyAlert] = useState<string | null>(null);
+  const [qtySteps, setQtySteps] = useState<Record<string, 0.5 | 1>>({});
 
   const { items, setRound: setCartRound, setItemQty, totalKg, totalAmount } = useCart();
 
@@ -42,7 +59,12 @@ export const RoundDetailPage: React.FC = () => {
     setQtyAlert(null);
     const existing = items.find((i) => i.round_item_id === item.id);
     const currentQty = existing ? existing.qty_kg : 0;
-    const newQty = Math.max(0, Math.round((currentQty + delta) * 10) / 10);
+    const requestedQty = currentQty + delta;
+    const maxAllowed = Math.min(
+      Number(item.available_qty_kg || 0),
+      item.max_qty_per_order_kg ? Number(item.max_qty_per_order_kg) : Number.POSITIVE_INFINITY,
+    );
+    const newQty = Math.max(0, Math.round((currentQty === 0 && delta > 0 ? Math.min(delta, maxAllowed) : requestedQty) * 10) / 10);
 
     const result = setItemQty(
       {
@@ -94,6 +116,8 @@ export const RoundDetailPage: React.FC = () => {
     );
   }
 
+  const farmNote = getCustomerFarmNote(round.notes);
+
   return (
     <div className="space-y-6 pb-20">
       {/* Back button */}
@@ -107,15 +131,15 @@ export const RoundDetailPage: React.FC = () => {
         </Link>
       </div>
 
-      {/* Round Header Card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div>
-            <span className="text-xs font-semibold uppercase text-farm-600 tracking-wider">
-              เปิดให้สั่งจองล่วงหน้า
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">{round.name}</h1>
-          </div>
+      <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
+        <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{round.status === 'booking_open' ? 'เปิดรับจอง' : 'ปิดรับจอง'}</span>
+        <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{round.items?.length || 0} ชนิดผัก</span>
+      </CustomerPageHeader>
+
+      {/* Round schedule */}
+      <div className="space-y-5 rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-7">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div><p className="text-[11px] font-extrabold uppercase tracking-[.15em] text-emerald-700">รายละเอียดรอบ</p><h2 className="mt-1 text-lg font-black text-slate-950">กำหนดการและการรับสินค้า</h2></div>
           <Badge status={round.status} type="round" />
         </div>
 
@@ -158,9 +182,9 @@ export const RoundDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {round.notes && (
+        {farmNote && (
           <p className="text-xs sm:text-sm text-slate-600 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
-            🌱 หมายเหตุจากฟาร์ม: {round.notes}
+            🌱 หมายเหตุจากฟาร์ม: {farmNote}
           </p>
         )}
 
@@ -183,15 +207,13 @@ export const RoundDetailPage: React.FC = () => {
       )}
 
       {/* Vegetable Cards List */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold text-slate-900">เลือกผักที่ต้องการจอง</h2>
-        <p className="text-xs text-slate-500">
-          สามารถระบุจำนวนเป็นกิโลกรัม (ขั้นต่ำ 0.5 กก. ปรับเพิ่ม-ลดทีละ 0.5 กก.)
-        </p>
+      <section className="space-y-4">
+        <div><p className="text-xs font-extrabold uppercase tracking-[.16em] text-emerald-700">Choose your greens</p><h2 className="mt-1 text-2xl font-black text-slate-950">เลือกผักที่ต้องการจอง</h2><p className="mt-1 text-xs text-slate-500">ปรับจำนวนทีละ 0.5 หรือ 1 กก. ในการ์ดผักแต่ละชนิด (ขั้นต่ำ 0.5 กก.)</p></div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {round.items?.map((item) => {
             const inCartQty = getItemQtyInCart(item.id);
+            const qtyStep = qtySteps[item.id] || 0.5;
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
             const available = Number(item.available_qty_kg || 0);
@@ -201,15 +223,15 @@ export const RoundDetailPage: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-2xl border p-5 flex flex-col justify-between transition-all ${
+                className={`flex flex-col justify-between rounded-[1.5rem] border bg-white p-5 shadow-sm transition-all hover:shadow-lg hover:shadow-emerald-900/5 ${
                   inCartQty > 0
-                    ? 'border-farm-500 ring-2 ring-farm-500/20 shadow-sm'
-                    : 'border-slate-200/90'
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'border-slate-200/90 hover:border-emerald-300'
                 } ${isSoldOut || isBookingClosed ? 'opacity-70 bg-slate-50/70' : ''}`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-bold text-base text-slate-900 leading-snug">{cropName}</h3>
+                    <h3 className="text-lg font-black leading-snug text-slate-950">{cropName}</h3>
                     {isBookingClosed ? (
                       <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                         ปิดรับจองแล้ว
@@ -226,7 +248,7 @@ export const RoundDetailPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-baseline gap-1.5 mb-3">
-                    <span className="text-xl font-extrabold text-slate-900">฿{price.toFixed(0)}</span>
+                    <span className="text-2xl font-black text-emerald-800">฿{price.toFixed(0)}</span>
                     <span className="text-xs text-slate-500 font-normal">/ กิโลกรัม</span>
                   </div>
 
@@ -237,9 +259,27 @@ export const RoundDetailPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Quantity Controller */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600">จำนวนที่เลือก:</span>
+                {/* Per-crop quantity step and controller */}
+                <div className="pt-3 border-t border-slate-100 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-600">ปรับจำนวนครั้งละ</span>
+                    <div className="flex rounded-lg border border-emerald-100 bg-emerald-50 p-0.5">
+                      {([0.5, 1] as const).map((step) => (
+                        <button
+                          key={step}
+                          type="button"
+                          onClick={() => setQtySteps((previous) => ({ ...previous, [item.id]: step }))}
+                          aria-pressed={qtyStep === step}
+                          className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${qtyStep === step ? 'bg-emerald-700 text-white shadow-sm' : 'text-emerald-800 hover:bg-white'}`}
+                        >
+                          {step} กก.
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-slate-600">จำนวนที่เลือก:</span>
 
                   {isBookingClosed ? (
                     <span className="text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -249,17 +289,17 @@ export const RoundDetailPage: React.FC = () => {
                     <span className="text-xs text-slate-400 font-medium">ไม่สามารถจองได้</span>
                   ) : inCartQty === 0 ? (
                     <button
-                      onClick={() => handleQtyChange(item, 0.5)}
+                      onClick={() => handleQtyChange(item, qtyStep)}
                       className="px-4 py-2 rounded-xl bg-farm-600 text-white text-xs font-semibold hover:bg-farm-700 active:scale-95 transition-all shadow-sm shadow-farm-600/20"
                     >
-                      + เพิ่ม 0.5 กก.
+                      + เพิ่ม {qtyStep} กก.
                     </button>
                   ) : (
                     <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
                       <button
-                        onClick={() => handleQtyChange(item, -0.5)}
+                        onClick={() => handleQtyChange(item, -qtyStep)}
                         className="w-8 h-8 rounded-lg bg-white text-slate-700 hover:bg-slate-200 flex items-center justify-center font-bold text-sm shadow-xs transition-colors"
-                        title="ลด 0.5 กก."
+                        title={`ลด ${qtyStep} กก.`}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -267,14 +307,15 @@ export const RoundDetailPage: React.FC = () => {
                         {inCartQty.toFixed(1)}
                       </span>
                       <button
-                        onClick={() => handleQtyChange(item, 0.5)}
+                        onClick={() => handleQtyChange(item, qtyStep)}
                         className="w-8 h-8 rounded-lg bg-farm-600 text-white hover:bg-farm-700 flex items-center justify-center font-bold text-sm shadow-xs transition-colors"
-                        title="เพิ่ม 0.5 กก."
+                        title={`เพิ่ม ${qtyStep} กก.`}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
             );
@@ -285,7 +326,7 @@ export const RoundDetailPage: React.FC = () => {
       {/* Floating Bottom Cart Bar */}
       {items.length > 0 && round.status === 'booking_open' && (
         <div className="fixed bottom-14 md:bottom-6 left-0 right-0 z-30 px-4 max-w-lg mx-auto">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 border border-slate-800 backdrop-blur-md">
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-emerald-800 bg-emerald-950 p-4 text-white shadow-2xl backdrop-blur-md">
             <div>
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-farm-400" />
@@ -302,12 +343,12 @@ export const RoundDetailPage: React.FC = () => {
                 if (!user) {
                   navigate('/login', { state: { returnTo: '/checkout' } });
                 } else {
-                  navigate('/checkout');
+                  navigate('/booking-review');
                 }
               }}
               className="px-5 py-2.5 rounded-xl bg-farm-500 hover:bg-farm-600 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95 whitespace-nowrap cursor-pointer"
             >
-              ดำเนินการสั่งจอง →
+              ตรวจสอบรายการจอง →
             </button>
           </div>
         </div>

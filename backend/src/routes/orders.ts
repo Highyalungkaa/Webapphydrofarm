@@ -79,6 +79,13 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
       return;
     }
 
+    // Read the persisted status after database triggers have applied the
+    // admin-confirmation workflow, so the API response matches the order.
+    const orderId = result?.order_id;
+    const { data: createdOrder } = orderId
+      ? await supabaseAdmin.from('orders').select('status, requires_confirmation').eq('id', orderId).maybeSingle()
+      : { data: null };
+
     // Also update phone in profile if not already set
     await supabaseAdmin
       .from('profiles')
@@ -88,7 +95,7 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
 
     res.status(201).json({
       message: 'บันทึกการจองสำเร็จ',
-      data: result,
+      data: createdOrder ? { ...result, ...createdOrder } : result,
     });
   } catch (err: any) {
     console.error('Create Order Exception:', err);
@@ -124,6 +131,7 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
           id,
           qty_kg,
           price_per_kg,
+          discount_amount,
           round_items (
             id,
             crops (
@@ -175,6 +183,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           id,
           qty_kg,
           price_per_kg,
+          discount_amount,
           fulfilled_qty_kg,
           fulfillment_source,
           round_items (

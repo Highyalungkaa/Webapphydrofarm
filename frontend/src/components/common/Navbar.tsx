@@ -18,22 +18,19 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <header className="sticky top-0 z-40 border-b border-emerald-100/80 bg-white/95 shadow-[0_6px_24px_-18px_rgba(12,69,48,.45)] backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Brand */}
-        <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-farm-600 to-farm-400 flex items-center justify-center text-white shadow-sm shadow-farm-500/20 group-hover:scale-105 transition-transform">
-            <Sprout className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="font-bold text-lg text-slate-900 tracking-tight flex items-center gap-1.5">
-              HydroFarm
-              <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-farm-100 text-farm-800">
-                Pre-order
-              </span>
-            </span>
-            <span className="text-xs text-slate-500 block -mt-1 hidden sm:block">ฟาร์มผักไฮโดรโปนิกส์สด</span>
-          </div>
+        <Link to="/" aria-label="HydroFarm กลับหน้ารอบเปิดจอง" className="group inline-flex shrink-0 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 sm:gap-3">
+          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-emerald-950 shadow-lg shadow-emerald-900/15 transition-transform duration-200 group-hover:-rotate-6 sm:h-11 sm:w-11">
+            <span className="absolute inset-[5px] rounded-[10px] border border-white/15" />
+            <Sprout className="relative h-5 w-5 text-lime-300 sm:h-6 sm:w-6" strokeWidth={2.2} />
+            <span className="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-lime-300"><span className="h-1 w-1 rounded-full bg-emerald-900" /></span>
+          </span>
+          <span className="flex min-w-0 flex-col justify-center leading-none">
+            <span className="whitespace-nowrap text-[18px] font-black tracking-[-.055em] sm:text-[21px]"><span className="text-slate-950">Hydro</span><span className="text-emerald-700">Farm</span></span>
+            <span className="mt-1 whitespace-nowrap text-[9px] font-bold tracking-[.04em] text-emerald-800/75 sm:text-[10px]">ผักสดและอุปกรณ์ปลูก</span>
+          </span>
         </Link>
 
         {/* Desktop Navigation */}
@@ -92,7 +89,7 @@ export const Navbar: React.FC = () => {
           </Link>
           {items.length > 0 && (
             <Link
-              to="/checkout"
+              to="/booking-review"
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-farm-600 text-white text-xs sm:text-sm font-medium hover:bg-farm-700 shadow-sm shadow-farm-600/30 transition-all hover:scale-102"
             >
               <ShoppingBag className="w-4 h-4" />

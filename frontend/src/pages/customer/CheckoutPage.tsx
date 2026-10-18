@@ -5,6 +5,7 @@ import { useCart } from '../../context/CartContext.js';
 import { api } from '../../lib/api.js';
 import { FulfillmentMethod } from '../../types/index.js';
 import { Store, Truck, ShoppingBag, ArrowLeft, CheckCircle2, AlertCircle, LogIn, MapPin } from 'lucide-react';
+import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 
 export const CheckoutPage: React.FC = () => {
   const { user, profile, refreshProfile, signInWithGoogle } = useAuth();
@@ -133,7 +134,7 @@ export const CheckoutPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 pb-8">
       <Link
         to={roundId ? `/rounds/${roundId}` : '/'}
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
@@ -142,13 +143,12 @@ export const CheckoutPage: React.FC = () => {
         <span>แก้ไขรายการในตะกร้า</span>
       </Link>
 
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">ยืนยันการสั่งจองผัก</h1>
-          <p className="text-xs sm:text-sm text-slate-500">
-            ระบบจองก่อนเก็บเกี่ยว ชำระเงินเมื่อได้รับผักสดจากฟาร์ม
-          </p>
-        </div>
+      <CustomerPageHeader eyebrow="ขั้นตอนสุดท้าย · ผักสดจากฟาร์ม" title="ยืนยันการสั่งจองผัก" description="ตรวจสอบรายการ เลือกวิธีรับสินค้า และกรอกข้อมูลติดต่อก่อนยืนยัน" icon={<ShoppingBag className="h-8 w-8" />}>
+        <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{items.length} ชนิด · {totalKg.toFixed(1)} กก.</span>
+        <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold">ชำระเงินเมื่อรับผัก</span>
+      </CustomerPageHeader>
+
+      <div className="space-y-6 rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-8">
 
         {/* Not Logged In Warning */}
         {!user && (
@@ -176,10 +176,10 @@ export const CheckoutPage: React.FC = () => {
 
         {/* Items Summary Table */}
         <div className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+          <h2 className="text-sm font-black uppercase tracking-wider text-emerald-800">
             รายการผักที่เลือก ({items.length} รายการ)
           </h2>
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/50 divide-y divide-slate-100 p-3">
+          <div className="divide-y divide-slate-100 rounded-2xl border border-emerald-100 bg-[#f8faf6] p-3">
             {items.map((i) => (
               <div key={i.round_item_id} className="py-2.5 flex items-center justify-between text-xs sm:text-sm">
                 <div>
@@ -196,7 +196,7 @@ export const CheckoutPage: React.FC = () => {
 
             <div className="pt-3 flex items-center justify-between text-sm sm:text-base font-extrabold border-t border-slate-200">
               <span className="text-slate-700">รวมทั้งหมด ({totalKg.toFixed(1)} กก.)</span>
-              <span className="text-farm-700">฿{totalAmount.toLocaleString()}</span>
+              <span className="text-emerald-800">฿{totalAmount.toLocaleString()}</span>
             </div>
           </div>
 
@@ -367,7 +367,7 @@ export const CheckoutPage: React.FC = () => {
             className={`w-full py-3.5 rounded-2xl text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
               isSubmitting || !user
                 ? 'bg-slate-400 cursor-not-allowed'
-                : 'bg-farm-600 hover:bg-farm-700 active:scale-98 shadow-farm-600/30'
+                : 'bg-emerald-800 hover:bg-emerald-900 active:scale-98 shadow-emerald-800/20'
             }`}
           >
             {isSubmitting ? (

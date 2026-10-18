@@ -4,7 +4,6 @@ import { Settings, Save, CheckCircle, AlertCircle } from 'lucide-react';
 
 export const AdminSettingsPage: React.FC = () => {
   const [deliveryMinTotalKg, setDeliveryMinTotalKg] = useState<number>(0);
-  const [largeOrderThresholdKg, setLargeOrderThresholdKg] = useState<number>(10);
   const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(24);
   const [noShowLimit, setNoShowLimit] = useState<number>(0);
 
@@ -23,7 +22,6 @@ export const AdminSettingsPage: React.FC = () => {
       const res = await api.get('/admin/settings');
       const map = res.map || {};
       if (map.delivery_min_total_kg !== undefined) setDeliveryMinTotalKg(Number(map.delivery_min_total_kg));
-      if (map.large_order_threshold_kg !== undefined) setLargeOrderThresholdKg(Number(map.large_order_threshold_kg));
       if (map.cancellation_deadline_hours_before_harvest !== undefined) setCancellationDeadlineHours(Number(map.cancellation_deadline_hours_before_harvest));
       if (map.no_show_limit !== undefined) setNoShowLimit(Number(map.no_show_limit));
     } catch (err: any) {
@@ -42,7 +40,6 @@ export const AdminSettingsPage: React.FC = () => {
       setSaving(true);
       await api.put('/admin/settings', {
         delivery_min_total_kg: Number(deliveryMinTotalKg),
-        large_order_threshold_kg: Number(largeOrderThresholdKg),
         cancellation_deadline_hours_before_harvest: Number(cancellationDeadlineHours),
         no_show_limit: Number(noShowLimit),
       });
@@ -65,7 +62,7 @@ export const AdminSettingsPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">ตั้งค่าระบบ (App Settings)</h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          กำหนดเกณฑ์ธุรกิจ การส่งมอบ ออเดอร์ใหญ่ และเงื่อนไขการยกเลิก
+          กำหนดเกณฑ์การส่งมอบและเงื่อนไขการจัดการออเดอร์
         </p>
       </div>
 
@@ -99,27 +96,6 @@ export const AdminSettingsPage: React.FC = () => {
               min="0"
               value={deliveryMinTotalKg}
               onChange={(e) => setDeliveryMinTotalKg(parseFloat(e.target.value) || 0)}
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900"
-              required
-            />
-          </div>
-        </div>
-
-        {/* Large Order Threshold */}
-        <div className="space-y-1.5 border-b border-slate-100 pb-5">
-          <label className="font-bold text-sm text-slate-900 block">
-            เกณฑ์ออเดอร์ขนาดใหญ่ที่ต้องรอแอดมินโทรยืนยัน (กิโลกรัม)
-          </label>
-          <p className="text-xs text-slate-500">
-            ออเดอร์ที่มีน้ำหนักรวมตั้งแต่เกณฑ์นี้ขึ้นไป จะเริ่มต้นด้วยสถานะ "รอยืนยัน" (pending_confirmation) เพื่อให้แอดมินโทรคุยก่อนยืนยัน
-          </p>
-          <div className="w-40 pt-1">
-            <input
-              type="number"
-              step="1"
-              min="1"
-              value={largeOrderThresholdKg}
-              onChange={(e) => setLargeOrderThresholdKg(parseFloat(e.target.value) || 1)}
               className="w-full p-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900"
               required
             />

@@ -27,24 +27,35 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[75vh] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200/90 shadow-xl shadow-slate-200/50 space-y-6 text-center">
+    <div className="min-h-[75vh] flex items-center justify-center py-6 sm:py-12">
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-xl shadow-emerald-950/10 md:grid-cols-[0.9fr_1fr]">
+        <div className="relative flex flex-col justify-between overflow-hidden bg-[#103e31] p-8 text-white sm:p-10">
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full border border-white/10" />
+          <div className="pointer-events-none absolute -bottom-24 left-0 h-72 w-72 rounded-full bg-lime-300/10 blur-3xl" />
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-lime-300 text-emerald-950"><Sprout className="h-8 w-8" /></div>
+          <div className="relative mt-16 space-y-4 md:mt-0">
+            <span className="inline-flex rounded-full border border-white/20 px-3 py-1 text-xs font-bold text-lime-200">HYDROFARM</span>
+            <h1 className="text-3xl font-black leading-tight sm:text-4xl">ผักสดและอุปกรณ์ปลูก<br />ในที่เดียว</h1>
+            <p className="max-w-xs text-sm leading-7 text-emerald-50/80">เข้าสู่ระบบเพื่อจองผัก เลือกซื้ออุปกรณ์ และติดตามคำสั่งซื้อของคุณ</p>
+          </div>
+        </div>
+        <div className="space-y-6 p-7 text-center sm:p-10">
         {/* Brand Logo */}
-        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-farm-600 to-farm-400 text-white flex items-center justify-center mx-auto shadow-md shadow-farm-500/30">
-          <Sprout className="w-9 h-9" />
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800 md:hidden">
+          <Sprout className="h-8 w-8" />
         </div>
 
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">เข้าสู่ระบบ HydroFarm</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            ระบบจองผักไฮโดรโปนิกส์สดล่วงหน้าก่อนเก็บเกี่ยว
+          <h2 className="text-2xl font-black tracking-tight text-emerald-950">ยินดีต้อนรับกลับมา</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            เข้าสู่ระบบเพื่อจัดการคำสั่งจองและคำสั่งซื้อ
           </p>
         </div>
 
         {returnTo !== '/' && !error && (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 text-left font-medium">
             <LogIn className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            <span>กรุณาเข้าสู่ระบบก่อนทำการสั่งจองผัก เพื่อบันทึกคำสั่งซื้อของคุณ</span>
+            <span>กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อและบันทึกคำสั่งซื้อของคุณ</span>
           </div>
         )}
 
@@ -60,7 +71,7 @@ export const LoginPage: React.FC = () => {
           <button
             onClick={handleGoogleLogin}
             disabled={isLoggingIn}
-            className="w-full py-3.5 px-4 rounded-2xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-3 active:scale-98"
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-200 bg-white px-4 py-4 text-sm font-bold text-emerald-950 shadow-sm transition-all hover:border-emerald-400 hover:bg-emerald-50 disabled:opacity-60"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -83,19 +94,20 @@ export const LoginPage: React.FC = () => {
             <span>{isLoggingIn ? 'กำลังเชื่อมต่อ Google...' : 'เข้าสู่ระบบด้วย Google'}</span>
           </button>
 
-          <p className="text-[11px] text-slate-400">
-            ระบบรองรับการเข้าสู่ระบบด้วยบัญชี Google อย่างปลอดภัย ไม่ต้องจำรหัสผ่าน
+          <p className="text-xs text-slate-500">
+            ใช้บัญชี Google ของคุณเพื่อเข้าสู่ระบบ
           </p>
         </div>
 
         <div className="pt-2">
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 transition-colors hover:text-emerald-900"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>กลับสู่หน้าหลัก</span>
           </Link>
+        </div>
         </div>
       </div>
     </div>

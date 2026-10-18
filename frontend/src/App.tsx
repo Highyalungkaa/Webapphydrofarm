@@ -13,6 +13,7 @@ import { EquipmentAdminLayout } from './components/layout/EquipmentAdminLayout.j
 import { HomePage } from './pages/customer/HomePage.js';
 import { RoundDetailPage } from './pages/customer/RoundDetailPage.js';
 import { CheckoutPage } from './pages/customer/CheckoutPage.js';
+import { BookingReviewPage } from './pages/customer/BookingReviewPage.js';
 import { OrdersPage } from './pages/customer/OrdersPage.js';
 import { OrderDetailPage } from './pages/customer/OrderDetailPage.js';
 import { EquipmentOrderDetailPage } from './pages/customer/EquipmentOrderDetailPage.js';
@@ -70,6 +71,7 @@ export const App: React.FC = () => {
             <Route element={<CustomerLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/rounds/:id" element={<RoundDetailPage />} />
+              <Route path="/booking-review" element={<BookingReviewPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/equipment" element={<EquipmentShopPage />} />
               <Route path="/equipment/:id" element={<EquipmentShopPage />} />

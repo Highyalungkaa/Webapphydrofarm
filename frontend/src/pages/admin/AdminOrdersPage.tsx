@@ -17,6 +17,8 @@ import {
   Banknote,
   CreditCard,
   History,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export const AdminOrdersPage: React.FC = () => {
@@ -43,6 +45,8 @@ export const AdminOrdersPage: React.FC = () => {
   const [modalPaymentMethod, setModalPaymentMethod] = useState<PaymentMethod>('cash');
   const [modalCancelReason, setModalCancelReason] = useState('');
   const [substituteInputs, setSubstituteInputs] = useState<Record<string, { qtyKg: string; totalCost: string }>>({});
+  const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({});
+  const [showSubstituteInputs, setShowSubstituteInputs] = useState(false);
 
   useEffect(() => {
     api.get<PlantingRound[]>('/admin/rounds').then(setRounds).catch(console.error);
@@ -69,6 +73,7 @@ export const AdminOrdersPage: React.FC = () => {
   };
 
   const handleOpenDetailModal = (order: Order) => {
+    setShowSubstituteInputs(false);
     setSelectedOrder(order);
     setModalStatus(order.status);
     setModalPaymentStatus(order.payment_status);
@@ -79,6 +84,7 @@ export const AdminOrdersPage: React.FC = () => {
       const totalCost = Number(item.substitute_total_cost ?? (qtyKg * Number(item.substitute_cost_per_kg || 0)));
       return [item.id, { qtyKg: qtyKg ? String(qtyKg) : '', totalCost: totalCost ? String(Number(totalCost.toFixed(2))) : '' }];
     })));
+    setDiscountInputs(Object.fromEntries((order.order_items || []).map((item) => [item.id, String(Number(item.discount_amount || 0))])));
   };
 
   const handleUpdateOrder = async (e: React.FormEvent) => {
@@ -88,7 +94,7 @@ export const AdminOrdersPage: React.FC = () => {
     try {
       setIsUpdating(true);
       await api.patch(`/admin/orders/${selectedOrder.id}`, {
-        status: modalStatus,
+        ...(modalStatus !== selectedOrder.status ? { status: modalStatus } : {}),
         payment_status: modalPaymentStatus,
         payment_method: modalPaymentStatus === 'paid' ? modalPaymentMethod : null,
         cancel_reason: modalStatus === 'cancelled' ? modalCancelReason : null,
@@ -99,6 +105,10 @@ export const AdminOrdersPage: React.FC = () => {
             qty_kg: Number(substituteInputs[item.id]?.qtyKg || 0),
             total_cost: Number(substituteInputs[item.id]?.totalCost || 0),
           })),
+        item_discounts: (selectedOrder.order_items || []).map((item) => ({
+          id: item.id,
+          discount_amount: Number(discountInputs[item.id] || 0),
+        })),
       });
 
       setSelectedOrder(null);
@@ -111,6 +121,10 @@ export const AdminOrdersPage: React.FC = () => {
   };
 
   const formatDate = formatDateTimeDMY;
+  const modalNetTotal = selectedOrder?.order_items?.reduce((sum, item) => {
+    const gross = Number(item.qty_kg) * Number(item.price_per_kg);
+    return sum + Math.max(0, gross - Number(discountInputs[item.id] || 0));
+  }, 0) ?? Number(selectedOrder?.total_amount || 0);
 
   return (
     <div className="space-y-6">
@@ -119,7 +133,7 @@ export const AdminOrdersPage: React.FC = () => {
         <div>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">จัดการคำสั่งจอง</h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          ตรวจสอบคำสั่งจอง กรองสถานะ ยืนยันออเดอร์ใหญ่ และบันทึกการชำระเงิน
+          ตรวจสอบคำสั่งจอง ยืนยันออเดอร์ก่อนดำเนินการ และบันทึกการชำระเงิน
         </p>
         </div>
         <Link to="/admin/rounds/history" className="inline-flex items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-300 hover:text-emerald-800">
@@ -156,7 +170,7 @@ export const AdminOrdersPage: React.FC = () => {
               className="w-full p-2.5 rounded-xl border border-slate-200 bg-white"
             >
               <option value="">-- ทุกสถานะ --</option>
-              <option value="pending_confirmation">รอยืนยัน (ออเดอร์ใหญ่)</option>
+              <option value="pending_confirmation">รอยืนยัน</option>
               <option value="confirmed">ยืนยันแล้ว</option>
               <option value="ready">พร้อมรับ/ส่ง</option>
             </select>
@@ -424,31 +438,34 @@ export const AdminOrdersPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Veggie Items */}
-            <div className="space-y-2">
-              <h3 className="font-bold text-xs uppercase text-slate-400">รายการผักในออเดอร์</h3>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl p-3 text-xs">
-                {selectedOrder.order_items?.map((it) => (
-                  <div key={it.id} className="py-2 flex items-center justify-between">
-                    <span>
-                      {it.round_items?.crops?.name || 'ผัก'} × {Number(it.qty_kg).toFixed(1)} กก.
-                    </span>
-                    <span className="font-bold">
-                      ฿{(Number(it.qty_kg) * Number(it.price_per_kg)).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-                <div className="pt-2 flex justify-between font-extrabold text-sm border-t border-slate-200">
-                  <span>ยอดรวมทั้งสิ้น</span>
-                  <span className="text-emerald-700">฿{Number(selectedOrder.total_amount).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5 space-y-3">
+            {/* Veggie Items & fixed amount discounts */}
+            <section className="space-y-3">
               <div>
-                <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">ผักทดแทนจากแหล่งอื่น</h3>
-                  <p className="text-xs text-slate-600 mt-1">กรอกเฉพาะรายการที่ซื้อมาแทนผักที่ขาด ระบบจะบันทึกยอดเงินรวมและคำนวณต้นทุนต่อกิโลกรัมให้</p>
+                <h3 className="font-bold text-xs uppercase text-slate-500">รายการผักและส่วนลด</h3>
+                <p className="mt-1 text-[11px] text-slate-500">กรอกส่วนลดเป็นจำนวนเงินบาทแยกแต่ละรายการ ระบบจะหักออกจากยอดที่ลูกค้าต้องชำระ</p>
+              </div>
+              <div className="space-y-2">
+                {selectedOrder.order_items?.map((it) => {
+                  const gross = Number(it.qty_kg) * Number(it.price_per_kg);
+                  const discount = Number(discountInputs[it.id] || 0);
+                  const invalidDiscount = discount > gross;
+                  return <div key={it.id} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_130px_110px] sm:items-center">
+                    <div><p className="font-bold text-slate-900">{it.round_items?.crops?.name || 'ผัก'} × {Number(it.qty_kg).toFixed(1)} กก.</p><p className="mt-0.5 text-[11px] text-slate-500">ราคาเต็ม ฿{gross.toLocaleString()}</p></div>
+                    <label className="block"><span className="text-[11px] font-semibold text-slate-600">ส่วนลด (บาท)</span><input type="number" min="0" max={gross} step="0.01" value={discountInputs[it.id] ?? '0'} onChange={(e) => setDiscountInputs((prev) => ({ ...prev, [it.id]: e.target.value }))} className={`mt-1 w-full rounded-lg border px-2.5 py-2 text-sm ${invalidDiscount?'border-rose-400 bg-rose-50':'border-slate-200 bg-slate-50'}`} />{invalidDiscount&&<span className="mt-1 block text-[10px] text-rose-600">ส่วนลดห้ามเกิน ฿{gross.toLocaleString()}</span>}</label>
+                    <div className="text-left sm:text-right"><p className="text-[10px] text-slate-500">หลังหักส่วนลด</p><p className="font-extrabold text-emerald-800">฿{Math.max(0,gross-discount).toLocaleString()}</p></div>
+                  </div>;
+                })}
+              </div>
+              <div className="flex justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-extrabold"><span>ยอดสุทธิที่ลูกค้าต้องชำระ</span><span className="text-emerald-800">฿{modalNetTotal.toLocaleString()}</span></div>
+            </section>
+
+            <button type="button" onClick={() => setShowSubstituteInputs((open) => !open)} aria-expanded={showSubstituteInputs} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-left transition hover:bg-amber-100/70 sm:px-5">
+              <span><span className="block text-sm font-extrabold text-slate-900">ผักทดแทนจากแหล่งอื่น</span><span className="mt-1 block text-xs text-slate-600">กรอกเมื่อมีการซื้อผักจากแหล่งอื่นมาแทนรายการที่ขาด</span></span>
+              <span className="flex shrink-0 items-center gap-2">{(selectedOrder.order_items || []).some((item) => item.fulfillment_source === 'substitute') && <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-900">มีข้อมูลแล้ว</span>}{showSubstituteInputs ? <ChevronUp className="h-5 w-5 text-amber-800" /> : <ChevronDown className="h-5 w-5 text-amber-800" />}</span>
+            </button>
+            {showSubstituteInputs && <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5 space-y-3">
+              <div>
+                <p className="text-xs text-slate-600">กรอกเฉพาะรายการที่ซื้อมาแทนผักที่ขาด ระบบจะบันทึกยอดเงินรวมและคำนวณต้นทุนต่อกิโลกรัมให้</p>
               </div>
               {(selectedOrder.order_items || []).map((item) => {
                 const input = substituteInputs[item.id] || { qtyKg: '', totalCost: '' };
@@ -482,7 +499,7 @@ export const AdminOrdersPage: React.FC = () => {
                   </div>
                 );
               })}
-            </section>
+            </section>}
 
             {/* Update Form */}
             <form onSubmit={handleUpdateOrder} className="space-y-5 pt-5 border-t border-slate-100 text-xs sm:text-sm">
@@ -618,7 +635,8 @@ export const AdminOrdersPage: React.FC = () => {
                   type="submit"
                   disabled={isUpdating || (selectedOrder.order_items || []).some((item) => {
                     const input = substituteInputs[item.id];
-                    return Number(input?.qtyKg || 0) > Number(item.qty_kg) || (Number(input?.qtyKg || 0) === 0 && Number(input?.totalCost || 0) > 0);
+                    const gross = Number(item.qty_kg) * Number(item.price_per_kg);
+                    return Number(input?.qtyKg || 0) > Number(item.qty_kg) || (Number(input?.qtyKg || 0) === 0 && Number(input?.totalCost || 0) > 0) || Number(discountInputs[item.id] || 0) > gross;
                   })}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 >

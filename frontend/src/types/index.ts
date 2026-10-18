@@ -121,6 +121,7 @@ export interface OrderItem {
   round_item_id: string;
   qty_kg: number;
   price_per_kg: number;
+  discount_amount?: number;
   fulfilled_qty_kg?: number | null;
   fulfillment_source?: 'own' | 'substitute' | null;
   substitute_supplier?: string | null;

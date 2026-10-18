@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Clock3, ImagePlus, MapPin, PackageCheck, Search, Truck } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Check, Clock3, ImagePlus, MapPin, PackageCheck, Search, Truck, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EquipmentOrder, EquipmentOrderStatus } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 
 const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+const bangkokDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 const statusNames: Record<EquipmentOrderStatus, string> = { pending_confirmation: 'รอตรวจสอบ', confirmed: 'ยืนยันแล้ว', processing: 'กำลังจัดเตรียม', shipped: 'จัดส่งแล้ว', completed: 'สำเร็จ', cancelled: 'ยกเลิก' };
 const nextStatuses: Record<EquipmentOrderStatus, EquipmentOrderStatus[]> = { pending_confirmation: ['confirmed','cancelled'], confirmed: ['processing','cancelled'], processing: ['shipped','cancelled'], shipped: ['completed'], completed: [], cancelled: [] };
 const statusStyle = (status: EquipmentOrderStatus) => status === 'completed' ? 'bg-emerald-100 text-emerald-800' : status === 'cancelled' ? 'bg-rose-100 text-rose-800' : status === 'shipped' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-900';
@@ -22,6 +23,8 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [shipmentMessage, setShipmentMessage] = useState('');
@@ -38,7 +41,13 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
   };
   useEffect(() => { void load(); }, []);
   const selectedOrder = orders.find((order) => order.id === selectedId) || null;
-  const filtered = useMemo(() => orders.filter((order) => (statusFilter === 'all' || order.status === statusFilter) && `${order.id} ${order.profiles?.full_name || ''} ${order.profiles?.email || ''} ${order.contact_phone}`.toLowerCase().includes(query.toLowerCase())), [orders, statusFilter, query]);
+  const filtered = useMemo(() => orders.filter((order) => {
+    const orderDate = bangkokDate(order.created_at);
+    return (statusFilter === 'all' || order.status === statusFilter)
+      && (!dateFrom || orderDate >= dateFrom)
+      && (!dateTo || orderDate <= dateTo)
+      && `${order.id} ${order.profiles?.full_name || ''} ${order.profiles?.email || ''} ${order.contact_phone}`.toLowerCase().includes(query.toLowerCase());
+  }), [orders, statusFilter, dateFrom, dateTo, query]);
 
   const openOrder = (order: EquipmentOrder) => { setSelectedId(order.id); setDraft(draftFrom(order)); setShipmentMessage(order.delivery_update_message || ''); setShipmentImageFile(null); setShipmentImagePreview(''); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const save = async () => {
@@ -76,7 +85,11 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
           <button disabled={saving} onClick={() => void save()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-800 py-3 text-sm font-extrabold text-white transition hover:bg-emerald-900 disabled:bg-slate-300"><Check className="h-4 w-4" />{saving ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}</button></section>
       </div>
     </section> : <>
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ค้นหาเลขออเดอร์ ชื่อลูกค้า เบอร์โทร" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm" /></label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><option value="all">ทุกสถานะ</option>{Object.entries(statusNames).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></div>
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ค้นหาเลขออเดอร์ ชื่อลูกค้า เบอร์โทร" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm" /></label><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold"><option value="all">ทุกสถานะ</option>{Object.entries(statusNames).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end"><div className="flex items-center gap-2 text-xs font-extrabold text-slate-600"><CalendarDays className="h-4 w-4 text-emerald-700" />วันที่สั่งซื้อ</div><label className="flex-1 text-[11px] font-bold text-slate-500">ตั้งแต่<input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800" /></label><label className="flex-1 text-[11px] font-bold text-slate-500">ถึง<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800" /></label>{(dateFrom || dateTo) && <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800"><X className="h-3.5 w-3.5" />ล้างวันที่</button>}</div>
+        <p className="text-[11px] text-slate-400">แสดง {filtered.length} จาก {orders.length} ออเดอร์ · วันที่อิงเขตเวลาไทย</p>
+      </div>
       {loading ? <div className="rounded-2xl bg-white p-12 text-center text-slate-500">กำลังโหลดคำสั่งซื้อ...</div> : filtered.length === 0 ? <div className="rounded-2xl bg-white p-12 text-center text-slate-500">ไม่มีคำสั่งซื้อที่ตรงกับเงื่อนไข</div> : <div className="space-y-3">{filtered.map((order) => <article key={order.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:p-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-black text-slate-900">#{order.id.slice(0,8)}</span><span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${statusStyle(order.status)}`}>{statusNames[order.status]}</span><Badge status={order.payment_status} type="payment" /></div><p className="mt-1 truncate text-sm font-bold text-slate-800">{order.profiles?.full_name || order.profiles?.email || 'ลูกค้า'} <span className="font-normal text-slate-500">· {order.contact_phone}</span></p><p className="mt-1 flex items-center gap-1 text-xs text-slate-400"><Clock3 className="h-3.5 w-3.5" />{new Date(order.created_at).toLocaleString('th-TH')} · {(order.equipment_order_items || []).reduce((sum, item) => sum + item.quantity, 0)} ชิ้น · เก็บเงินปลายทาง</p></div><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-lg font-black text-emerald-800">{money(order.total_amount)}</span><button onClick={() => openOrder(order)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-emerald-900"><PackageCheck className="h-4 w-4" />จัดการออเดอร์</button></div></article>)}</div>}
     </>}
   </div>;

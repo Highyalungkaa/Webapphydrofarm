@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
 import { User, Phone, MapPin, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
+import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 
 export const ProfilePage: React.FC = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -46,20 +47,19 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">ข้อมูลส่วนตัว</h1>
-        <p className="text-xs sm:text-sm text-slate-500">จัดการข้อมูลติดต่อและที่อยู่เริ่มต้นสำหรับการสั่งจอง</p>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6 pb-8">
+      <CustomerPageHeader eyebrow="บัญชีของฉัน" title="ข้อมูลส่วนตัว" description="ดูแลข้อมูลติดต่อและที่อยู่เริ่มต้น เพื่อให้การจองผักและซื้ออุปกรณ์ครั้งต่อไปสะดวกขึ้น" icon={<User className="h-8 w-8" />}>
+        <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{user?.email}</span>
+      </CustomerPageHeader>
 
-      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-sm space-y-6">
+      <div className="space-y-6 rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-8">
         {/* Account Info */}
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-lg">
+        <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-[#f4f9f2] p-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-800 text-lg font-black text-lime-200">
             {fullName ? fullName[0].toUpperCase() : 'U'}
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="font-bold text-slate-900 truncate">{fullName || 'ผู้ใช้งาน'}</h2>
+          <h2 className="truncate font-black text-slate-950">{fullName || 'ผู้ใช้งาน'}</h2>
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>
           {profile?.is_admin && (
@@ -91,7 +91,8 @@ export const ProfilePage: React.FC = () => {
         )}
 
         {/* Edit Form */}
-        <form onSubmit={handleSave} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-5 border-t border-slate-100 pt-5">
+          <div><p className="text-[11px] font-extrabold uppercase tracking-[.15em] text-emerald-700">ข้อมูลสำหรับติดต่อ</p><h3 className="mt-1 text-lg font-black text-slate-900">แก้ไขข้อมูลของคุณ</h3></div>
           <div>
             <label className="text-xs font-bold text-slate-700 block mb-1">
               ชื่อ-นามสกุล (สำหรับติดต่อ) *
@@ -149,7 +150,7 @@ export const ProfilePage: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving}
-              className="w-full py-3 rounded-xl bg-farm-600 hover:bg-farm-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all"
+              className="w-full rounded-xl bg-emerald-800 py-3 text-xs font-extrabold text-white shadow-sm transition-all hover:bg-emerald-900 sm:text-sm"
             >
               {isSaving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลส่วนตัว'}
             </button>
