@@ -205,13 +205,63 @@ router.patch('/admin/orders/:id', async (req: AuthenticatedRequest, res: Respons
   res.json(data);
 });
 
+const readAllEquipmentRows = async (getPage: (start: number, end: number) => Promise<any>) => {
+  const pageSize = 500;
+  const rows: any[] = [];
+  for (let start = 0; ; start += pageSize) {
+    const { data, error } = await getPage(start, start + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+  }
+};
+
 router.get('/admin/reports', async (_req, res) => {
-  const [{ data: orders, error: ordersError }, { data: products, error: productsError }] = await Promise.all([
-    supabaseAdmin.from('equipment_orders').select('id,status,payment_status,total_amount,shipping_fee,created_at,equipment_order_items(product_name,sku,quantity,unit_price)'),
-    supabaseAdmin.from('equipment_products').select('id,name,sku,stock_quantity,low_stock_threshold'),
-  ]);
-  if (ordersError || productsError) { res.status(500).json({ error: ordersError?.message || productsError?.message }); return; }
-  res.json({ orders: orders || [], low_stock: (products || []).filter((p) => p.stock_quantity <= p.low_stock_threshold) });
+  try {
+    const [orders, products] = await Promise.all([
+      readAllEquipmentRows(async (start, end) => await supabaseAdmin.from('equipment_orders')
+        .select('id,status,payment_status,total_amount,shipping_fee,created_at,equipment_order_items(product_name,sku,quantity,unit_price)')
+        .order('created_at', { ascending: false }).order('id', { ascending: false }).range(start, end)),
+      readAllEquipmentRows(async (start, end) => await supabaseAdmin.from('equipment_products')
+        .select('id,name,sku,stock_quantity,low_stock_threshold')
+        .order('name').order('id').range(start, end)),
+    ]);
+    res.json({ orders, low_stock: products.filter((p) => p.stock_quantity <= p.low_stock_threshold) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'ไม่สามารถโหลดรายงานอุปกรณ์ได้' });
+  }
+});
+
+router.get('/admin/reports/export', async (req, res) => {
+  const parsed = z.enum(['7', '30', '90', 'all']).safeParse(req.query.period);
+  if (!parsed.success) { res.status(400).json({ error: 'ช่วงเวลารายงานไม่ถูกต้อง' }); return; }
+  const cutoff = parsed.data === 'all' ? null : new Date(Date.now() - Number(parsed.data) * 86400000).toISOString();
+  try {
+    const [orders, products, transactions] = await Promise.all([
+      readAllEquipmentRows(async (start, end) => {
+        let query = supabaseAdmin.from('equipment_orders')
+          .select('*, equipment_order_items(*), profiles(full_name,email,phone)')
+          .order('created_at', { ascending: false }).order('id', { ascending: false })
+          .range(start, end);
+        if (cutoff) query = query.gte('created_at', cutoff);
+        return await query;
+      }),
+      readAllEquipmentRows(async (start, end) => await supabaseAdmin.from('equipment_products')
+        .select('id,name,category,sku,price,stock_quantity,low_stock_threshold,is_active')
+        .order('name').order('id').range(start, end)),
+      readAllEquipmentRows(async (start, end) => {
+        let query = supabaseAdmin.from('equipment_inventory_transactions')
+          .select('id,product_id,order_id,transaction_type,quantity_change,stock_after,note,created_at')
+          .order('created_at', { ascending: false }).order('id', { ascending: false })
+          .range(start, end);
+        if (cutoff) query = query.gte('created_at', cutoff);
+        return await query;
+      }),
+    ]);
+    res.json({ orders, products, transactions });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'ไม่สามารถเตรียมข้อมูลส่งออกได้' });
+  }
 });
 
 export default router;

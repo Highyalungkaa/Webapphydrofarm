@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, CheckCircle2, Clock3, Coins, PackageCheck, ShoppingBag, Truck, Wallet } from 'lucide-react';
+import { AlertTriangle, BarChart3, CheckCircle2, Clock3, Coins, Download, PackageCheck, ShoppingBag, Truck, Wallet } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EquipmentOrder, EquipmentProduct } from '../../types/index.js';
 
@@ -14,6 +14,7 @@ export const AdminEquipmentReportsPage: React.FC = () => {
   const [period, setPeriod] = useState<Period>('30');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
   useEffect(() => { api.get<ReportData>('/equipment/admin/reports').then(setReport).catch((err) => setError(err.message)).finally(() => setLoading(false)); }, []);
   const summary = useMemo(() => {
     const all = report?.orders || [];
@@ -34,9 +35,24 @@ export const AdminEquipmentReportsPage: React.FC = () => {
   }, [report, period]);
   const maxQty = Math.max(1, ...summary.products.slice(0, 6).map((p) => p.quantity));
   const maxRevenue = Math.max(1, ...summary.daily.map((d) => d.revenue));
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      setError('');
+      const [data, { exportEquipmentReport }] = await Promise.all([
+        api.get<import('../../lib/exportEquipmentReport.js').EquipmentExportData>(`/equipment/admin/reports/export?period=${period}`),
+        import('../../lib/exportEquipmentReport.js'),
+      ]);
+      await exportEquipmentReport(data, period, new Date());
+    } catch (err: any) {
+      setError(err.message || 'ไม่สามารถส่งออกรายงาน Excel ได้');
+    } finally {
+      setExporting(false);
+    }
+  };
   if (loading) return <div className="p-14 text-center text-slate-500">กำลังคำนวณรายงาน...</div>;
   return <div className="space-y-6">
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">HydroFarm Supply</p><h1 className="mt-1 text-2xl font-black text-slate-950">รายงานสินค้าอุปกรณ์</h1><p className="mt-1 text-sm text-slate-500">ภาพรวมยอดขาย คำสั่งซื้อ การชำระเงิน และสต็อก</p></div><div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{([['7','7 วัน'],['30','30 วัน'],['90','90 วัน'],['all','ทั้งหมด']] as [Period,string][]).map(([key,label]) => <button key={key} onClick={() => setPeriod(key)} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${period===key?'bg-emerald-700 text-white shadow':'text-slate-600 hover:bg-slate-100'}`}>{label}</button>)}</div></div>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">HydroFarm Supply</p><h1 className="mt-1 text-2xl font-black text-slate-950">รายงานสินค้าอุปกรณ์</h1><p className="mt-1 text-sm text-slate-500">ภาพรวมยอดขาย คำสั่งซื้อ การชำระเงิน และสต็อก</p></div><div className="flex flex-wrap items-center gap-2 sm:justify-end"><div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{([['7','7 วัน'],['30','30 วัน'],['90','90 วัน'],['all','ทั้งหมด']] as [Period,string][]).map(([key,label]) => <button key={key} type="button" onClick={() => setPeriod(key)} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${period===key?'bg-emerald-700 text-white shadow':'text-slate-600 hover:bg-slate-100'}`}>{label}</button>)}</div><button type="button" onClick={() => void handleExport()} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />{exporting ? 'กำลังสร้างไฟล์...' : 'ส่งออก Excel'}</button></div></div>
     {error && <div className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={<Coins />} label="ยอดขายสำเร็จ" value={money(summary.revenue)} detail="ออเดอร์จัดส่งแล้วหรือสำเร็จ" color="emerald" /><Metric icon={<ShoppingBag />} label="ออเดอร์ทั้งหมด" value={`${summary.orders.length} รายการ`} detail={`ยกเลิก ${summary.cancelled} รายการ`} color="sky" /><Metric icon={<PackageCheck />} label="สินค้าที่ขายได้" value={`${summary.units} ชิ้น`} detail="นับเฉพาะรายการจัดส่งแล้ว/สำเร็จ" color="violet" /><Metric icon={<AlertTriangle />} label="สินค้าใกล้หมด" value={`${report?.low_stock.length || 0} รายการ`} detail="ต่ำกว่าระดับแจ้งเตือน" color="amber" /></div>
     <div className="grid gap-3 sm:grid-cols-3"><MiniMetric icon={<Clock3 />} title="รอยืนยันออเดอร์" value={`${summary.counts.pending_confirmation || 0}`} hint="ต้องตรวจสอบ" /><MiniMetric icon={<Wallet />} title="ยังไม่ชำระ" value={`${summary.unpaid}`} hint="รวมออเดอร์ที่ยังดำเนินการ" /><MiniMetric icon={<CheckCircle2 />} title="ชำระแล้ว" value={`${summary.paid}`} hint="ออเดอร์ในช่วงเวลาที่เลือก" /></div>

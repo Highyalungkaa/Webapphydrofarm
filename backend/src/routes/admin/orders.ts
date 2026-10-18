@@ -27,7 +27,14 @@ const updateOrderSchema = z.object({
 // GET /api/admin/orders - List all orders with multi-parameter filtering
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { round_id, status, fulfillment_method, payment_status, search } = req.query;
+    const { round_id, status, fulfillment_method, payment_status, search, offset, limit } = req.query;
+    const pageOffset = offset === undefined ? null : Number(offset);
+    const pageLimit = limit === undefined ? null : Number(limit);
+    if ((pageOffset !== null && (!Number.isInteger(pageOffset) || pageOffset < 0)) ||
+        (pageLimit !== null && (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 1000))) {
+      res.status(400).json({ error: 'offset หรือ limit ไม่ถูกต้อง' });
+      return;
+    }
 
     let query = supabaseAdmin
       .from('orders')
@@ -69,7 +76,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           )
         )
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     if (round_id && typeof round_id === 'string') {
       query = query.eq('round_id', round_id);
@@ -85,6 +93,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     if (payment_status && typeof payment_status === 'string') {
       query = query.eq('payment_status', payment_status);
+    }
+
+    if (pageOffset !== null || pageLimit !== null) {
+      const start = pageOffset || 0;
+      query = query.range(start, start + (pageLimit || 500) - 1);
     }
 
     const { data: orders, error } = await query;

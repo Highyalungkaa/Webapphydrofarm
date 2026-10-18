@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Medal,
   Repeat2,
+  Download,
 } from 'lucide-react';
 
 type CropReport = { name: string; bookedKg: number; soldKg: number };
@@ -28,13 +29,24 @@ export const AdminReportsPage: React.FC = () => {
   const [error, setError] = useState('');
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedRoundId, setSelectedRoundId] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const loadAllOrders = async (): Promise<Order[]> => {
+    const pageSize = 500;
+    const all: Order[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await api.get<Order[]>(`/admin/orders?offset=${offset}&limit=${pageSize}`);
+      all.push(...page);
+      if (page.length < pageSize) return all;
+    }
+  };
 
   const loadReport = async () => {
     try {
       setLoading(true);
       setError('');
       const [orderData, roundData] = await Promise.all([
-        api.get<Order[]>('/admin/orders'),
+        loadAllOrders(),
         api.get<PlantingRound[]>('/admin/rounds'),
       ]);
       setOrders(orderData || []);
@@ -123,6 +135,19 @@ export const AdminReportsPage: React.FC = () => {
 
   const sellThrough = report.openedKg > 0 ? Math.min(100, (report.soldKg / report.openedKg) * 100) : 0;
 
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      setError('');
+      const { exportVegetableReport } = await import('../../lib/exportVegetableReport.js');
+      await exportVegetableReport({ orders, rounds, selectedRoundId, exportedAt: new Date() });
+    } catch (err: any) {
+      setError(err.message || 'ไม่สามารถส่งออกรายงาน Excel ได้');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -131,7 +156,7 @@ export const AdminReportsPage: React.FC = () => {
           <h1 className="text-2xl font-black tracking-tight text-slate-900">รายงาน</h1>
           <p className="mt-1 text-xs text-slate-500">สรุปคำสั่งจอง ลูกค้า ผลผลิตที่เปิดจอง และยอดขายสำเร็จ</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
             <span className="hidden sm:inline">รอบปลูก</span>
             <select value={selectedRoundId} onChange={(e) => setSelectedRoundId(e.target.value)} className="max-w-52 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
@@ -142,6 +167,9 @@ export const AdminReportsPage: React.FC = () => {
           {updatedAt && <span className="text-[11px] text-slate-400">อัปเดต {formatDateDMY(updatedAt.toISOString())}</span>}
           <button type="button" onClick={() => void loadReport()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-800 disabled:opacity-50">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> รีเฟรช
+          </button>
+          <button type="button" onClick={() => void handleExport()} disabled={loading || exporting || Boolean(error && orders.length === 0)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">
+            <Download className="h-4 w-4" /> {exporting ? 'กำลังสร้างไฟล์...' : 'ส่งออก Excel'}
           </button>
         </div>
       </header>
