@@ -1,3 +1,22 @@
+/** Preserve date-only values; convert timestamps to the Bangkok calendar date. */
+export function toBangkokDateString(value?: string | null): string | null {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+
+/** Calendar-day difference without mixing a UTC timestamp with a Bangkok date. */
+export function differenceInBangkokCalendarDays(start?: string | null, end?: string | null): number | null {
+  const startDate = toBangkokDateString(start);
+  const endDate = toBangkokDateString(end);
+  if (!startDate || !endDate) return null;
+  return Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000);
+}
+
 /** Display dates in day/month/year order while preserving date-only values as local calendar dates. */
 export function formatDateDMY(value?: string | null): string {
   if (!value) return '-';

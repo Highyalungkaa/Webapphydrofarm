@@ -139,8 +139,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           name,
           expected_harvest_date,
           fulfillment_date,
-          pickup_start_time,
-          pickup_end_time,
           delivery_start_time,
           delivery_end_time,
           status

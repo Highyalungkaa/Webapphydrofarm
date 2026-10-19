@@ -316,7 +316,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
               {searchQuery || selectedDate
                 ? 'ลองเปลี่ยนคำค้นหาหรือวันที่อีกครั้ง'
-                : 'เมื่อรอบการปลูกปัจจุบันดำเนินการครบทั้ง 7 สเต็ปและกดยืนยันสถานะ "สิ้นสุดรอบ" ระบบจะย้ายรอบนั้นมาเก็บไว้ที่หน้านี้อัตโนมัติ'}
+                : 'เมื่อรอบการปลูกปัจจุบันดำเนินการครบทั้ง 8 สเต็ปและกดยืนยันสถานะ "สิ้นสุดรอบ" ระบบจะย้ายรอบนั้นมาเก็บไว้ที่หน้านี้อัตโนมัติ'}
             </p>
             {!searchQuery && !selectedDate && (
               <div className="pt-2">
@@ -371,12 +371,12 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                     </Link>
                   </div>
 
-                  {/* 7-Step Timeline Record */}
+                  {/* 8-Step Timeline Record */}
                   <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/70">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-3">
-                      บันทึกไทม์ไลน์ 7 สเต็ปของรอบนี้
+                      บันทึกไทม์ไลน์ 8 สเต็ปของรอบนี้
                     </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 text-center text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 text-center text-xs">
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
                         <span className="text-[10px] text-slate-400 block font-medium">1. ปักเม็ด</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
@@ -390,31 +390,37 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">3. ปลูกจริง</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">3. เริ่มปลูก</span>
+                        <span className="font-bold text-slate-800 block mt-0.5">
+                          {formatDateDMY(round.planting_start_date)}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
+                        <span className="text-[10px] text-slate-400 block font-medium">4. ปลูกจริง</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
                           {formatDateDMY(round.transplant_date || round.planted_at)}
                         </span>
                       </div>
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">4. เปิดสั่งจอง</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">5. เปิดสั่งจอง</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
                           {formatDateDMY(round.booking_opens_at)}
                         </span>
                       </div>
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">5. เก็บ & ขาย</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">6. เก็บ & ขาย</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
                           {formatDateDMY(round.harvest_sale_date || round.expected_harvest_date)}
                         </span>
                       </div>
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">6. ขายหมด</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">7. ขายหมด</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
                           {formatDateDMY(round.sold_out_date)}
                         </span>
                       </div>
                       <div className="p-2.5 bg-purple-50 rounded-xl border border-purple-100 shadow-2xs">
-                        <span className="text-[10px] text-purple-600 block font-bold">7. สิ้นสุดรอบ</span>
+                        <span className="text-[10px] text-purple-600 block font-bold">8. สิ้นสุดรอบ</span>
                         <span className="font-bold text-purple-900 block mt-0.5">
                           {formatDateDMY(round.completed_date)}
                         </span>

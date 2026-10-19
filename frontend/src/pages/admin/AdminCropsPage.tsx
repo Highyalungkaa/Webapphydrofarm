@@ -163,7 +163,7 @@ export const AdminCropsPage: React.FC = () => {
     }
 
     if (isNaN(slotsNum) || slotsNum <= 0) {
-      setError('จำนวน slot ปลูก ต่อ 1 กก. ต้องมากกว่า 0');
+      setError('จำนวนต้น ต่อ 1 กก. ต้องมากกว่า 0');
       return;
     }
 
@@ -240,7 +240,7 @@ export const AdminCropsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">แคตตาล็อกชนิดผัก</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            จัดการรายการผักไฮโดรโปนิกส์ ราคาเริ่มต้น อัตราส่วนช่องปลูก (Slot/กก.) รูปภาพ และรายละเอียดสินค้า
+            จัดการรายการผักไฮโดรโปนิกส์ ราคาเริ่มต้น จำนวนต้นต่อกิโลกรัม (ต้น/กก.) รูปภาพ และรายละเอียดสินค้า
           </p>
         </div>
         <button
@@ -269,7 +269,7 @@ export const AdminCropsPage: React.FC = () => {
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
                   <th className="py-3.5 px-4">รูปภาพ / ชนิดผัก</th>
                   <th className="py-3.5 px-4">ราคาตั้งต้น / กก.</th>
-                  <th className="py-3.5 px-4">จำนวน Slot / กก.</th>
+                  <th className="py-3.5 px-4">จำนวนต้น / กก.</th>
                   <th className="py-3.5 px-4 hidden md:table-cell">รายละเอียดสินค้า</th>
                   <th className="py-3.5 px-4 text-center">สถานะ</th>
                   <th className="py-3.5 px-4 text-right">การจัดการ</th>
@@ -317,7 +317,7 @@ export const AdminCropsPage: React.FC = () => {
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 font-semibold text-xs border border-sky-100">
                         <Layers className="w-3.5 h-3.5" />
-                        <span>{crop.slots_per_kg ? Number(crop.slots_per_kg) : 4} ช่อง / กก.</span>
+                        <span>{crop.slots_per_kg ? Number(crop.slots_per_kg) : 4} ต้น / กก.</span>
                       </div>
                     </td>
 
@@ -473,7 +473,7 @@ export const AdminCropsPage: React.FC = () => {
                 {/* Slots per Kg */}
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    3. จำนวน Slot ปลูก ต่อ 1 กก. <span className="text-rose-500">*</span>
+                    3. จำนวนต้น ต่อ 1 กก. <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -488,7 +488,7 @@ export const AdminCropsPage: React.FC = () => {
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    เช่น 4 ช่องปลูก = ผลผลิตประมาณ 1 กก.
+                    เช่น ผัก 4 ต้น = ผลผลิตประมาณ 1 กก.
                   </p>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -188,15 +189,14 @@ export const OrderDetailPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-slate-700">
-              <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>
-                ช่วงเวลา:{' '}
-                {order.fulfillment_method === 'pickup'
-                  ? `${order.planting_rounds?.pickup_start_time?.slice(0, 5)} - ${order.planting_rounds?.pickup_end_time?.slice(0, 5)} น.`
-                  : `${order.planting_rounds?.delivery_start_time?.slice(0, 5)} - ${order.planting_rounds?.delivery_end_time?.slice(0, 5)} น.`}
-              </span>
-            </div>
+            {order.fulfillment_method === 'delivery' && (
+              <div className="flex items-center gap-2 text-slate-700">
+                <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>
+                  ช่วงเวลาจัดส่ง: {order.planting_rounds?.delivery_start_time?.slice(0, 5)} - {order.planting_rounds?.delivery_end_time?.slice(0, 5)} น.
+                </span>
+              </div>
+            )}
 
             {order.fulfillment_method === 'delivery' && (
               <div className="flex items-start gap-2 text-slate-700 pt-1 border-t border-slate-200">
@@ -236,7 +236,7 @@ export const OrderDetailPage: React.FC = () => {
                     {item.round_items?.crops?.name || 'ผักสลัด'}
                   </h4>
                   <p className="text-slate-500 text-xs">
-                    ฿{Number(item.price_per_kg).toFixed(0)} × {Number(item.qty_kg).toFixed(1)} กก.
+                    ฿{Number(item.price_per_kg).toFixed(0)} × {formatKg(Number(item.qty_kg))} กก.
                   </p>
                 </div>
                 <div className="text-right">

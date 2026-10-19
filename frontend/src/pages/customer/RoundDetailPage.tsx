@@ -7,7 +7,9 @@ import { useCart } from '../../context/CartContext.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { Badge } from '../../components/common/Badge.js';
 import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
-import { Calendar, Clock, Store, Truck, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
+import { CropPhoto } from '../../components/common/CropPhoto.js';
+import { parseBookingQuantity, formatKg } from '../../lib/bookingQuantity.js';
+import { Calendar, Clock, Truck, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
 
 const getCustomerFarmNote = (notes?: string | null): string => {
   if (!notes) return '';
@@ -33,6 +35,8 @@ export const RoundDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [qtyAlert, setQtyAlert] = useState<string | null>(null);
   const [qtySteps, setQtySteps] = useState<Record<string, 0.5 | 1>>({});
+  const [qtyInputs, setQtyInputs] = useState<Record<string, string | undefined>>({});
+  const [qtyInputErrors, setQtyInputErrors] = useState<Record<string, string | undefined>>({});
 
   const { items, setRound: setCartRound, setItemQty, totalKg, totalAmount } = useCart();
 
@@ -64,7 +68,7 @@ export const RoundDetailPage: React.FC = () => {
       Number(item.available_qty_kg || 0),
       item.max_qty_per_order_kg ? Number(item.max_qty_per_order_kg) : Number.POSITIVE_INFINITY,
     );
-    const newQty = Math.max(0, Math.round((currentQty === 0 && delta > 0 ? Math.min(delta, maxAllowed) : requestedQty) * 10) / 10);
+    const newQty = Math.max(0, Math.round((currentQty === 0 && delta > 0 ? Math.min(delta, maxAllowed) : requestedQty) * 100) / 100);
 
     const result = setItemQty(
       {
@@ -80,6 +84,30 @@ export const RoundDetailPage: React.FC = () => {
     if (!result.success && result.message) {
       setQtyAlert(result.message);
       setTimeout(() => setQtyAlert(null), 4000);
+    } else if (result.success) {
+      setQtyInputs((previous) => ({ ...previous, [item.id]: undefined }));
+      setQtyInputErrors((previous) => ({ ...previous, [item.id]: undefined }));
+    }
+  };
+
+  const handleCustomQty = (item: RoundItem) => {
+    const currentQty = items.find((entry) => entry.round_item_id === item.id)?.qty_kg || 0;
+    const parsed = parseBookingQuantity(qtyInputs[item.id] ?? (currentQty > 0 ? String(currentQty) : ''));
+    if (parsed.qty === undefined) {
+      setQtyInputErrors((previous) => ({ ...previous, [item.id]: parsed.error }));
+      return;
+    }
+    const result = setItemQty({
+      round_item_id: item.id,
+      crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
+      price_per_kg: Number(item.price_per_kg),
+      max_qty_per_order_kg: item.max_qty_per_order_kg,
+      available_qty_kg: Number(item.available_qty_kg || 0),
+    }, parsed.qty);
+    setQtyInputErrors((previous) => ({ ...previous, [item.id]: result.success ? undefined : result.message }));
+    if (result.success) {
+      setQtyInputs((previous) => ({ ...previous, [item.id]: undefined }));
+      setQtyAlert(null);
     }
   };
 
@@ -163,16 +191,6 @@ export const RoundDetailPage: React.FC = () => {
 
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
             <div className="flex items-center gap-2 font-medium text-slate-800">
-              <Store className="w-4 h-4 text-slate-500" />
-              <span>เวลามารับเองที่ฟาร์ม</span>
-            </div>
-            <p className="text-slate-600">
-              {round.pickup_start_time.slice(0, 5)} - {round.pickup_end_time.slice(0, 5)} น.
-            </p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-            <div className="flex items-center gap-2 font-medium text-slate-800">
               <Truck className="w-4 h-4 text-slate-500" />
               <span>ช่วงเวลาจัดส่งในตัวเมือง</span>
             </div>
@@ -208,7 +226,7 @@ export const RoundDetailPage: React.FC = () => {
 
       {/* Vegetable Cards List */}
       <section className="space-y-4">
-        <div><p className="text-xs font-extrabold uppercase tracking-[.16em] text-emerald-700">Choose your greens</p><h2 className="mt-1 text-2xl font-black text-slate-950">เลือกผักที่ต้องการจอง</h2><p className="mt-1 text-xs text-slate-500">ปรับจำนวนทีละ 0.5 หรือ 1 กก. ในการ์ดผักแต่ละชนิด (ขั้นต่ำ 0.5 กก.)</p></div>
+        <div><p className="text-xs font-extrabold uppercase tracking-[.16em] text-emerald-700">Choose your greens</p><h2 className="mt-1 text-2xl font-black text-slate-950">เลือกผักที่ต้องการจอง</h2><p className="mt-1 text-xs text-slate-500">กดเพิ่ม–ลด หรือกรอกจำนวนกิโลกรัมเองได้ ขั้นต่ำ 0.5 กก.</p></div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {round.items?.map((item) => {
@@ -230,6 +248,9 @@ export const RoundDetailPage: React.FC = () => {
                 } ${isSoldOut || isBookingClosed ? 'opacity-70 bg-slate-50/70' : ''}`}
               >
                 <div>
+                  <div className="-mx-5 -mt-5 mb-4 overflow-hidden rounded-t-[1.5rem]">
+                    <CropPhoto imageUrl={item.crops?.image_url} name={cropName} />
+                  </div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-lg font-black leading-snug text-slate-950">{cropName}</h3>
                     {isBookingClosed ? (
@@ -242,7 +263,7 @@ export const RoundDetailPage: React.FC = () => {
                       </span>
                     ) : (
                       <span className="text-xs text-slate-600">
-                        เหลือ <strong className="text-farm-700">{available.toFixed(1)}</strong> กก.
+                        เหลือ <strong className="text-farm-700">{formatKg(available)}</strong> กก.
                       </span>
                     )}
                   </div>
@@ -278,6 +299,35 @@ export const RoundDetailPage: React.FC = () => {
                     </div>
                   </div>
 
+                  {!isBookingClosed && !isSoldOut && (
+                    <div className="space-y-1.5">
+                      <label htmlFor={`custom-qty-${item.id}`} className="block text-xs font-semibold text-slate-700">กรอกจำนวนเอง (กก.)</label>
+                      <div className="flex gap-2">
+                        <input
+                          id={`custom-qty-${item.id}`}
+                          type="number"
+                          inputMode="decimal"
+                          min="0.5"
+                          step="0.01"
+                          max={Math.min(available, Number(item.max_qty_per_order_kg) || Infinity)}
+                          placeholder="เช่น 2.5"
+                          value={qtyInputs[item.id] ?? (inCartQty > 0 ? String(inCartQty) : '')}
+                          onChange={(event) => {
+                            setQtyInputs((previous) => ({ ...previous, [item.id]: event.target.value }));
+                            setQtyInputErrors((previous) => ({ ...previous, [item.id]: undefined }));
+                          }}
+                          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleCustomQty(item); } }}
+                          aria-label={`จำนวนกิโลกรัมของ${cropName}`}
+                          aria-invalid={!!qtyInputErrors[item.id]}
+                          aria-describedby={`custom-qty-help-${item.id}`}
+                          className={`min-w-0 flex-1 rounded-xl border bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:ring-2 ${qtyInputErrors[item.id] ? 'border-rose-300 focus:ring-rose-200' : 'border-slate-200 focus:ring-emerald-200'}`}
+                        />
+                        <button type="button" onClick={() => handleCustomQty(item)} className="shrink-0 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-bold text-white hover:bg-emerald-800">{inCartQty > 0 ? 'อัปเดตจำนวน' : 'เพิ่มลงตะกร้า'}</button>
+                      </div>
+                      <p id={`custom-qty-help-${item.id}`} role={qtyInputErrors[item.id] ? 'alert' : undefined} className={`text-[11px] ${qtyInputErrors[item.id] ? 'font-semibold text-rose-700' : 'text-slate-500'}`}>{qtyInputErrors[item.id] || 'ขั้นต่ำ 0.5 กก. · กรอกทศนิยมได้ 2 ตำแหน่ง แล้วกดปุ่มยืนยันจำนวน'}</p>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-slate-600">จำนวนที่เลือก:</span>
 
@@ -304,7 +354,7 @@ export const RoundDetailPage: React.FC = () => {
                         <Minus className="w-3.5 h-3.5" />
                       </button>
                       <span className="w-12 text-center font-bold text-sm text-slate-900">
-                        {inCartQty.toFixed(1)}
+                        {formatKg(inCartQty)}
                       </span>
                       <button
                         onClick={() => handleQtyChange(item, qtyStep)}
@@ -333,7 +383,7 @@ export const RoundDetailPage: React.FC = () => {
                 <span className="text-xs text-slate-400">ตะกร้าของคุณ ({items.length} ชนิด):</span>
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="font-extrabold text-base text-white">{totalKg.toFixed(1)} กก.</span>
+                <span className="font-extrabold text-base text-white">{formatKg(totalKg)} กก.</span>
                 <span className="text-sm font-semibold text-emerald-400">฿{totalAmount.toLocaleString()}</span>
               </div>
             </div>

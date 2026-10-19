@@ -36,11 +36,12 @@ const dayDifference = (dateStr: string): number => {
 
 const STEP_TITLES: Record<number, string> = {
   2: 'ใส่ปุ๋ย',
-  3: 'ย้ายลงแปลงปลูก',
-  4: 'เปิดรับจอง',
-  5: 'อัปเดตพร้อมเก็บเกี่ยว',
-  6: 'ตรวจสอบและบันทึกการขายหมด',
-  7: 'ปิดรอบหลังส่งมอบครบ',
+  3: 'เริ่มปลูก',
+  4: 'ย้ายลงแปลงปลูก',
+  5: 'เปิดรับจอง',
+  6: 'อัปเดตพร้อมเก็บเกี่ยว',
+  7: 'ตรวจสอบและบันทึกการขายหมด',
+  8: 'ปิดรอบหลังส่งมอบครบ',
 };
 
 export const AdminDashboardPage: React.FC = () => {
@@ -76,17 +77,18 @@ export const AdminDashboardPage: React.FC = () => {
   const roundReminders = rounds.flatMap((round) => {
     if (round.status === 'completed' || round.status === 'cancelled' || round.completed_date) return [];
     const currentStep = Number(round.current_step || 1);
-    const nextStep = Math.min(7, currentStep + 1);
+    const nextStep = Math.min(8, currentStep);
     let dueDate: string | null = null;
 
     if (nextStep === 2) dueDate = round.fertilizing_date || addDays(round.seed_date, 7);
-    else if (nextStep === 3) dueDate = round.transplant_date || addDays(round.seed_date, 14);
-    else if (nextStep === 4) dueDate = round.booking_opens_at?.slice(0, 10) || null;
-    else if (nextStep === 5) dueDate = round.harvest_sale_date || round.expected_harvest_date || null;
-    else if (nextStep === 7) dueDate = round.fulfillment_date || null;
+    else if (nextStep === 3) dueDate = round.planting_start_date || null;
+    else if (nextStep === 4) dueDate = round.transplant_date || addDays(round.seed_date, 14);
+    else if (nextStep === 5) dueDate = round.booking_opens_at?.slice(0, 10) || null;
+    else if (nextStep === 6) dueDate = round.harvest_sale_date || round.expected_harvest_date || null;
+    else if (nextStep === 8) dueDate = round.fulfillment_date || null;
 
     // Selling out is event driven; prompt the admin when the round is fully booked.
-    if (nextStep === 6 && round.is_all_sold_out) dueDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+    if (nextStep === 7 && round.is_all_sold_out) dueDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
     if (!dueDate) return [];
 
     const daysLeft = dayDifference(dueDate);

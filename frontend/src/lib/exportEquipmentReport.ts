@@ -206,7 +206,7 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
     customer: order.profiles?.full_name || '-', phone: order.contact_phone || order.profiles?.phone || '-',
     status: statusLabels[order.status] || order.status,
     payment: order.payment_status === 'paid' ? 'ชำระแล้ว' : 'รอชำระ',
-    paymentMethod: order.payment_method === 'cash_on_delivery' ? 'เก็บเงินปลายทาง' : 'โอนเงิน (ออเดอร์เดิม)',
+    paymentMethod: order.payment_method === 'cash_on_delivery' ? 'เก็บเงินปลายทาง' : 'โอนเงิน',
     units: sum(orderItems(order), (item) => number(item.quantity)),
     productsAmount: sum(orderItems(order), lineAmount), shipping: number(order.shipping_fee),
     total: number(order.total_amount), tracking: order.tracking_number || '-',

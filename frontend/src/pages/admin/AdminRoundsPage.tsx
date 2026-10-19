@@ -1,3 +1,6 @@
+import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
+import { plantCountToKg } from '../../lib/plantingQuantities.js';
+import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -25,7 +28,7 @@ import {
 interface RoundItemForm {
   crop_id: string;
   selected_plot_ids: string[];
-  bookable_qty_kg: number;
+  plant_count: number;
   price_per_kg: number;
   growing_days: number;
 }
@@ -36,6 +39,7 @@ export const AdminRoundsPage: React.FC = () => {
   const [crops, setCrops] = useState<Crop[]>([]);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [setupLoadError, setSetupLoadError] = useState<string | null>(null);
 
   // Simple Create Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,15 +59,21 @@ export const AdminRoundsPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setSetupLoadError(null);
       const [roundsRes, cropsRes, plotsRes] = await Promise.allSettled([
         api.get<PlantingRound[]>('/admin/rounds'),
         api.get<Crop[]>('/admin/crops'),
         api.get<{ plots: Plot[] }>('/admin/plots'),
       ]);
+      const failures = [
+        { result: roundsRes, label: 'รอบปลูก' }, { result: cropsRes, label: 'แคตตาล็อกผัก' }, { result: plotsRes, label: 'แปลงปลูก' },
+      ].filter((entry) => entry.result.status === 'rejected');
+      if (failures.length) setSetupLoadError('ไม่สามารถโหลดข้อมูล' + failures.map((entry) => entry.label).join(', ') + ' จึงยังตรวจสอบความพร้อมสำหรับเพิ่มผักไม่ได้ กรุณาลองโหลดข้อมูลอีกครั้ง');
       if (roundsRes.status === 'fulfilled') setRounds(roundsRes.value || []);
       if (cropsRes.status === 'fulfilled') setCrops(cropsRes.value || []);
       if (plotsRes.status === 'fulfilled') setPlots(plotsRes.value?.plots || []);
     } catch (err: any) {
+      setSetupLoadError(err.message || 'ไม่สามารถโหลดข้อมูลความพร้อมของผักและแปลงปลูกได้');
       console.error(err);
     } finally {
       setLoading(false);
@@ -71,13 +81,13 @@ export const AdminRoundsPage: React.FC = () => {
   };
 
   const activePlots = plots.filter((p) => p.is_active);
-  const activeCrops = crops.filter((crop) => crop.is_active !== false);
-  const designatedCrops = activeCrops.filter((crop) => activePlots.some((plot) => plot.crop_id === crop.id));
+  const cropAvailability = getRoundCropAvailability(crops, plots, items.map((item) => item.crop_id));
+  const designatedCrops = cropAvailability.readyCrops;
 
-  // Active ongoing rounds that are currently occupying farm plots (step 1 to 6, not completed or cancelled)
+  // Active ongoing rounds that are currently occupying farm plots (step 1 to 7, not completed or cancelled)
   const activeOngoingRounds = React.useMemo(() => {
     return rounds.filter(
-      (r) => r.status !== 'completed' && r.status !== 'cancelled' && (r.current_step ?? 1) < 7 && !r.completed_date
+      (r) => r.status !== 'completed' && r.status !== 'cancelled' && (r.current_step ?? 1) < 8 && !r.completed_date
     );
   }, [rounds]);
 
@@ -107,13 +117,13 @@ export const AdminRoundsPage: React.FC = () => {
       (r.round_items || []).forEach((item: any) => {
         const crop = crops.find((c) => c.id === item.crop_id) || item.crops;
         const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-        let slotsNeeded = Math.round((Number(item.bookable_qty_kg) || 0) * rate);
+        let slotsNeeded = item.plant_count ?? Math.round((Number(item.bookable_qty_kg) || 0) * rate);
 
         // Plots assigned to this item
         const itemPlotIds: string[] = rCropPlotIds[item.crop_id] || (Array.isArray(item.plot_ids) ? item.plot_ids : []);
         const itemPlots = itemPlotIds.length > 0
           ? activePlots.filter((p) => itemPlotIds.includes(p.id))
-          : activePlots.filter((p) => p.crop_id === item.crop_id);
+          : activePlots.filter((p) => plotSupportsCrop(p, item.crop_id));
 
         itemPlots.forEach((plot) => {
           if (slotsNeeded <= 0) return;
@@ -122,7 +132,7 @@ export const AdminRoundsPage: React.FC = () => {
           const cap = Number(plot.slot_capacity || 0);
           const currentOcc = occ.occupiedSlots;
           const remainingInPlot = Math.max(0, cap - currentOcc);
-          const usedInThisPlot = Math.min(slotsNeeded, remainingInPlot > 0 ? remainingInPlot : cap);
+          const usedInThisPlot = Math.min(slotsNeeded, remainingInPlot);
           occ.occupiedSlots += usedInThisPlot;
           occ.occupyingRounds.push({
             roundId: r.id,
@@ -160,31 +170,40 @@ export const AdminRoundsPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const plotSlotAllocation = allocatePlotSlots(
+    activePlots, items,
+    Object.fromEntries(crops.map((crop) => [crop.id, Number(crop.slots_per_kg) || 4])),
+    Object.fromEntries(Object.entries(plotOccupancyMap).map(([id, usage]) => [id, usage.occupiedSlots])),
+  );
+  const itemOccupiedSlots = (index: number, plotId: string) =>
+    plotSlotAllocation.beforeItem[index]?.[plotId] ?? plotOccupancyMap[plotId]?.occupiedSlots ?? 0;
+
   const handleAddItem = () => {
-    const availableCrop = designatedCrops.find((crop) => !items.some((item) => item.crop_id === crop.id));
+    setFormError(null);
+    const availableCrop = cropAvailability.remainingCrops[0];
     if (!availableCrop) {
-      setFormError('ไม่มีชนิดผักที่กำหนดแปลงปลูกและยังไม่ได้เพิ่มในรอบนี้ กรุณากำหนดผักให้แปลงในหน้าจัดการแปลงปลูก');
+      setFormError(setupLoadError || cropAvailability.issues[0]?.message || 'เพิ่มผักที่พร้อมปลูกครบทุกชนิดแล้ว หากต้องการเพิ่มชนิดอื่น กรุณาตรวจสอบแคตตาล็อกผักและแปลงปลูก');
       return;
     }
-    const cropPlots = activePlots.filter((p) => p.crop_id === availableCrop.id);
+    const cropPlots = activePlots.filter((p) => plotSupportsCrop(p, availableCrop.id));
     const availableCropPlots = cropPlots.filter((p) => {
-      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      const occ = plotSlotAllocation.used[p.id] || 0;
       return Number(p.slot_capacity || 0) - occ > 0;
     });
     const plotIds = availableCropPlots.map((p) => p.id);
     const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
-      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      const occ = plotSlotAllocation.used[p.id] || 0;
       return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
     }, 0);
     const rate = availableCrop.slots_per_kg ? Number(availableCrop.slots_per_kg) : 4.0;
-    const defaultKg = totalAvailableSlots > 0 ? Math.floor(totalAvailableSlots / rate) : 0;
+    const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems((prev) => [
       ...prev,
       {
         crop_id: availableCrop.id,
         selected_plot_ids: plotIds,
-        bookable_qty_kg: defaultKg,
+        plant_count: defaultPlantCount,
         price_per_kg: Number(availableCrop.default_price_per_kg) || 130,
         growing_days: Number(availableCrop.growing_days) || 45,
       },
@@ -198,7 +217,8 @@ export const AdminRoundsPage: React.FC = () => {
   const handleItemCropChange = (index: number, cropId: string) => {
     const selected = designatedCrops.find((c) => c.id === cropId);
     if (!selected) {
-      setFormError('ชนิดผักนี้ไม่มีแปลงปลูกที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนี้');
+      const crop = crops.find((crop) => crop.id === cropId);
+      setFormError(crop ? getRoundCropAvailability([crop], plots).issues[0]?.message || 'ชนิดผักนี้ยังไม่พร้อมปลูก' : 'ไม่พบชนิดผักนี้ กรุณาตรวจสอบแคตตาล็อกผัก');
       return;
     }
     if (items.some((item, itemIndex) => itemIndex !== index && item.crop_id === cropId)) {
@@ -206,18 +226,18 @@ export const AdminRoundsPage: React.FC = () => {
       return;
     }
     setFormError(null);
-    const cropPlots = activePlots.filter((p) => p.crop_id === cropId);
+    const cropPlots = activePlots.filter((p) => plotSupportsCrop(p, cropId));
     const availableCropPlots = cropPlots.filter((p) => {
-      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      const occ = itemOccupiedSlots(index, p.id);
       return Number(p.slot_capacity || 0) - occ > 0;
     });
     const plotIds = availableCropPlots.map((p) => p.id);
     const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
-      const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+      const occ = itemOccupiedSlots(index, p.id);
       return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
     }, 0);
     const rate = selected?.slots_per_kg ? Number(selected.slots_per_kg) : 4.0;
-    const defaultKg = totalAvailableSlots > 0 ? Math.floor(totalAvailableSlots / rate) : 0;
+    const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems(
       items.map((it, i) => {
@@ -226,7 +246,7 @@ export const AdminRoundsPage: React.FC = () => {
           ...it,
           crop_id: cropId,
           selected_plot_ids: plotIds,
-          bookable_qty_kg: defaultKg,
+          plant_count: defaultPlantCount,
           price_per_kg: selected ? Number(selected.default_price_per_kg) : it.price_per_kg,
           growing_days: selected?.growing_days ? Number(selected.growing_days) : it.growing_days,
         };
@@ -237,12 +257,12 @@ export const AdminRoundsPage: React.FC = () => {
   const handleTogglePlot = (itemIndex: number, plotId: string) => {
     const occ = plotOccupancyMap[plotId];
     const plot = activePlots.find((p) => p.id === plotId);
-    if (!plot || plot.crop_id !== items[itemIndex]?.crop_id) {
+    if (!plot || !plotSupportsCrop(plot, items[itemIndex]?.crop_id)) {
       setFormError('เลือกได้เฉพาะแปลงที่กำหนดไว้สำหรับผักชนิดนี้');
       return;
     }
     const cap = Number(plot?.slot_capacity || 0);
-    const available = Math.max(0, cap - (occ?.occupiedSlots || 0));
+    const available = Math.max(0, cap - itemOccupiedSlots(itemIndex, plotId));
 
     setItems((prevItems) =>
       prevItems.map((it, idx) => {
@@ -267,15 +287,15 @@ export const AdminRoundsPage: React.FC = () => {
         const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const chosenPlots = activePlots.filter((p) => newSelected.includes(p.id));
         const newAvailableSlots = chosenPlots.reduce((sum, p) => {
-          const pOcc = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          const pOcc = itemOccupiedSlots(itemIndex, p.id);
           return sum + Math.max(0, Number(p.slot_capacity || 0) - pOcc);
         }, 0);
-        const calculatedKg = newAvailableSlots > 0 ? Math.floor(newAvailableSlots / rate) : 0;
+        const calculatedPlantCount = Math.max(0, Math.floor(newAvailableSlots));
 
         return {
           ...it,
           selected_plot_ids: newSelected,
-          bookable_qty_kg: it.bookable_qty_kg === 0 ? calculatedKg : it.bookable_qty_kg,
+          plant_count: it.plant_count === 0 ? calculatedPlantCount : it.plant_count,
         };
       })
     );
@@ -285,25 +305,25 @@ export const AdminRoundsPage: React.FC = () => {
     setItems((prevItems) =>
       prevItems.map((it, idx) => {
         if (idx !== itemIndex) return it;
-        const designatedPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
+        const designatedPlots = activePlots.filter((p) => plotSupportsCrop(p, it.crop_id));
         // Only select plots that have available space > 0
         const availablePlots = designatedPlots.filter((p) => {
-          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          const occ = itemOccupiedSlots(itemIndex, p.id);
           return Number(p.slot_capacity || 0) - occ > 0;
         });
         const plotIds = availablePlots.map((p) => p.id);
         const crop = crops.find((c) => c.id === it.crop_id);
         const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const newSlots = availablePlots.reduce((sum, p) => {
-          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          const occ = itemOccupiedSlots(itemIndex, p.id);
           return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
         }, 0);
-        const newKg = newSlots > 0 ? Math.floor(newSlots / rate) : 0;
+        const newPlantCount = Math.max(0, Math.floor(newSlots));
 
         return {
           ...it,
           selected_plot_ids: plotIds,
-          bookable_qty_kg: newKg,
+          plant_count: newPlantCount,
         };
       })
     );
@@ -311,11 +331,11 @@ export const AdminRoundsPage: React.FC = () => {
 
   const handleDeselectAllPlots = (itemIndex: number) => {
     setItems((prevItems) =>
-      prevItems.map((it, idx) => (idx === itemIndex ? { ...it, selected_plot_ids: [], bookable_qty_kg: 0 } : it))
+      prevItems.map((it, idx) => (idx === itemIndex ? { ...it, selected_plot_ids: [], plant_count: 0 } : it))
     );
   };
 
-  const handleMatchCapacityKg = (itemIndex: number) => {
+  const handleMatchCapacityPlants = (itemIndex: number) => {
     setItems((prevItems) =>
       prevItems.map((it, idx) => {
         if (idx !== itemIndex) return it;
@@ -323,13 +343,13 @@ export const AdminRoundsPage: React.FC = () => {
         const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const chosenPlots = activePlots.filter((p) => (it.selected_plot_ids || []).includes(p.id));
         const availableSlotsInChosen = chosenPlots.reduce((sum, p) => {
-          const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+          const occ = itemOccupiedSlots(itemIndex, p.id);
           return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
         }, 0);
-        const matchedKg = Math.max(0, Math.floor(availableSlotsInChosen / rate));
+        const matchedPlantCount = Math.max(0, Math.floor(availableSlotsInChosen));
         return {
           ...it,
-          bookable_qty_kg: matchedKg,
+          plant_count: matchedPlantCount,
         };
       })
     );
@@ -344,6 +364,10 @@ export const AdminRoundsPage: React.FC = () => {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    if (loading || setupLoadError) {
+      setFormError(setupLoadError || 'กำลังตรวจสอบข้อมูลผักและแปลงปลูก กรุณารอสักครู่');
+      return;
+    }
 
     if (!name.trim()) {
       setFormError('กรุณาระบุชื่อรอบการปลูก');
@@ -365,29 +389,27 @@ export const AdminRoundsPage: React.FC = () => {
     }
 
     // 2. Strict validation: check each item against actual remaining plot space
-    const chosenPlotIds = new Set<string>();
-    for (const it of items) {
+    for (const [itemIndex, it] of items.entries()) {
       const crop = crops.find((c) => c.id === it.crop_id);
       const cropName = crop?.name || 'ผัก';
       if (!designatedCrops.some((designated) => designated.id === it.crop_id)) {
-        setFormError(`${cropName} ยังไม่มีแปลงปลูกที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนี้`);
+        setFormError(crop ? getRoundCropAvailability([crop], plots).issues[0]?.message || `${cropName} ยังไม่พร้อมปลูก` : 'ไม่พบชนิดผักที่เลือก กรุณาตรวจสอบแคตตาล็อกผัก');
         return;
       }
       const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-      const targetKg = Number(it.bookable_qty_kg) || 0;
-      const requiredSlots = Math.round(targetKg * rate);
+      const targetKg = plantCountToKg(it.plant_count, rate);
+      const requiredSlots = it.plant_count;
+      if (!Number.isSafeInteger(it.plant_count) || it.plant_count <= 0) {
+        setFormError(`กรุณาระบุจำนวนต้นของ ${cropName} เป็นจำนวนเต็มมากกว่า 0`);
+        return;
+      }
       const selectedPlotIds = it.selected_plot_ids || [];
-      const chosenPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id) && p.crop_id === it.crop_id);
+      const chosenPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id) && plotSupportsCrop(p, it.crop_id));
 
       if (chosenPlots.length === 0 || chosenPlots.length !== selectedPlotIds.length) {
         setFormError(`กรุณาเลือกแปลงปลูกสำหรับ ${cropName} อย่างน้อย 1 แปลง`);
         return;
       }
-      if (selectedPlotIds.some((plotId) => chosenPlotIds.has(plotId))) {
-        setFormError('มีแปลงปลูกถูกเลือกซ้ำในรอบนี้ กรุณาเลือกแปลงให้แต่ละชนิดผักแยกกัน');
-        return;
-      }
-      selectedPlotIds.forEach((plotId) => chosenPlotIds.add(plotId));
 
       // Calculate REAL available slots in chosen plots (deducting other active rounds)
       let availableSlotsInChosen = 0;
@@ -396,7 +418,7 @@ export const AdminRoundsPage: React.FC = () => {
 
       chosenPlots.forEach((p) => {
         const occ = plotOccupancyMap[p.id];
-        const pOccupied = occ?.occupiedSlots || 0;
+        const pOccupied = itemOccupiedSlots(itemIndex, p.id);
         const pCap = Number(p.slot_capacity || 0);
         occupiedInChosen += pOccupied;
         availableSlotsInChosen += Math.max(0, pCap - pOccupied);
@@ -413,9 +435,9 @@ export const AdminRoundsPage: React.FC = () => {
       }
 
       if (requiredSlots > availableSlotsInChosen) {
-        const maxKg = Math.floor(availableSlotsInChosen / rate);
+        const maxKg = plantCountToKg(availableSlotsInChosen, rate);
         setFormError(
-          `พื้นที่แปลงสำหรับ ${cropName} ไม่เพียงพอ! แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง ${availableSlotsInChosen.toLocaleString()} ช่อง (~${maxKg} กก.) แต่เป้าหมายต้องการ ${requiredSlots.toLocaleString()} ช่อง (มีรอบเดิมใช้อยู่ ${occupiedInChosen.toLocaleString()} ช่อง) กรุณาปรับลดเป้าหมายไม่ให้เกิน ${maxKg} กก.`
+          `พื้นที่แปลงสำหรับ ${cropName} ไม่เพียงพอ! แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง ${availableSlotsInChosen.toLocaleString()} ต้น (~${maxKg} กก.) แต่เป้าหมายต้องการ ${requiredSlots.toLocaleString()} ต้น (มีรอบเดิมใช้อยู่ ${occupiedInChosen.toLocaleString()} ต้น) กรุณาปรับลดจำนวนต้นไม่ให้เกิน ${availableSlotsInChosen.toLocaleString()} ต้น`
         );
         return;
       }
@@ -434,8 +456,9 @@ export const AdminRoundsPage: React.FC = () => {
         notes: notes.trim() || null,
         items: items.map((it) => ({
           crop_id: it.crop_id,
-          estimated_qty_kg: it.bookable_qty_kg,
-          bookable_qty_kg: it.bookable_qty_kg,
+          plant_count: it.plant_count,
+          estimated_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
+          bookable_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
           price_per_kg: it.price_per_kg,
           growing_days: it.growing_days,
           plot_ids: it.selected_plot_ids || [],
@@ -484,32 +507,38 @@ export const AdminRoundsPage: React.FC = () => {
         );
       case 3:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200">
-            🌿 สเต็ป 3: ปลูกจริง ({formatDateDMY(round.transplant_date || round.planted_at)})
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-lime-50 text-lime-700 text-xs font-bold border border-lime-200">
+            🌱 สเต็ป 3: เริ่มปลูก ({formatDateDMY(round.planting_start_date)})
           </span>
         );
       case 4:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
-            🛒 สเต็ป 4: เปิดสั่งจองล่วงหน้า ({formatDateDMY(round.booking_opens_at)})
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200">
+            🌿 สเต็ป 4: ปลูกจริง ({formatDateDMY(round.transplant_date || round.planted_at)})
           </span>
         );
       case 5:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-300">
-            🧺 สเต็ป 5: วันที่พร้อมเก็บและขาย ({formatDateDMY(round.harvest_sale_date || round.expected_harvest_date)})
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
+            🛒 สเต็ป 5: เปิดสั่งจองล่วงหน้า ({formatDateDMY(round.booking_opens_at)})
           </span>
         );
       case 6:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
-            🏷️ สเต็ป 6: ขายหมดแล้ว ({formatDateDMY(round.sold_out_date)})
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-300">
+            🧺 สเต็ป 6: วันที่พร้อมเก็บและขาย ({formatDateDMY(round.harvest_sale_date || round.expected_harvest_date)})
           </span>
         );
       case 7:
         return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
+            🏷️ สเต็ป 7: ขายหมดแล้ว ({formatDateDMY(round.sold_out_date)})
+          </span>
+        );
+      case 8:
+        return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold border border-slate-300">
-            🏁 สเต็ป 7: สิ้นสุดรอบ
+            🏁 สเต็ป 8: สิ้นสุดรอบ
           </span>
         );
       default:
@@ -536,7 +565,7 @@ export const AdminRoundsPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            สร้างรอบปลูกและจัดการวงจรชีวิต 7 สเต็ป: ปักเม็ด ➔ ใส่ปุ๋ย ➔ ปลูกจริง ➔ เปิดจอง ➔ เก็บและขาย ➔ ขายหมด ➔ สิ้นสุดรอบ
+            สร้างรอบปลูกและจัดการวงจรชีวิต 8 สเต็ป: ปักเม็ด ➔ ใส่ปุ๋ย ➔ เริ่มปลูก ➔ ปลูกจริง ➔ เปิดจอง ➔ เก็บและขาย ➔ ขายหมด ➔ สิ้นสุดรอบ
           </p>
         </div>
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
@@ -740,7 +769,7 @@ export const AdminRoundsPage: React.FC = () => {
                       🚨 แปลงปลูกในฟาร์มถูกใช้งานเต็ม 100% แล้ว (ไม่มีพื้นที่ว่างสำหรับสร้างรอบใหม่)
                     </h3>
                     <p className="text-xs text-rose-700 leading-relaxed">
-                      ฟาร์มมีความจุทั้งหมด <strong>{farmTotalSlots.toLocaleString()} ช่อง</strong> ถูกใช้งานไปแล้ว <strong>{farmOccupiedSlots.toLocaleString()} ช่อง</strong>
+                      ฟาร์มมีความจุทั้งหมด <strong>{farmTotalSlots.toLocaleString()} ต้น</strong> ถูกใช้งานไปแล้ว <strong>{farmOccupiedSlots.toLocaleString()} ต้น</strong>
                       {activeOngoingRounds.length > 0 && (
                         <span> โดยรอบที่กำลังดำเนินการ: <strong>{activeOngoingRounds.map((r) => r.name).join(', ')}</strong></span>
                       )}
@@ -798,14 +827,14 @@ export const AdminRoundsPage: React.FC = () => {
                         ผักที่จะปลูกในรอบนี้ <span className="text-rose-500">*</span>
                       </label>
                       <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                        เพิ่มชนิดผักที่มีแปลงปลูกกำหนดไว้ แล้วเลือกเป้าหมายผลผลิต ระบบจะคำนวณพื้นที่ว่างให้อัตโนมัติ
+                        เลือกผักและระบุจำนวนต้น ระบบคำนวณน้ำหนักจากจำนวนต้นต่อกิโลกรัม โดยปัดเศษลงเป็นกิโลกรัมจำนวนเต็ม
                       </span>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={handleAddItem}
-                    disabled={isFarmFullyOccupied || designatedCrops.length === 0 || items.length >= designatedCrops.length}
+                    disabled={loading || !!setupLoadError || isFarmFullyOccupied || cropAvailability.remainingCrops.length === 0}
                     className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 text-xs font-extrabold text-white shadow-md transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
                   >
                     <Plus className="h-4 w-4" />
@@ -814,11 +843,22 @@ export const AdminRoundsPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-4 p-3 sm:p-5">
-                {designatedCrops.length === 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-                    <span>ยังไม่มีผักที่กำหนดไว้ในแปลงปลูกที่เปิดใช้งาน กรุณาไปกำหนดชนิดผักให้แปลงก่อน</span>
-                    <Link to="/admin/plots" target="_blank" className="font-bold underline">จัดการแปลงปลูก</Link>
+                {setupLoadError ? (
+                  <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-900">
+                    <p>{setupLoadError}</p>
+                    <button type="button" disabled={loading} onClick={() => void loadData()} className="mt-2 font-bold underline disabled:opacity-50">{loading ? 'กำลังโหลด...' : 'โหลดข้อมูลอีกครั้ง'}</button>
                   </div>
+                ) : (
+                  <>
+                    {cropAvailability.issues.map((issue) => (
+                      <div key={issue.kind} className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                        <p className="font-semibold leading-relaxed">{issue.message}</p>
+                        <Link to={issue.href} target="_blank" rel="noopener noreferrer" className="self-start font-bold underline underline-offset-2">{issue.action} ↗</Link>
+                      </div>
+                    ))}
+                    {cropAvailability.allAdded && <p className="flex items-center gap-1.5 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800"><CheckCircle2 className="h-4 w-4 shrink-0" />เพิ่มผักที่พร้อมปลูกครบทุกชนิดแล้ว ({designatedCrops.length} ชนิด)</p>}
+                    {cropAvailability.issues.length > 0 && <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-600">หลังแก้ไขในหน้าที่เปิดใหม่แล้ว ให้กด<button type="button" disabled={loading} onClick={() => void loadData()} className="font-bold text-emerald-800 underline disabled:opacity-50">{loading ? 'กำลังตรวจสอบ...' : 'ตรวจสอบข้อมูลอีกครั้ง'}</button></p>}
+                  </>
                 )}
 
                 {/* Overall Round Farm Capacity & Alert Summary Banner */}
@@ -833,22 +873,22 @@ export const AdminRoundsPage: React.FC = () => {
                       const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
                       return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
                     }, 0);
-                  const totalTargetKg = items.reduce((s, it) => s + (Number(it.bookable_qty_kg) || 0), 0);
+                  const totalTargetKg = items.reduce((sum, it) => sum + plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4), 0);
                   const totalRequiredSlots = items.reduce((s, it) => {
                     const c = crops.find((cr) => cr.id === it.crop_id);
                     const r = c?.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
-                    return s + Math.round((Number(it.bookable_qty_kg) || 0) * r);
+                    return s + it.plant_count;
                   }, 0);
 
                   const itemsWithoutPlots = items.filter((it) => (it.selected_plot_ids || []).length === 0);
-                  const itemsOvercapacity = items.filter((it) => {
+                  const itemsOvercapacity = items.filter((it, itemIndex) => {
                     const c = crops.find((cr) => cr.id === it.crop_id);
                     const r = c?.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
-                    const req = Math.round((Number(it.bookable_qty_kg) || 0) * r);
+                    const req = it.plant_count;
                     const avail = activePlots
                       .filter((p) => (it.selected_plot_ids || []).includes(p.id))
                       .reduce((sum, p) => {
-                        const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                        const occ = itemOccupiedSlots(itemIndex, p.id);
                         return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
                       }, 0);
                     return req > avail;
@@ -860,7 +900,7 @@ export const AdminRoundsPage: React.FC = () => {
                       plotUsageCounts[pid] = (plotUsageCounts[pid] || 0) + 1;
                     });
                   });
-                  const duplicatePlotIds = Object.keys(plotUsageCounts).filter((pid) => plotUsageCounts[pid] > 1);
+                  const sharedPlotIds = Object.keys(plotUsageCounts).filter((pid) => plotUsageCounts[pid] > 1);
 
                   return (
                     <div className="mb-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-slate-50 border border-emerald-100/90 shadow-2xs space-y-2">
@@ -874,9 +914,9 @@ export const AdminRoundsPage: React.FC = () => {
                               สรุปพื้นที่แปลงปลูก (คำนวณจากรอบเดิมที่กำลังดำเนินการ)
                             </h4>
                             <p className="text-[10px] text-slate-500">
-                              ความจุฟาร์มรวม: {activePlots.length} แปลง ({farmTotalSlots.toLocaleString()} ช่อง) • รอบเดิมใช้ไป: {farmOccupiedSlots.toLocaleString()} ช่อง • 
+                              ความจุฟาร์มรวม: {activePlots.length} แปลง ({farmTotalSlots.toLocaleString()} ต้น) • รอบเดิมใช้ไป: {farmOccupiedSlots.toLocaleString()} ต้น •
                               <strong className={farmAvailableSlots > 0 ? 'text-emerald-700 ml-1' : 'text-rose-600 ml-1'}>
-                                {farmAvailableSlots > 0 ? `พื้นที่ว่างในฟาร์มเหลือ: ${farmAvailableSlots.toLocaleString()} ช่อง` : 'แปลงในฟาร์มเต็มแล้ว (เหลือ 0 ช่อง)'}
+                                {farmAvailableSlots > 0 ? `พื้นที่ว่างในฟาร์มเหลือ: ${farmAvailableSlots.toLocaleString()} ต้น` : 'แปลงในฟาร์มเต็มแล้ว (เหลือ 0 ต้น)'}
                               </strong>
                             </p>
                           </div>
@@ -884,11 +924,11 @@ export const AdminRoundsPage: React.FC = () => {
 
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span className="font-semibold text-slate-600">
-                            เป้าหมายรอบนี้: <strong className="text-emerald-800">{totalTargetKg.toLocaleString()} กก.</strong> (~{totalRequiredSlots.toLocaleString()} ช่อง)
+                            ปลูกรอบนี้: <strong className="text-emerald-800">{totalRequiredSlots.toLocaleString()} ต้น</strong> (น้ำหนักประมาณ {totalTargetKg.toLocaleString()} กก.)
                           </span>
                           <span className="text-slate-300">•</span>
                           <span className="font-semibold text-slate-600">
-                            แปลงที่เลือกรอบนี้: <strong className="text-slate-900">{allChosenPlotIds.length} แปลง</strong> (พื้นที่ว่างในแปลงที่เลือก: {totalAvailableInChosenPlots.toLocaleString()} ช่อง)
+                            แปลงที่เลือกรอบนี้: <strong className="text-slate-900">{allChosenPlotIds.length} แปลง</strong> (พื้นที่ว่างในแปลงที่เลือก: {totalAvailableInChosenPlots.toLocaleString()} ต้น)
                           </span>
                         </div>
                       </div>
@@ -902,7 +942,7 @@ export const AdminRoundsPage: React.FC = () => {
                             style={{
                               width: `${farmTotalSlots > 0 ? Math.min(100, (farmOccupiedSlots / farmTotalSlots) * 100) : 0}%`,
                             }}
-                            title={`รอบเดิมใช้ไป: ${farmOccupiedSlots} ช่อง`}
+                            title={`รอบเดิมใช้ไป: ${farmOccupiedSlots} ต้น`}
                           />
                           {/* Segment 2: Allocated in this new round */}
                           <div
@@ -910,24 +950,24 @@ export const AdminRoundsPage: React.FC = () => {
                             style={{
                               width: `${farmTotalSlots > 0 ? Math.min(100 - (farmOccupiedSlots / farmTotalSlots) * 100, (totalRequiredSlots / farmTotalSlots) * 100) : 0}%`,
                             }}
-                            title={`รอบนี้ต้องการ: ${totalRequiredSlots} ช่อง`}
+                            title={`รอบนี้ต้องการ: ${totalRequiredSlots} ต้น`}
                           />
                         </div>
                         <div className="flex justify-between text-[10px] text-slate-500">
                           <span className="flex items-center gap-3">
                             <span className="flex items-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
-                              รอบเดิมใช้: {farmOccupiedSlots.toLocaleString()} ช่อง ({farmTotalSlots > 0 ? Math.round((farmOccupiedSlots / farmTotalSlots) * 100) : 0}%)
+                              รอบเดิมใช้: {farmOccupiedSlots.toLocaleString()} ต้น ({farmTotalSlots > 0 ? Math.round((farmOccupiedSlots / farmTotalSlots) * 100) : 0}%)
                             </span>
                             <span className="flex items-center gap-1">
                               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                              รอบนี้เลือก: {totalRequiredSlots.toLocaleString()} ช่อง
+                              รอบนี้เลือก: {totalRequiredSlots.toLocaleString()} ต้น
                             </span>
                           </span>
                           <span>
                             {farmAvailableSlots > 0 ? (
                               <span className="text-emerald-700 font-semibold">
-                                เหลือพื้นที่ว่างในฟาร์ม: {farmAvailableSlots.toLocaleString()} ช่อง
+                                เหลือพื้นที่ว่างในฟาร์ม: {farmAvailableSlots.toLocaleString()} ต้น
                               </span>
                             ) : (
                               <strong className="text-rose-600">แปลงในฟาร์มเต็ม 100%</strong>
@@ -937,7 +977,7 @@ export const AdminRoundsPage: React.FC = () => {
                       </div>
 
                       {/* Alert Badges */}
-                      {(itemsWithoutPlots.length > 0 || itemsOvercapacity.length > 0 || duplicatePlotIds.length > 0 || isFarmFullyOccupied) ? (
+                      {(itemsWithoutPlots.length > 0 || itemsOvercapacity.length > 0 || isFarmFullyOccupied) ? (
                         <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-emerald-100/60">
                           {isFarmFullyOccupied && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
@@ -957,18 +997,16 @@ export const AdminRoundsPage: React.FC = () => {
                               <span>มี {itemsOvercapacity.length} ผักที่พื้นที่ว่างในแปลงไม่พอ</span>
                             </span>
                           )}
-                          {duplicatePlotIds.length > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                              <AlertCircle className="w-3 h-3 text-rose-600" />
-                              <span>มีแปลงถูกเลือกซ้ำ {duplicatePlotIds.length} แปลง</span>
-                            </span>
-                          )}
+
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 pt-1 border-t border-emerald-100/60 text-[10px] font-bold text-emerald-700">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>เลือกแปลงปลูกครบถ้วนและพื้นที่เพียงพอกับเป้าหมาย</span>
                         </div>
+                      )}
+                      {sharedPlotIds.length > 0 && (
+                        <p className="flex items-center gap-1.5 text-[11px] text-sky-800"><Info className="h-3.5 w-3.5 shrink-0" />ใช้แปลงร่วมกัน {sharedPlotIds.length} แปลง โดยนับความจุแต่ละแปลงเพียงครั้งเดียว</p>
                       )}
                     </div>
                   );
@@ -987,27 +1025,27 @@ export const AdminRoundsPage: React.FC = () => {
                     {items.map((it, idx) => {
                       const selectedCrop = crops.find((c) => c.id === it.crop_id);
                       const cropRate = selectedCrop?.slots_per_kg ? Number(selectedCrop.slots_per_kg) : 4.0;
-                      const targetKg = Number(it.bookable_qty_kg) || 0;
-                      const requiredSlots = Math.round(targetKg * cropRate);
+                      const targetKg = plantCountToKg(it.plant_count, cropRate);
+                      const requiredSlots = it.plant_count;
 
                       // Only plots designated for this crop can be selected.
-                      const designatedPlots = activePlots.filter((p) => p.crop_id === it.crop_id);
+                      const designatedPlots = activePlots.filter((p) => plotSupportsCrop(p, it.crop_id));
 
                       // Selected plots for this item
                       const selectedPlotIds = it.selected_plot_ids || [];
                       const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
                       const totalSelectedRawCapacity = selectedPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-                      const totalSelectedOccupied = selectedPlots.reduce((sum, p) => sum + (plotOccupancyMap[p.id]?.occupiedSlots || 0), 0);
+                      const totalSelectedOccupied = selectedPlots.reduce((sum, p) => sum + itemOccupiedSlots(idx, p.id), 0);
                       const totalSelectedAvailableSlots = selectedPlots.reduce((sum, p) => {
-                        const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                        const occ = itemOccupiedSlots(idx, p.id);
                         return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
                       }, 0);
 
-                      // Conflict detection: plot selected in another item
-                      const conflictingPlotIds = selectedPlotIds.filter((pid) =>
+                      // Sharing a plot across crop items is supported.
+                      const sharedPlotIds = selectedPlotIds.filter((pid) =>
                         items.some((otherIt, otherIdx) => otherIdx !== idx && (otherIt.selected_plot_ids || []).includes(pid))
                       );
-                      const conflictingPlotNames = activePlots.filter((p) => conflictingPlotIds.includes(p.id)).map((p) => p.name);
+                      const sharedPlotNames = activePlots.filter((p) => sharedPlotIds.includes(p.id)).map((p) => p.name);
 
                       // Capacity checks based on REAL remaining available slots
                       const isNoPlot = selectedPlots.length === 0;
@@ -1018,9 +1056,9 @@ export const AdminRoundsPage: React.FC = () => {
 
                       const missingSlots = Math.max(0, requiredSlots - totalSelectedAvailableSlots);
                       const extraSlots = Math.max(0, totalSelectedAvailableSlots - requiredSlots);
-                      const missingKg = (missingSlots / cropRate).toFixed(1);
-                      const extraKg = (extraSlots / cropRate).toFixed(1);
-                      const matchCapacityKg = Math.floor(totalSelectedAvailableSlots / cropRate);
+                      const missingKg = plantCountToKg(missingSlots, cropRate);
+                      const extraKg = plantCountToKg(extraSlots, cropRate);
+                      const matchCapacityPlants = Math.floor(totalSelectedAvailableSlots);
 
                       // Gauge bar calculation
                       const usagePercent = totalSelectedAvailableSlots > 0 ? Math.min(100, Math.round((requiredSlots / totalSelectedAvailableSlots) * 100)) : (isSelectedPlotsZeroFree ? 100 : 0);
@@ -1030,10 +1068,10 @@ export const AdminRoundsPage: React.FC = () => {
                           key={idx}
                           className="rounded-2xl border-2 border-emerald-300 border-l-4 border-l-emerald-700 bg-emerald-50 p-4 shadow-md transition-shadow hover:shadow-lg sm:p-5"
                         >
-                          {/* Top inputs: Crop, Target kg, Price, Growing days, Delete */}
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          {/* Crop, plant count, growing days and delete action */}
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
                             {/* Crop select */}
-                            <div className="flex-1">
+                            <div className="min-w-0 flex-1">
                               <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
                                 ชนิดผักที่ ({idx + 1})
                               </label>
@@ -1043,7 +1081,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 text-slate-900"
                               >
                                 {designatedCrops.filter((crop) => crop.id === it.crop_id || !items.some((item) => item.crop_id === crop.id)).map((c) => {
-                                  const plotsCount = activePlots.filter((p) => p.crop_id === c.id).length;
+                                  const plotsCount = activePlots.filter((p) => plotSupportsCrop(p, c.id)).length;
                                   return (
                                     <option key={c.id} value={c.id}>
                                       {c.name} (มีแปลงประจำ {plotsCount} แปลง)
@@ -1053,25 +1091,26 @@ export const AdminRoundsPage: React.FC = () => {
                               </select>
                             </div>
 
-                            {/* Target Qty Kg */}
-                            <div className="w-28">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
-                                เป้าหมาย (กก.)
+                            {/* Plant count */}
+                            <div className="w-full sm:w-32 sm:shrink-0">
+                              <label htmlFor={`plant-count-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                                จำนวนต้น
                               </label>
                               <input
+                                id={`plant-count-${idx}`}
                                 type="number"
-                                min="0"
+                                min="1"
                                 step="1"
-                                value={it.bookable_qty_kg}
+                                value={it.plant_count}
                                 onChange={(e) =>
-                                  handleItemFieldChange(idx, 'bookable_qty_kg', parseFloat(e.target.value) || 0)
+                                  handleItemFieldChange(idx, 'plant_count', Math.max(0, Math.floor(Number(e.target.value) || 0)))
                                 }
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500"
                               />
                             </div>
 
                             {/* Growing Days */}
-                            <div className="w-20">
+                            <div className="w-full sm:w-24 sm:shrink-0">
                               <label className="text-[10px] font-bold text-slate-500 block mb-0.5">วันปลูก</label>
                               <input
                                 type="number"
@@ -1096,16 +1135,26 @@ export const AdminRoundsPage: React.FC = () => {
                             </button>
                           </div>
 
+                          <div className="my-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-white/90 px-3.5 py-3">
+                            <div className="flex items-baseline gap-3">
+                              <span className="text-xs font-semibold text-slate-600">น้ำหนักประมาณ</span>
+                              <output htmlFor={`plant-count-${idx}`} className="text-xl font-black tabular-nums text-emerald-800">
+                                {targetKg.toLocaleString()} <span className="text-sm font-semibold">กก.</span>
+                              </output>
+                            </div>
+                            <p className="text-[11px] text-slate-500">{cropRate} ต้น/กก. · ปัดเศษลง</p>
+                          </div>
+
                           {/* PROMINENT REAL-TIME WARNING & NOTIFICATION ALERT BOX */}
                           <div className="space-y-2">
-                            {/* 1. Conflict Warning */}
-                            {conflictingPlotNames.length > 0 && (
-                              <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 shadow-2xs">
-                                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                            {/* 1. Shared plot information */}
+                            {sharedPlotNames.length > 0 && (
+                              <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-900 text-xs flex items-start gap-2">
+                                <Info className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
                                 <div className="flex-1">
-                                  <p className="font-bold">⚠️ แปลงปลูกถูกเลือกซ้ำข้ามรายการผัก!</p>
-                                  <p className="text-[11px] text-rose-700 mt-0.5">
-                                    แปลง <strong>{conflictingPlotNames.join(', ')}</strong> ถูกเลือกในผักชนิดอื่นด้วย กรุณาตรวจสอบเพื่อไม่ให้ปลูกทับซ้อนกันในรอบเดียวกัน
+                                  <p className="font-bold">ปลูกผักหลายชนิดร่วมแปลงเดียวกัน</p>
+                                  <p className="text-[11px] text-sky-800 mt-0.5">
+                                    แปลง <strong>{sharedPlotNames.join(', ')}</strong> ใช้ร่วมกับผักชนิดอื่นในรอบนี้ โดยระบบหักจำนวนต้นที่ใช้ร่วมกันแล้ว
                                   </p>
                                 </div>
                               </div>
@@ -1119,7 +1168,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">⚠️ ยังไม่ได้เลือกแปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}!</p>
                                     <p className="text-[11px] text-amber-800 mt-0.5">
-                                      เป้าหมาย <strong>{targetKg} กก.</strong> ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ช่องปลูก</strong> (อัตรา ~{cropRate} ช่อง/กก.) กรุณาเลือกแปลงปลูกด้านล่าง
+                                      จำนวนที่ปลูก <strong>{requiredSlots.toLocaleString()} ต้น</strong> (ประมาณ {targetKg} กก.) ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ต้น</strong> (อัตรา ~{cropRate} ต้น/กก.) กรุณาเลือกแปลงปลูกด้านล่าง
                                     </p>
                                   </div>
                                 </div>
@@ -1145,7 +1194,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">🚨 แปลงที่เลือกถูกรอบอื่นใช้งานเต็ม 100% แล้ว (ไม่มีพื้นที่ว่าง)!</p>
                                     <p className="text-[11px] text-rose-800 mt-0.5">
-                                      แปลงที่เลือก ({selectedPlots.map((p) => p.name).join(', ')}) ถูกรอบเดิมที่กำลังดำเนินการใช้งานเต็มความจุ {totalSelectedRawCapacity.toLocaleString()} ช่อง ไม่สามารถปลูกในรอบนี้ได้ กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง
+                                      แปลงที่เลือก ({selectedPlots.map((p) => p.name).join(', ')}) ถูกรอบเดิมที่กำลังดำเนินการใช้งานเต็มความจุ {totalSelectedRawCapacity.toLocaleString()} ต้น ไม่สามารถปลูกในรอบนี้ได้ กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง
                                     </p>
                                   </div>
                                 </div>
@@ -1158,21 +1207,21 @@ export const AdminRoundsPage: React.FC = () => {
                                 <div className="flex items-start gap-2">
                                   <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
                                   <div>
-                                    <p className="font-bold">🚨 พื้นที่ว่างในแปลงที่เลือกไม่เพียงพอสำหรับเป้าหมาย {targetKg} กก.!</p>
+                                    <p className="font-bold">🚨 พื้นที่ว่างในแปลงที่เลือกไม่เพียงพอสำหรับจำนวนที่ปลูก {requiredSlots.toLocaleString()} ต้น!</p>
                                     <p className="text-[11px] text-rose-800 mt-0.5">
-                                      ต้องการ <strong>{requiredSlots.toLocaleString()} ช่อง</strong> แต่แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง <strong>{totalSelectedAvailableSlots.toLocaleString()} ช่อง</strong>
-                                      {totalSelectedOccupied > 0 && ` (รอบเดิมใช้ไป ${totalSelectedOccupied.toLocaleString()} ช่อง)`}
-                                      {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ช่อง</strong> หรือ ~{missingKg} กก.)
+                                      ต้องการ <strong>{requiredSlots.toLocaleString()} ต้น</strong> แต่แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong>
+                                      {totalSelectedOccupied > 0 && ` (รอบเดิมใช้ไป ${totalSelectedOccupied.toLocaleString()} ต้น)`}
+                                      {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ต้น</strong> หรือ ~{missingKg} กก.)
                                     </p>
                                   </div>
                                 </div>
-                                {matchCapacityKg > 0 && (
+                                {matchCapacityPlants > 0 && (
                                   <button
                                     type="button"
-                                    onClick={() => handleMatchCapacityKg(idx)}
+                                    onClick={() => handleMatchCapacityPlants(idx)}
                                     className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-colors whitespace-nowrap shadow-2xs"
                                   >
-                                    ⚡ ปรับเป้าหมายเป็น {matchCapacityKg} กก. (ตามพื้นที่ว่างที่เหลือ)
+                                    ⚡ ปรับเป้าหมายเป็น {matchCapacityPlants.toLocaleString()} ต้น (ตามพื้นที่ว่างที่เหลือ)
                                   </button>
                                 )}
                               </div>
@@ -1186,16 +1235,16 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">ℹ️ แปลงที่เลือกมีพื้นที่ว่างเหลือ!</p>
                                     <p className="text-[11px] text-sky-800 mt-0.5">
-                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ช่อง</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ช่อง</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ช่อง</strong> หรือ ~{extraKg} กก.)
+                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ต้น</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ต้น</strong> หรือ ~{extraKg} กก.)
                                     </p>
                                   </div>
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => handleMatchCapacityKg(idx)}
+                                  onClick={() => handleMatchCapacityPlants(idx)}
                                   className="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] transition-colors whitespace-nowrap shadow-2xs"
                                 >
-                                  ⚡ ปรับเป้าหมายเป็น {matchCapacityKg} กก. (เต็มพื้นที่ว่าง)
+                                  ⚡ ปรับเป้าหมายเป็น {matchCapacityPlants.toLocaleString()} ต้น (เต็มพื้นที่ว่าง)
                                 </button>
                               </div>
                             )}
@@ -1206,7 +1255,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                                   <span className="font-bold">
-                                    ✓ พื้นที่ว่างในแปลงที่เลือกพอดีกับเป้าหมายผลผลิต ({totalSelectedAvailableSlots.toLocaleString()} ช่องปลูก)
+                                    ✓ พื้นที่ว่างในแปลงที่เลือกพอดีกับเป้าหมายผลผลิต ({totalSelectedAvailableSlots.toLocaleString()} ต้น)
                                   </span>
                                 </div>
                               </div>
@@ -1221,7 +1270,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 <LayoutGrid className="w-4 h-4 text-emerald-600" />
                                 <span>แปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}:</span>
                                 <span className="text-slate-500 font-normal">
-                                  (เลือก {selectedPlots.length} แปลง • พื้นที่ว่างรวม {totalSelectedAvailableSlots.toLocaleString()} ช่อง)
+                                  (เลือก {selectedPlots.length} แปลง • พื้นที่ว่างรวม {totalSelectedAvailableSlots.toLocaleString()} ต้น)
                                 </span>
                               </div>
 
@@ -1238,10 +1287,10 @@ export const AdminRoundsPage: React.FC = () => {
                                 {totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots !== requiredSlots && (
                                   <button
                                     type="button"
-                                    onClick={() => handleMatchCapacityKg(idx)}
+                                    onClick={() => handleMatchCapacityPlants(idx)}
                                     className="px-2 py-1 text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg transition-colors"
                                   >
-                                    ปรับ กก. ตามพื้นที่ว่าง ({matchCapacityKg} กก.)
+                                    ปรับจำนวนต้นตามพื้นที่ว่าง ({matchCapacityPlants.toLocaleString()} ต้น)
                                   </button>
                                 )}
                                 {selectedPlotIds.length > 0 && (
@@ -1265,9 +1314,9 @@ export const AdminRoundsPage: React.FC = () => {
                                   </span>
                                   <span className="font-bold text-slate-800">
                                     {isSelectedPlotsZeroFree ? (
-                                      <span className="text-rose-600">รอบเดิมใช้เต็ม 100% (ว่าง 0 ช่อง)</span>
+                                      <span className="text-rose-600">รอบเดิมใช้เต็ม 100% (ว่าง 0 ต้น)</span>
                                     ) : (
-                                      <span>ใช้ {requiredSlots.toLocaleString()} / พื้นที่ว่าง {totalSelectedAvailableSlots.toLocaleString()} ช่อง ({usagePercent}%)</span>
+                                      <span>ใช้ {requiredSlots.toLocaleString()} / พื้นที่ว่าง {totalSelectedAvailableSlots.toLocaleString()} ต้น ({usagePercent}%)</span>
                                     )}
                                   </span>
                                 </div>
@@ -1278,7 +1327,7 @@ export const AdminRoundsPage: React.FC = () => {
                                     style={{
                                       width: `${totalSelectedRawCapacity > 0 ? Math.min(100, (totalSelectedOccupied / totalSelectedRawCapacity) * 100) : 0}%`,
                                     }}
-                                    title={`รอบเดิมใช้: ${totalSelectedOccupied} ช่อง`}
+                                    title={`รอบเดิมใช้: ${totalSelectedOccupied} ต้น`}
                                   />
                                   {/* Used by this crop in this round */}
                                   <div
@@ -1288,18 +1337,18 @@ export const AdminRoundsPage: React.FC = () => {
                                     style={{
                                       width: `${totalSelectedRawCapacity > 0 ? Math.min(100 - (totalSelectedOccupied / totalSelectedRawCapacity) * 100, (requiredSlots / totalSelectedRawCapacity) * 100) : 0}%`,
                                     }}
-                                    title={`รอบนี้ใช้: ${requiredSlots} ช่อง`}
+                                    title={`รอบนี้ใช้: ${requiredSlots} ต้น`}
                                   />
                                 </div>
                                 <div className="flex justify-between text-[10px] text-slate-500">
-                                  <span>เป้าหมายผลผลิต: {it.bookable_qty_kg} กก.</span>
+                                  <span>จำนวนที่ปลูก: {it.plant_count.toLocaleString()} ต้น · ประมาณ {targetKg} กก.</span>
                                   <span>
                                     {isSelectedPlotsZeroFree ? (
                                       <strong className="text-rose-600">รอบอื่นใช้งานเต็มแล้ว</strong>
                                     ) : isOverCapacity ? (
-                                      <strong className="text-rose-600">เกินพื้นที่ว่าง {missingSlots.toLocaleString()} ช่อง</strong>
+                                      <strong className="text-rose-600">เกินพื้นที่ว่าง {missingSlots.toLocaleString()} ต้น</strong>
                                     ) : extraSlots > 0 ? (
-                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ช่อง (~{extraKg} กก.)</strong>
+                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ต้น (~{extraKg} กก.)</strong>
                                     ) : (
                                       <strong className="text-emerald-700">เต็มพื้นที่ว่างพอดี 100%</strong>
                                     )}
@@ -1316,7 +1365,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 const isChecked = selectedPlotIds.includes(plot.id);
                                 const cap = Number(plot.slot_capacity || 0);
                                 const occ = plotOccupancyMap[plot.id];
-                                const occupiedByOtherRounds = occ?.occupiedSlots || 0;
+                                const occupiedByOtherRounds = itemOccupiedSlots(idx, plot.id);
                                 const occupyingRoundNames = occ?.occupyingRounds.map((r) => r.roundName) || [];
                                 const availableInPlot = Math.max(0, cap - occupiedByOtherRounds);
                                 const isPlotFull = availableInPlot === 0;
@@ -1393,15 +1442,15 @@ export const AdminRoundsPage: React.FC = () => {
                                                 : 'bg-sky-100 text-sky-800'
                                             }`}
                                           >
-                                            {usedInPlot >= availableInPlot ? 'เต็มโควตาว่าง' : `ใช้ ${usedInPlot} ช่อง`}
+                                            {usedInPlot >= availableInPlot ? 'เต็มโควตาว่าง' : `ใช้ ${usedInPlot} ต้น`}
                                           </span>
                                         ) : occupiedByOtherRounds > 0 ? (
                                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
-                                            🟠 ว่าง {availableInPlot}/{cap} ช่อง
+                                            🟠 ว่าง {availableInPlot}/{cap} ต้น
                                           </span>
                                         ) : (
                                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                                            🟢 ว่าง {cap} ช่อง
+                                            🟢 ว่าง {cap} ต้น
                                           </span>
                                         )}
                                       </div>
@@ -1429,15 +1478,15 @@ export const AdminRoundsPage: React.FC = () => {
                                       <div className="flex justify-between text-[10px] text-slate-500">
                                         <span>
                                           {isPlotFull ? (
-                                            <span className="text-rose-600 font-bold">รอบเดิมใช้เต็ม {cap} ช่อง</span>
+                                            <span className="text-rose-600 font-bold">รอบเดิมใช้เต็ม {cap} ต้น</span>
                                           ) : isChecked ? (
                                             <>
-                                              รอบนี้ใช้ <strong className="text-slate-800">{usedInPlot}</strong> / ว่าง {availableInPlot} ช่อง
+                                              รอบนี้ใช้ <strong className="text-slate-800">{usedInPlot}</strong> / ว่าง {availableInPlot} ต้น
                                             </>
                                           ) : occupiedByOtherRounds > 0 ? (
-                                            <>รอบเดิมใช้ {occupiedByOtherRounds} / {cap} ช่อง</>
+                                            <>รอบเดิมใช้ {occupiedByOtherRounds} / {cap} ต้น</>
                                           ) : (
-                                            <>ความจุ {cap} ช่อง (ว่าง 100%)</>
+                                            <>ความจุ {cap} ต้น (ว่าง 100%)</>
                                           )}
                                         </span>
                                         <span>
@@ -1445,12 +1494,12 @@ export const AdminRoundsPage: React.FC = () => {
                                             <span className="text-rose-600 font-semibold">สร้างรอบทับไม่ได้</span>
                                           ) : isChecked ? (
                                             remainingFreeInPlot > 0 ? (
-                                              <span className="text-sky-700 font-semibold">เหลือ {remainingFreeInPlot} ช่อง</span>
+                                              <span className="text-sky-700 font-semibold">เหลือ {remainingFreeInPlot} ต้น</span>
                                             ) : (
                                               <span className="text-emerald-700 font-semibold">เต็มพื้นที่ว่าง</span>
                                             )
                                           ) : (
-                                            <span className="text-emerald-600 font-medium">ว่าง {availableInPlot} ช่อง</span>
+                                            <span className="text-emerald-600 font-medium">ว่าง {availableInPlot} ต้น</span>
                                           )}
                                         </span>
                                       </div>
@@ -1467,7 +1516,7 @@ export const AdminRoundsPage: React.FC = () => {
                                       <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
                                         <span>🌱 แปลงที่กำหนดไว้สำหรับ {selectedCrop?.name} ({designatedPlots.length} แปลง):</span>
                                         <span className="text-[10px] text-slate-400 font-normal">
-                                          ความจุรวม: {designatedPlots.reduce((s, p) => s + p.slot_capacity, 0).toLocaleString()} ช่อง
+                                          ความจุรวม: {designatedPlots.reduce((s, p) => s + p.slot_capacity, 0).toLocaleString()} ต้น
                                         </span>
                                       </div>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1515,7 +1564,7 @@ export const AdminRoundsPage: React.FC = () => {
                       <thead>
                         <tr className="text-slate-400 border-b border-slate-200 pb-1.5 font-semibold">
                           <th className="py-1 px-1">ชนิดผัก</th>
-                          <th className="py-1 px-2">เป้าหมาย (กก. / ช่อง)</th>
+                          <th className="py-1 px-2">จำนวนต้น / น้ำหนักคำนวณ</th>
                           <th className="py-1 px-2">แปลงที่เลือกปลูก</th>
                           <th className="py-1 px-2 min-w-[140px]">หลอดความจุแปลง</th>
                           <th className="py-1 px-2">สถานะพื้นที่</th>
@@ -1525,14 +1574,14 @@ export const AdminRoundsPage: React.FC = () => {
                         {items.map((it, idx) => {
                           const crop = crops.find((c) => c.id === it.crop_id);
                           const cropRate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-                          const targetKg = Number(it.bookable_qty_kg) || 0;
-                          const requiredSlots = Math.round(targetKg * cropRate);
+                          const targetKg = plantCountToKg(it.plant_count, cropRate);
+                          const requiredSlots = it.plant_count;
 
                           const selectedPlotIds = it.selected_plot_ids || [];
                           const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
                           const rawSelectedSlots = selectedPlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
                           const availableSelectedSlots = selectedPlots.reduce((s, p) => {
-                            const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
+                            const occ = itemOccupiedSlots(idx, p.id);
                             return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
                           }, 0);
                           const usedPercent = availableSelectedSlots > 0 ? Math.min(100, Math.round((requiredSlots / availableSelectedSlots) * 100)) : 0;
@@ -1548,15 +1597,15 @@ export const AdminRoundsPage: React.FC = () => {
                                 {crop?.name || 'ผัก'}
                               </td>
                               <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
-                                <strong className="text-emerald-800">{targetKg} กก.</strong>
-                                <span className="text-[10px] text-slate-400 block">({requiredSlots.toLocaleString()} ช่อง)</span>
+                                <strong className="text-emerald-800">{requiredSlots.toLocaleString()} ต้น</strong>
+                                <span className="text-[10px] text-slate-400 block">ประมาณ {targetKg} กก.</span>
                               </td>
                               <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
                                 {selectedPlots.length > 0 ? (
                                   <div>
                                     <span className="font-bold text-slate-900">{selectedPlots.length} แปลง</span>
                                     <span className="text-[10px] text-slate-400 block">
-                                      {selectedPlots.map((p) => p.name).join(', ')} (ว่าง {availableSelectedSlots.toLocaleString()}/{rawSelectedSlots.toLocaleString()} ช่อง)
+                                      {selectedPlots.map((p) => p.name).join(', ')} (ว่าง {availableSelectedSlots.toLocaleString()}/{rawSelectedSlots.toLocaleString()} ต้น)
                                     </span>
                                   </div>
                                 ) : (
@@ -1569,7 +1618,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div className="space-y-1">
                                     <div className="flex justify-between text-[10px]">
                                       <span className="font-semibold text-slate-700">
-                                        {requiredSlots.toLocaleString()} / ว่าง {availableSelectedSlots.toLocaleString()} ช่อง
+                                        {requiredSlots.toLocaleString()} / ว่าง {availableSelectedSlots.toLocaleString()} ต้น
                                       </span>
                                       <span className={`font-bold ${isZeroAvail || isOver ? 'text-rose-600' : 'text-slate-700'}`}>
                                         {isZeroAvail ? 'เต็ม 100%' : `${usedPercent}%`}
@@ -1603,11 +1652,11 @@ export const AdminRoundsPage: React.FC = () => {
                                   </span>
                                 ) : isOver ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                                    🚨 ขาด {(requiredSlots - availableSelectedSlots).toLocaleString()} ช่อง
+                                    🚨 ขาด {(requiredSlots - availableSelectedSlots).toLocaleString()} ต้น
                                   </span>
                                 ) : isUnder ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
-                                    ℹ️ ว่าง {(availableSelectedSlots - requiredSlots).toLocaleString()} ช่อง
+                                    ℹ️ ว่าง {(availableSelectedSlots - requiredSlots).toLocaleString()} ต้น
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">

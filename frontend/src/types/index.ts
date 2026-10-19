@@ -19,12 +19,28 @@ export type FulfillmentMethod = 'pickup' | 'delivery';
 export type PaymentStatus = 'unpaid' | 'paid';
 export type PaymentMethod = 'cash' | 'transfer';
 
+export interface PlotOccupyingRound {
+  id: string;
+  name: string;
+  crop_name: string;
+  used_slots: number;
+  status?: RoundStatus;
+  current_step?: number;
+  seed_date?: string | null;
+  fertilizing_date?: string | null;
+  planting_start_date?: string | null;
+  transplant_date?: string | null;
+  growing_days?: number;
+  calculated_harvest_date?: string | null;
+}
+
 export interface Plot {
   id: string;
   name: string;
   zone_name: string;
   slot_capacity: number;
   crop_id?: string | null;
+  crop_ids?: string[];
   is_active: boolean;
   notes?: string | null;
   created_at: string;
@@ -32,7 +48,7 @@ export interface Plot {
   crops?: Crop | null;
   used_slots?: number;
   crop_names?: string[];
-  occupying_rounds?: Array<{ id: string; name: string; crop_name: string; used_slots: number }>;
+  occupying_rounds?: PlotOccupyingRound[];
 }
 
 export interface FarmMetrics {
@@ -71,6 +87,7 @@ export interface RoundItem {
   crop_id: string;
   crop_name?: string;
   estimated_qty_kg: number;
+  plant_count?: number | null;
   bookable_qty_kg: number;
   actual_qty_kg?: number | null;
   price_per_kg: number;
@@ -93,14 +110,13 @@ export interface PlantingRound {
   booking_opens_at: string;
   booking_closes_at: string | null;
   fulfillment_date: string;
-  pickup_start_time: string;
-  pickup_end_time: string;
   delivery_start_time: string;
   delivery_end_time: string;
   status: RoundStatus;
   current_step?: number;
   seed_date?: string | null;
   fertilizing_date?: string | null;
+  planting_start_date?: string | null;
   transplant_date?: string | null;
   harvest_sale_date?: string | null;
   sold_out_date?: string | null;
@@ -228,6 +244,8 @@ export interface EquipmentOrder {
   status: EquipmentOrderStatus;
   payment_status: PaymentStatus;
   payment_method: 'transfer' | 'cash_on_delivery';
+  payment_slip_path?: string | null;
+  payment_slip_uploaded_at?: string | null;
   shipping_method: 'standard';
   shipping_address: string;
   contact_phone: string;
@@ -240,4 +258,12 @@ export interface EquipmentOrder {
   created_at: string;
   equipment_order_items?: EquipmentOrderItem[];
   profiles?: { full_name?: string; email?: string; phone?: string };
+}
+
+export interface EquipmentTransferAccount {
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  qr_image_url: string;
+  transfer_enabled: boolean;
 }

@@ -1,3 +1,4 @@
+import { SLIP_BUCKET, parseSlipImage, readTransferAccount } from '../services/equipmentPayments.js';
 import { Router, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -36,18 +37,42 @@ router.get('/shipping', async (_req, res) => {
   res.json({ shipping_fee: Number(data?.value ?? 0) });
 });
 
+router.get('/payment-settings', async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from('app_settings').select('value').eq('key', 'equipment_transfer_account').maybeSingle();
+  if (error) { res.status(500).json({ error: error.message }); return; }
+  res.json(readTransferAccount(data?.value));
+});
+
+router.post('/orders/payment-slip', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = z.object({ mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']), data: z.string().min(1).max(7 * 1024 * 1024) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'กรุณาแนบสลิป JPEG, PNG หรือ WebP ขนาดไม่เกิน 5 MB' }); return; }
+  try {
+    const { buffer, extension } = parseSlipImage(parsed.data.mime_type, parsed.data.data);
+    const path = req.user!.id + '/' + randomUUID() + '.' + extension;
+    const { error } = await supabaseAdmin.storage.from(SLIP_BUCKET).upload(path, buffer, { contentType: parsed.data.mime_type, upsert: false });
+    if (error) { res.status(400).json({ error: 'อัปโหลดสลิปไม่สำเร็จ: ' + error.message }); return; }
+    res.status(201).json({ path });
+  } catch (error: any) { res.status(400).json({ error: error.message || 'อัปโหลดสลิปไม่สำเร็จ' }); }
+});
+
 router.post('/orders', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const parsed = z.object({
       items: z.array(z.object({ product_id: z.string().uuid(), quantity: z.number().int().min(1) })).min(1),
       shipping_address: z.string().trim().min(5), contact_phone: z.string().trim().min(9),
-      payment_method: z.literal('cash_on_delivery'), note: z.string().optional().nullable(),
+      payment_method: z.enum(['cash_on_delivery', 'transfer']), note: z.string().optional().nullable(),
+      payment_slip_path: z.string().max(200).optional().nullable(),
     }).safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.errors[0]?.message || 'ข้อมูลสั่งซื้อไม่ถูกต้อง' }); return; }
+    const slipPath = parsed.data.payment_method === 'transfer' ? parsed.data.payment_slip_path : null;
+    if (parsed.data.payment_method === 'transfer' && (!slipPath || !slipPath.startsWith(req.user!.id + '/') || slipPath.includes('..') || slipPath.split('/').length !== 2)) {
+      res.status(400).json({ error: 'กรุณาแนบสลิปการโอนเงินของคุณก่อนยืนยันคำสั่งซื้อ' }); return;
+    }
     const { data, error } = await supabaseAdmin.rpc('create_equipment_order', {
       p_customer_id: req.user!.id, p_items: parsed.data.items,
       p_shipping_address: parsed.data.shipping_address, p_contact_phone: parsed.data.contact_phone,
       p_payment_method: parsed.data.payment_method, p_note: parsed.data.note || null,
+      p_payment_slip_path: slipPath || null,
     });
     if (error) { res.status(400).json({ error: error.message }); return; }
     res.status(201).json({ id: data });
@@ -67,7 +92,42 @@ router.get('/orders/mine/:id', requireAuth, async (req: AuthenticatedRequest, re
   res.json(data);
 });
 
+const paymentSlipUrl = async (req: AuthenticatedRequest, res: Response, admin: boolean) => {
+  let query = supabaseAdmin.from('equipment_orders').select('id,payment_slip_path').eq('id', req.params.id);
+  if (!admin) query = query.eq('customer_id', req.user!.id);
+  const { data: order, error } = await query.maybeSingle();
+  if (error) { res.status(500).json({ error: 'ไม่สามารถโหลดข้อมูลสลิปได้' }); return; }
+  if (!order) { res.status(404).json({ error: 'ไม่พบคำสั่งซื้อ' }); return; }
+  if (!order.payment_slip_path) { res.status(404).json({ error: 'ยังไม่มีสลิปการโอนเงิน' }); return; }
+  const { data, error: signError } = await supabaseAdmin.storage.from(SLIP_BUCKET).createSignedUrl(order.payment_slip_path, 3600);
+  if (signError || !data) { res.status(500).json({ error: 'ไม่สามารถเปิดสลิปได้ กรุณาลองอีกครั้ง' }); return; }
+  res.json({ url: data.signedUrl });
+};
+router.get('/orders/mine/:id/payment-slip', requireAuth, (req: AuthenticatedRequest, res: Response) => paymentSlipUrl(req, res, false));
+
 router.use('/admin', requireAuth, requireAdmin);
+
+router.get('/admin/orders/:id/payment-slip', (req: AuthenticatedRequest, res: Response) => paymentSlipUrl(req, res, true));
+router.post('/admin/settings/payment/qr', async (req, res) => {
+  const parsed = z.object({ mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp']), data: z.string().min(1).max(7 * 1024 * 1024) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'กรุณาแนบ QR Code เป็นรูป JPEG, PNG หรือ WebP ขนาดไม่เกิน 5 MB' }); return; }
+  try {
+    const { buffer, extension } = parseSlipImage(parsed.data.mime_type, parsed.data.data);
+    const path = randomUUID() + '.' + extension;
+    const { error } = await supabaseAdmin.storage.from('equipment-payment-qr').upload(path, buffer, { contentType: parsed.data.mime_type, upsert: false });
+    if (error) { res.status(400).json({ error: 'อัปโหลด QR Code ไม่สำเร็จ: ' + error.message }); return; }
+    const { data } = supabaseAdmin.storage.from('equipment-payment-qr').getPublicUrl(path);
+    res.status(201).json({ image_url: data.publicUrl });
+  } catch (error: any) { res.status(400).json({ error: error.message || 'อัปโหลด QR Code ไม่สำเร็จ' }); }
+});
+
+router.put('/admin/settings/payment', async (req, res) => {
+  const parsed = z.object({ bank_name: z.string().trim().max(100), account_name: z.string().trim().max(160), account_number: z.string().trim().max(50), qr_image_url: z.string().url().or(z.literal('')).default('') }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'ข้อมูลบัญชีรับโอนไม่ถูกต้อง' }); return; }
+  const { error } = await supabaseAdmin.from('app_settings').upsert({ key: 'equipment_transfer_account', value: parsed.data, description: 'บัญชีรับโอนเงินร้านอุปกรณ์', updated_at: new Date().toISOString() });
+  if (error) { res.status(400).json({ error: error.message }); return; }
+  res.json(readTransferAccount(parsed.data));
+});
 
 router.get('/admin/settings/shipping', async (_req, res) => {
   const { data, error } = await supabaseAdmin.from('app_settings').select('value').eq('key', 'equipment_shipping_fee').maybeSingle();

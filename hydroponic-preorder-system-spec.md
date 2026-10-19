@@ -57,6 +57,7 @@
 
 ### 4.3 การรับของ
 - ออเดอร์ระบุ `fulfillment_method` = `pickup` (มารับเองที่ฟาร์ม) หรือ `delivery` (ให้ส่ง)
+- การมารับเองใช้วันส่งมอบของรอบปลูก โดยไม่มีการกำหนดช่วงเวลารับเอง
 - การจัดส่งใช้ที่อยู่จัดส่งของลูกค้า โดยพื้นที่ให้บริการและเงื่อนไขการจัดส่งกำหนดโดยฟาร์ม
 - มีตั้งค่า **ยอดขั้นต่ำสำหรับการส่ง** (`delivery_min_total_kg`) ปรับได้ใน settings ค่าเริ่มต้น = 0 (ปิด) ถ้าตั้งค่าไว้และออเดอร์ต่ำกว่า ให้เลือกได้แค่มารับเอง
 
@@ -67,6 +68,7 @@
 
 ### 4.5 การยกเลิกและไม่มารับ
 - ลูกค้ายกเลิกเองได้จนถึง **เส้นตายยกเลิก** (`cancellation_deadline_hours_before_harvest` ใน settings) หลังจากนั้นแอดมินเท่านั้นที่ยกเลิกได้
+- เส้นตายยกเลิกนับย้อนหลังจากเวลา 00:00 น. ของวันส่งมอบตามเขตเวลา Asia/Bangkok
 - แอดมินทำเครื่องหมาย **ไม่มารับ** (`no_show`) ได้ ระบบเพิ่ม `no_show_count` ในโปรไฟล์ลูกค้า และแสดงให้แอดมินเห็นในหน้าออเดอร์/ลูกค้า
 - มีตั้งค่า (ปิดเป็นค่าเริ่มต้น) `no_show_limit`: ถ้าลูกค้า no_show ถึงจำนวนนี้ ห้ามจองเพิ่ม
 
@@ -78,7 +80,7 @@
 
 ### 4.7 การแก้ไขรอบหลังมีคนจองแล้ว
 - แอดมินแก้ไขได้ทุกอย่าง แต่ **ทุกการแก้ไขหลังเปิดจองต้องบันทึกใน `audit_logs`** (ใคร ทำอะไร ค่าเก่า/ใหม่ เวลา)
-- ถ้าเปลี่ยน **วันเก็บ หรือวัน-เวลารับ/ส่ง** หลังมีออเดอร์แล้ว: ระบบแสดงจำนวนออเดอร์ที่ได้รับผลกระทบให้แอดมินยืนยันก่อนบันทึก, ตั้ง flag `needs_customer_notice = true` ในออเดอร์เหล่านั้น, แสดงแบนเนอร์แจ้งการเปลี่ยนแปลงในหน้าออเดอร์ของลูกค้า, และลูกค้า **ยกเลิกได้โดยไม่ถือว่าผิดกติกา** แม้เลยเส้นตายยกเลิก (`cancel_reason = 'round_rescheduled'` และไม่นับเป็น no_show)
+- ถ้าเปลี่ยน **วันเก็บ วันรับ หรือวัน-เวลาจัดส่ง** หลังมีออเดอร์แล้ว: ระบบแสดงจำนวนออเดอร์ที่ได้รับผลกระทบให้แอดมินยืนยันก่อนบันทึก, ตั้ง flag `needs_customer_notice = true` ในออเดอร์เหล่านั้น, แสดงแบนเนอร์แจ้งการเปลี่ยนแปลงในหน้าออเดอร์ของลูกค้า, และลูกค้า **ยกเลิกได้โดยไม่ถือว่าผิดกติกา** แม้เลยเส้นตายยกเลิก (`cancel_reason = 'round_rescheduled'` และไม่นับเป็น no_show)
 - ปิดจองไปแล้วเปิดใหม่ได้ (ต้องมี audit log)
 
 ### 4.8 ผลผลิตจริงขาดและการทดแทนผัก
@@ -96,7 +98,7 @@
 - **admin_users**: `email` (unique), `created_at` | ใช้ตรวจสิทธิ์แอดมิน (มี SQL function `is_admin()`)
 - **districts**: `id`, `name`, `is_active`
 - **crops** (แคตตาล็อกชนิดผัก): `id`, `name`, `default_price_per_kg`, `is_active`
-- **planting_rounds**: `id`, `name`, `planted_at`, `growing_days`, `expected_harvest_date`, `booking_opens_at`, `booking_closes_at`, `fulfillment_date`, `pickup_start_time`, `pickup_end_time`, `delivery_start_time`, `delivery_end_time`, `status` (enum: `draft`, `growing`, `booking_open`, `booking_closed`, `harvested`, `completed`, `cancelled`), `notes`, `created_at`
+- **planting_rounds**: `id`, `name`, `planted_at`, `growing_days`, `expected_harvest_date`, `booking_opens_at`, `booking_closes_at`, `fulfillment_date`, `delivery_start_time`, `delivery_end_time`, `status` (enum: `draft`, `growing`, `booking_open`, `booking_closed`, `harvested`, `completed`, `cancelled`), `notes`, `created_at`
   - `expected_harvest_date` คำนวณเริ่มต้นจาก `planted_at + growing_days` แต่ **แก้ไขได้อิสระ**
 - **round_items**: `id`, `round_id`, `crop_id`, `estimated_qty_kg`, `bookable_qty_kg`, `actual_qty_kg` (nullable), `price_per_kg`, `max_qty_per_order_kg` (nullable) | unique (`round_id`, `crop_id`)
 - **orders**: `id`, `round_id`, `customer_id`, `fulfillment_method` (`pickup`/`delivery`), `delivery_address`, `district_id`, `contact_phone` (snapshot ณ ตอนจอง), `note`, `status` (enum: `pending_confirmation`, `confirmed`, `ready`, `completed`, `cancelled`, `no_show`), `requires_confirmation`, `confirmed_at`, `payment_status` (`unpaid`/`paid`), `payment_method` (nullable), `paid_at`, `total_amount`, `needs_customer_notice` (default false), `accepted_substitution_terms_at`, `cancelled_at`, `cancel_reason`, `created_at`

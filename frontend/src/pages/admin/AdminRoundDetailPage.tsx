@@ -1,7 +1,8 @@
+import { plotSupportsCrop } from '../../lib/plotCrops.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
+import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { PlantingRound, Plot } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -30,7 +31,7 @@ interface StepDef {
   title: string;
   subtitle: string;
   icon: string;
-  field: 'seed_date' | 'fertilizing_date' | 'transplant_date' | 'booking_opens_at' | 'harvest_sale_date' | 'sold_out_date' | 'completed_date';
+  field: 'seed_date' | 'fertilizing_date' | 'planting_start_date' | 'transplant_date' | 'booking_opens_at' | 'harvest_sale_date' | 'sold_out_date' | 'completed_date';
   color: string;
 }
 
@@ -55,44 +56,53 @@ const STEPS: StepDef[] = [
   },
   {
     number: 3,
+    key: 'planting_start',
+    title: '3. วันเริ่มปลูก',
+    subtitle: 'เริ่มปลูกหลังระยะอนุบาล',
+    icon: '🌱',
+    field: 'planting_start_date',
+    color: 'lime',
+  },
+  {
+    number: 4,
     key: 'transplanting',
-    title: '3. วันปลูกจริง',
+    title: '4. วันปลูกจริง',
     subtitle: 'ย้ายลงรางปลูกไฮโดรโปนิกส์',
     icon: '🌿',
     field: 'transplant_date',
     color: 'teal',
   },
   {
-    number: 4,
+    number: 5,
     key: 'booking_open',
-    title: '4. เปิดสั่งจองล่วงหน้า',
+    title: '5. เปิดสั่งจองล่วงหน้า',
     subtitle: 'เปิดรับจองผลผลิตล่วงหน้า',
     icon: '🛒',
     field: 'booking_opens_at',
     color: 'emerald',
   },
   {
-    number: 5,
+    number: 6,
     key: 'harvest_sale',
-    title: '5. วันที่พร้อมเก็บและขาย',
+    title: '6. วันที่พร้อมเก็บและขาย',
     subtitle: 'ผลผลิตพร้อมเก็บเกี่ยว & ส่งมอบ',
     icon: '🧺',
     field: 'harvest_sale_date',
     color: 'amber',
   },
   {
-    number: 6,
+    number: 7,
     key: 'sold_out',
-    title: '6. วันที่ขายหมด',
+    title: '7. วันที่ขายหมด',
     subtitle: 'ผลผลิตถูกจอง/ขายหมด',
     icon: '🏷️',
     field: 'sold_out_date',
     color: 'rose',
   },
   {
-    number: 7,
+    number: 8,
     key: 'completed',
-    title: '7. สิ้นสุดรอบ',
+    title: '8. สิ้นสุดรอบ',
     subtitle: 'ส่งมอบครบ ปิดรอบสมบูรณ์',
     icon: '🏁',
     field: 'completed_date',
@@ -172,14 +182,16 @@ export const AdminRoundDetailPage: React.FC = () => {
     } else if (stepNum === 2) {
       defaultVal = currentRound.fertilizing_date || (currentRound.seed_date ? addDaysToDateStr(currentRound.seed_date, 7) : today);
     } else if (stepNum === 3) {
-      defaultVal = currentRound.transplant_date || currentRound.planted_at || (currentRound.seed_date ? addDaysToDateStr(currentRound.seed_date, 14) : today);
+      defaultVal = currentRound.planting_start_date || currentRound.fertilizing_date || today;
     } else if (stepNum === 4) {
-      defaultVal = currentRound.booking_opens_at ? currentRound.booking_opens_at.split('T')[0] : today;
+      defaultVal = currentRound.transplant_date || currentRound.planted_at || (currentRound.seed_date ? addDaysToDateStr(currentRound.seed_date, 14) : today);
     } else if (stepNum === 5) {
-      defaultVal = currentRound.harvest_sale_date || currentRound.expected_harvest_date || currentRound.fulfillment_date || today;
+      defaultVal = toBangkokDateString(currentRound.booking_opens_at) || today;
     } else if (stepNum === 6) {
-      defaultVal = currentRound.sold_out_date || today;
+      defaultVal = currentRound.harvest_sale_date || currentRound.expected_harvest_date || currentRound.fulfillment_date || today;
     } else if (stepNum === 7) {
+      defaultVal = currentRound.sold_out_date || today;
+    } else if (stepNum === 8) {
       defaultVal = currentRound.completed_date || today;
     }
 
@@ -195,7 +207,7 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const handleConfirmStepUpdate = async () => {
     if (!round || !inputDate) return;
-    if (activeStepTab === 4 && !isBookingActuallyOpen) {
+    if (activeStepTab === 5 && !isBookingActuallyOpen) {
       setError('กรุณาเปิดรับจองที่หน้า “การเปิดสั่งจองล่วงหน้า” และรอจนถึงเวลาเปิดก่อน จึงจะยืนยันไปสถานะถัดไปได้');
       return;
     }
@@ -206,7 +218,7 @@ export const AdminRoundDetailPage: React.FC = () => {
       setError(null);
       
       let formattedDate = inputDate;
-      if (activeStepTab === 4 && inputDate.length === 10) {
+      if (activeStepTab === 5 && inputDate.length === 10) {
         formattedDate = `${inputDate}T08:00:00+07:00`;
       }
 
@@ -220,14 +232,14 @@ export const AdminRoundDetailPage: React.FC = () => {
         growing_days: maxDays,
       };
 
-      if (activeStepTab === 3 && Object.keys(itemDaysMap).length > 0) {
+      if (activeStepTab === 4 && Object.keys(itemDaysMap).length > 0) {
         payload.crop_growing_days = itemDaysMap;
       }
 
       const updated = await api.patch<PlantingRound>(`/admin/rounds/${round.id}/step`, payload);
-      setRound(updated);
+      setRound((previous) => previous ? { ...previous, ...updated } : updated);
 
-      if (activeStepTab === 7) {
+      if (activeStepTab === 8) {
         setActionSuccess(`🏁 สิ้นสุดรอบการปลูก "${round.name}" เรียบร้อยแล้ว! กำลังนำทางไปยังหน้าประวัติรอบปลูก...`);
         setTimeout(() => {
           navigate('/admin/rounds/history');
@@ -236,12 +248,12 @@ export const AdminRoundDetailPage: React.FC = () => {
       }
 
       // Advance to next step tab if available
-      const nextStep = activeStepTab < 7 ? activeStepTab + 1 : 7;
+      const nextStep = activeStepTab < 8 ? activeStepTab + 1 : 8;
       setActiveStepTab(nextStep);
       initDateForStep(nextStep, updated);
 
       setActionSuccess(
-        activeStepTab === 4 && new Date(formattedDate) > new Date()
+        activeStepTab === 5 && new Date(formattedDate) > new Date()
           ? `ตั้งเวลาเปิดจองของ "${round.name}" แล้ว ลูกค้าจะเริ่มจองได้เมื่อถึงวันที่กำหนด`
           : `อัปเดต "${STEPS[activeStepTab - 1].title}" เรียบร้อยแล้ว`
       );
@@ -279,20 +291,23 @@ export const AdminRoundDetailPage: React.FC = () => {
     && new Date(round.booking_opens_at).getTime() <= clockNow
     && !round.booking_closes_at;
   const growingDays = round.growing_days || 45;
-  const calculatedHarvestDate = inputDate && activeStepTab === 3 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
+  const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
   const totalBookable = Number(round.total_bookable_kg || 0);
   const totalBooked = Number(round.total_booked_kg || 0);
   const totalAvailable = Number(round.total_available_kg || Math.max(0, totalBookable - totalBooked));
   const percentSold = totalBookable > 0 ? Math.min(100, (totalBooked / totalBookable) * 100) : 0;
   const orders = (round as any).orders || [];
+  const totalRevenue = orders
+    .filter((order: any) => order.status !== 'cancelled')
+    .reduce((sum: number, order: any) => sum + Math.round(Number(order.total_amount || 0) * 100), 0) / 100;
 
   // Plot capacity metrics
   const activePlots = plots.filter((p) => p.is_active);
   const totalActivePlotSlots = activePlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
   const totalRoundSlotsNeeded = (round.round_items || []).reduce((sum: number, it: any) => {
     const rate = it.crops?.slots_per_kg ? Number(it.crops.slots_per_kg) : 4.0;
-    return sum + Math.round((Number(it.bookable_qty_kg) || 0) * rate);
+    return sum + (it.plant_count ?? Math.round((Number(it.bookable_qty_kg) || 0) * rate));
   }, 0);
   const remainingPlotSlots = totalActivePlotSlots - totalRoundSlotsNeeded;
   const avgSlotsPerPlot = activePlots.length > 0 ? totalActivePlotSlots / activePlots.length : 250;
@@ -301,7 +316,7 @@ export const AdminRoundDetailPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top back link & Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <Link
             to="/admin/rounds"
@@ -320,34 +335,39 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
 
         {/* Quick summary numbers */}
-        <div className="flex items-center gap-3 self-start sm:self-auto bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
-          <div className="px-3 border-r border-slate-100 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 items-center gap-3 self-stretch xl:self-auto bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+          <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">เปิดจองรวม</span>
             <span className="text-base font-black text-slate-800">{totalBookable.toFixed(1)} กก.</span>
           </div>
-          <div className="px-3 border-r border-slate-100 text-center">
+          <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-emerald-600 block">จองแล้ว</span>
             <span className="text-base font-black text-emerald-700">{totalBooked.toFixed(1)} กก.</span>
           </div>
-          <div className="px-3 text-center">
+          <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-sky-600 block">คงเหลือ</span>
             <span className="text-base font-black text-sky-700">{totalAvailable.toFixed(1)} กก.</span>
+          </div>
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-center" title="ยอดรวมออเดอร์ที่ไม่ถูกยกเลิก รวมทั้งชำระแล้วและยังไม่ชำระ">
+            <span className="block text-[10px] font-bold text-amber-700">รายได้รวมรอบนี้</span>
+            <span className="block whitespace-nowrap text-base font-black text-amber-900">฿{totalRevenue.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="block text-[9px] text-amber-700">ยอดออเดอร์ไม่รวมยกเลิก</span>
           </div>
         </div>
       </div>
 
-      {/* Interactive 7-Step Visual Stepper Bar */}
+      {/* Interactive 8-Step Visual Stepper Bar */}
       <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs overflow-x-auto">
-        <div className="flex items-center min-w-[840px] justify-between relative">
+        <div className="flex items-center min-w-[960px] justify-between relative">
           {/* Background progress bar line */}
           <div className="absolute top-1/2 left-6 right-6 -translate-y-1/2 h-1 bg-slate-100 z-0" />
           <div
             className="absolute top-1/2 left-6 -translate-y-1/2 h-1 bg-emerald-500 z-0 transition-all duration-500"
-            style={{ width: `${Math.max(0, Math.min(100, ((currentStep - 1) / 6) * 100))}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, ((currentStep - 1) / 7) * 100))}%` }}
           />
 
           {STEPS.map((step) => {
-            const isCompleted = step.number < currentStep || (isRoundCompleted && step.number === 7);
+            const isCompleted = step.number < currentStep || (isRoundCompleted && step.number === 8);
             const isCurrent = step.number === currentStep && !isRoundCompleted;
             const isSelected = step.number === activeStepTab;
             const recordedDate = (round as any)[step.field];
@@ -406,7 +426,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">
-                  ขั้นตอนที่ {activeStepTab} จาก 7
+                  ขั้นตอนที่ {activeStepTab} จาก 8
                 </span>
                 {activeStepTab === currentStep && !isRoundCompleted && (
                   <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
@@ -414,7 +434,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     กำลังดำเนินการ
                   </span>
                 )}
-                {(activeStepTab < currentStep || (isRoundCompleted && activeStepTab === 7)) && (
+                {(activeStepTab < currentStep || (isRoundCompleted && activeStepTab === 8)) && (
                   <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     ยืนยันแล้ว
@@ -446,7 +466,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
-            {activeStepTab === 4 ? (
+            {activeStepTab === 5 ? (
               <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${isBookingActuallyOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
                 {isBookingActuallyOpen
                   ? `รับจองเปิดแล้วตั้งแต่ ${formatDateTimeDMY(round.booking_opens_at)} ยืนยันเพื่อไปยังขั้นตอนถัดไปได้`
@@ -467,15 +487,16 @@ export const AdminRoundDetailPage: React.FC = () => {
               <p className="text-[11px] text-slate-500 mt-1.5">
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
                 {activeStepTab === 2 && '🧪 ระบุวันที่เริ่มให้ปุ๋ย AB สูตรอนุบาล (ปกติ 5-7 วันหลังปักเม็ด)'}
-                {activeStepTab === 3 && '🌿 ระบุวันที่ย้ายต้นกล้าลงรางปลูกจริง (ระบบจะคำนวณวันเก็บเกี่ยวให้)'}
-                {activeStepTab === 5 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
-                {activeStepTab === 6 && '🏷️ ระบุวันที่ผลผลิตในรอบนี้ถูกจองหรือขายหมดแล้ว'}
-                {activeStepTab === 7 && '🏁 ระบุวันที่จัดส่งมอบเสร็จสิ้น และปิดรอบการปลูก'}
+                {activeStepTab === 3 && '🌱 ระบุวันเริ่มปลูกหลังจากใส่ปุ๋ยและอนุบาลต้นกล้า'}
+                {activeStepTab === 4 && '🌿 ระบุวันที่ย้ายต้นกล้าลงรางปลูกจริง (ระบบจะคำนวณวันเก็บเกี่ยวให้)'}
+                {activeStepTab === 6 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
+                {activeStepTab === 7 && '🏷️ ระบุวันที่ผลผลิตในรอบนี้ถูกจองหรือขายหมดแล้ว'}
+                {activeStepTab === 8 && '🏁 ระบุวันที่จัดส่งมอบเสร็จสิ้น และปิดรอบการปลูก'}
               </p>
             </div>}
 
-            {/* Special Feature for Step 3: Auto Harvest Calculation per Vegetable */}
-            {activeStepTab === 3 && (
+            {/* Special Feature for Step 4: Auto Harvest Calculation per Vegetable */}
+            {activeStepTab === 4 && (
               <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/90 border border-sky-200 space-y-3.5">
                 <div className="flex items-center gap-2 font-bold text-sky-950 text-xs sm:text-sm">
                   <Sparkles className="w-4 h-4 text-sky-600 flex-shrink-0" />
@@ -550,14 +571,14 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <p className="text-[11px] text-sky-800/80 pt-1 border-t border-sky-200/60 flex items-center gap-1.5">
                   <span className="font-bold">💡 หมายเหตุ:</span>
                   <span>
-                    วันที่พร้อมเก็บและขายคำนวณแยกของแต่ละผัก โดยอิงจาก <strong>จำนวนวันปลูกที่กรอกตอนเพิ่มผักในรอบนี้</strong> + <strong>วันปลูกจริง (Step 3)</strong>
+                    วันที่พร้อมเก็บและขายคำนวณแยกของแต่ละผัก โดยอิงจาก <strong>จำนวนวันปลูกที่กรอกตอนเพิ่มผักในรอบนี้</strong> + <strong>วันปลูกจริง (Step 4)</strong>
                   </span>
                 </p>
               </div>
             )}
 
-            {/* Special Feature for Step 4: Display Harvest / Ready-to-Sell Dates as Decision Aid */}
-            {activeStepTab === 4 && (
+            {/* Special Feature for Step 5: Display Harvest / Ready-to-Sell Dates as Decision Aid */}
+            {activeStepTab === 5 && (
               <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-3.5">
                 <div className="flex items-center gap-2 font-bold text-amber-950 text-xs sm:text-sm">
                   <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
@@ -572,13 +593,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                       const itemHarvestDate = addDaysToDateStr(baseDate, itemDays);
                       const cropName = it.crop_name || it.crops?.name || 'ผัก';
 
-                      // Calculate days difference relative to selected booking date (inputDate)
-                      let daysDiff: number | null = null;
-                      if (inputDate && itemHarvestDate) {
-                        const tHarvest = new Date(itemHarvestDate).getTime();
-                        const tOpen = new Date(inputDate).getTime();
-                        daysDiff = Math.round((tHarvest - tOpen) / (1000 * 60 * 60 * 24));
-                      }
+                      // Booking dates are managed on the booking page, not this form.
+                      const daysDiff = differenceInBangkokCalendarDays(round.booking_opens_at, itemHarvestDate);
 
                       return (
                         <div
@@ -624,7 +640,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                   ? `เปิดจองล่วงหน้า ${daysDiff} วัน`
                                   : daysDiff === 0
                                   ? 'เปิดจองวันเดียวกับวันเก็บเกี่ยว'
-                                  : `⚠️ เปิดหลังวันเก็บเกี่ยว ${Math.abs(daysDiff)} วัน`}
+                                  : `⚠️ วันเปิดจองช้ากว่าวันเก็บเกี่ยวที่คำนวณไว้ ${Math.abs(daysDiff)} วัน`}
                               </span>
                             )}
                           </div>
@@ -658,7 +674,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                   <span>สิ้นสุดรอบการปลูกแล้ว{round.completed_date ? ` เมื่อ ${formatDateDMY(round.completed_date)}` : ''}</span>
                 </div>
               ) : <>
-              {(activeStepTab !== 4 || isBookingActuallyOpen) && <button
+              {(activeStepTab !== 5 || isBookingActuallyOpen) && <button
                 type="button"
                 onClick={handleConfirmStepUpdate}
                 disabled={updatingStep || !inputDate}
@@ -671,20 +687,22 @@ export const AdminRoundDetailPage: React.FC = () => {
                     : activeStepTab === 1
                     ? 'กดยืนยันวันที่ปักเม็ด ➔ ไปสถานะถัดไป (วันใส่ปุ๋ย)'
                     : activeStepTab === 2
-                    ? 'กดยืนยันวันใส่ปุ๋ย ➔ ไปสถานะถัดไป (วันปลูกจริง)'
+                    ? 'กดยืนยันวันใส่ปุ๋ย ➔ ไปสถานะถัดไป (วันเริ่มปลูก)'
                     : activeStepTab === 3
-                    ? 'กดยืนยันวันปลูกจริง ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)'
+                    ? 'กดยืนยันวันเริ่มปลูก ➔ ไปสถานะถัดไป (วันปลูกจริง)'
                     : activeStepTab === 4
-                    ? 'ยืนยันเปิดจองแล้ว ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)'
+                    ? 'กดยืนยันวันปลูกจริง ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)'
                     : activeStepTab === 5
-                    ? 'กดยืนยันวันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)'
+                    ? 'ยืนยันเปิดจองแล้ว ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)'
                     : activeStepTab === 6
+                    ? 'กดยืนยันวันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)'
+                    : activeStepTab === 7
                     ? 'กดยืนยันวันที่ขายหมด ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)'
                     : 'กดยืนยันสถานะสิ้นสุดรอบการปลูก'}
                 </span>
               </button>}
 
-              {activeStepTab === 4 && (
+              {activeStepTab === 5 && (
                 !isBookingActuallyOpen ? (
                   <Link
                     to="/admin/bookings"
@@ -705,7 +723,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Column: Visual Status & Step 4 Stock Progress Gauge */}
+          {/* Right Column: Visual Status & Step 5 Stock Progress Gauge */}
           <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-2xs space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">
@@ -797,15 +815,16 @@ export const AdminRoundDetailPage: React.FC = () => {
                         <span className="block">{item.crop_name || item.crops?.name || 'ผักสลัด'}</span>
                         <div className="text-[10px] text-slate-400 mt-0.5">
                           <span>ระยะปลูก: {item.growing_days || item.crops?.growing_days || 45} วัน</span>
+                          {item.plant_count != null && <span className="ml-2 font-semibold text-emerald-700">ปลูก {Number(item.plant_count).toLocaleString()} ต้น</span>}
                           {(() => {
                             const itemPlots: Plot[] = (item.plots && item.plots.length > 0)
                               ? item.plots
                               : (item.plot_ids && item.plot_ids.length > 0)
                               ? activePlots.filter((p) => item.plot_ids?.includes(p.id))
-                              : activePlots.filter((p) => p.crop_id === item.crop_id);
+                              : activePlots.filter((p) => plotSupportsCrop(p, item.crop_id));
 
                             const cropRate = item.crops?.slots_per_kg ? Number(item.crops.slots_per_kg) : 4.0;
-                            const targetSlots = Math.round(bookable * cropRate);
+                            const targetSlots = item.plant_count ?? Math.round(bookable * cropRate);
                             let remainingSlots = targetSlots;
                             const totalAssignedSlots = itemPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
 
@@ -822,7 +841,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                     </Link>
                                   </div>
                                   <p className="text-[10px] text-amber-700">
-                                    เป้าหมาย {bookable} กก. ต้องใช้พื้นที่ประมาณ {targetSlots.toLocaleString()} ช่องปลูก
+                                    {item.plant_count != null ? 'จำนวนที่ปลูก' : 'จำนวนต้นโดยประมาณ'} {targetSlots.toLocaleString()} ต้น · เปิดจอง {bookable} กก.
                                   </p>
                                 </div>
                               );
@@ -833,22 +852,22 @@ export const AdminRoundDetailPage: React.FC = () => {
                                 <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
                                   <span className="font-bold text-slate-700 flex items-center gap-1">
                                     <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>แปลงปลูกที่ใช้ ({itemPlots.length} แปลง รวม {totalAssignedSlots.toLocaleString()} ช่อง):</span>
+                                    <span>แปลงที่ปลูก ({itemPlots.length} แปลง · รองรับรวม {totalAssignedSlots.toLocaleString()} ต้น)</span>
                                   </span>
                                   {targetSlots > totalAssignedSlots ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
                                       <AlertCircle className="w-3 h-3 text-rose-600" />
-                                      <span>พื้นที่ไม่พอ ขาดอีก {(targetSlots - totalAssignedSlots).toLocaleString()} ช่อง</span>
+                                      <span>ต้องเพิ่มแปลงให้รองรับอีก {(targetSlots - totalAssignedSlots).toLocaleString()} ต้น</span>
                                     </span>
                                   ) : totalAssignedSlots > targetSlots ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
                                       <Info className="w-3 h-3 text-sky-600" />
-                                      <span>ความจุเหลือ {(totalAssignedSlots - targetSlots).toLocaleString()} ช่อง</span>
+                                      <span>รองรับได้อีก {(totalAssignedSlots - targetSlots).toLocaleString()} ต้น</span>
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      <span>ความจุพอดี</span>
+                                      <span>รองรับจำนวนต้นได้พอดี</span>
                                     </span>
                                   )}
                                 </div>
@@ -875,7 +894,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                                 : 'text-slate-400'
                                             }
                                           >
-                                            {pct >= 100 ? 'เต็มแปลง' : pct > 0 ? `ใช้ไป ${pct}%` : 'ว่าง'}
+                                            {pct >= 100 ? 'ปลูกเต็มจำนวน' : pct > 0 ? `ปลูกแล้ว ${pct}%` : 'ยังไม่ได้ปลูก'}
                                           </span>
                                         </div>
                                         <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -886,13 +905,13 @@ export const AdminRoundDetailPage: React.FC = () => {
                                             style={{ width: `${pct}%` }}
                                           />
                                         </div>
-                                        <div className="flex justify-between text-slate-400">
-                                          <span>ใช้ {usedInPlot} / {cap} ช่อง</span>
+                                        <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400">
+                                          <span>ปลูก {usedInPlot} ต้น / รองรับ {cap} ต้น</span>
                                           <span>
                                             {cap - usedInPlot > 0 ? (
-                                              <strong className="text-sky-700">เหลือ {cap - usedInPlot} ช่อง</strong>
+                                              <strong className="text-sky-700">รองรับได้อีก {cap - usedInPlot} ต้น</strong>
                                             ) : (
-                                              <strong className="text-emerald-700">เต็มพอดี</strong>
+                                              <strong className="text-emerald-700">ปลูกครบจำนวนที่รองรับ</strong>
                                             )}
                                           </span>
                                         </div>

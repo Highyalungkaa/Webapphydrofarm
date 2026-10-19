@@ -12,7 +12,7 @@ export const EquipmentAdminLayout: React.FC = () => {
     { to: '/admin/equipment/products', label: 'สินค้าและสต็อก', icon: PackageSearch },
     { to: '/admin/equipment/orders', label: 'คำสั่งซื้ออุปกรณ์', icon: Truck },
     { to: '/admin/equipment/reports', label: 'รายงานอุปกรณ์', icon: BarChart3 },
-    { to: '/admin/equipment/settings/shipping', label: 'ตั้งค่าค่าส่ง', icon: Settings2 },
+    { to: '/admin/equipment/settings/shipping', label: 'ค่าส่ง / การชำระเงิน', icon: Settings2 },
   ];
 
   if (isLoading) return <div className="grid min-h-screen place-items-center bg-teal-50"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-teal-700" /></div>;

@@ -117,8 +117,6 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
           name,
           expected_harvest_date,
           fulfillment_date,
-          pickup_start_time,
-          pickup_end_time,
           delivery_start_time,
           delivery_end_time,
           status
@@ -169,8 +167,6 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           name,
           expected_harvest_date,
           fulfillment_date,
-          pickup_start_time,
-          pickup_end_time,
           delivery_start_time,
           delivery_end_time,
           status

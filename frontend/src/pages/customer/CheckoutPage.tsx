@@ -1,3 +1,4 @@
+import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
@@ -144,7 +145,7 @@ export const CheckoutPage: React.FC = () => {
       </Link>
 
       <CustomerPageHeader eyebrow="ขั้นตอนสุดท้าย · ผักสดจากฟาร์ม" title="ยืนยันการสั่งจองผัก" description="ตรวจสอบรายการ เลือกวิธีรับสินค้า และกรอกข้อมูลติดต่อก่อนยืนยัน" icon={<ShoppingBag className="h-8 w-8" />}>
-        <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{items.length} ชนิด · {totalKg.toFixed(1)} กก.</span>
+        <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{items.length} ชนิด · {formatKg(totalKg)} กก.</span>
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold">ชำระเงินเมื่อรับผัก</span>
       </CustomerPageHeader>
 
@@ -185,7 +186,7 @@ export const CheckoutPage: React.FC = () => {
                 <div>
                   <span className="font-semibold text-slate-800">{i.crop_name}</span>
                   <div className="text-slate-500 text-xs">
-                    ฿{i.price_per_kg.toFixed(0)} × {i.qty_kg.toFixed(1)} กก.
+                    ฿{i.price_per_kg.toFixed(0)} × {formatKg(i.qty_kg)} กก.
                   </div>
                 </div>
                 <span className="font-bold text-slate-900">
@@ -195,7 +196,7 @@ export const CheckoutPage: React.FC = () => {
             ))}
 
             <div className="pt-3 flex items-center justify-between text-sm sm:text-base font-extrabold border-t border-slate-200">
-              <span className="text-slate-700">รวมทั้งหมด ({totalKg.toFixed(1)} กก.)</span>
+              <span className="text-slate-700">รวมทั้งหมด ({formatKg(totalKg)} กก.)</span>
               <span className="text-emerald-800">฿{totalAmount.toLocaleString()}</span>
             </div>
           </div>

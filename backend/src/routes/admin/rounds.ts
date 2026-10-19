@@ -1,3 +1,5 @@
+import { plantCountToKg } from '../../services/plantingQuantities.js';
+import { getPlotCropIds } from '../../services/plotCrops.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { getSupabaseClient, supabaseAdmin } from '../../config/supabase.js';
@@ -10,6 +12,7 @@ router.use(requireAuth, requireAdmin);
 const roundItemInputSchema = z.object({
   id: z.string().uuid().optional(),
   crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง'),
+  plant_count: z.number().int().min(1, 'จำนวนต้นต้องเป็นจำนวนเต็มมากกว่า 0').optional().nullable(),
   estimated_qty_kg: z.number().min(0, 'ประมาณการผลผลิตต้องไม่ต่ำกว่า 0'),
   bookable_qty_kg: z.number().min(0, 'จำนวนที่เปิดให้จองต้องไม่ต่ำกว่า 0'),
   price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ต่ำกว่า 0'),
@@ -25,14 +28,13 @@ const roundSchema = z.object({
   expected_harvest_date: z.string().optional(),
   booking_opens_at: z.string().optional(),
   fulfillment_date: z.string().optional(),
-  pickup_start_time: z.string().optional(),
-  pickup_end_time: z.string().optional(),
   delivery_start_time: z.string().optional(),
   delivery_end_time: z.string().optional(),
   status: z.enum(['draft', 'growing', 'booking_open', 'booking_closed', 'harvested', 'completed', 'cancelled']).default('draft'),
-  current_step: z.number().int().min(1).max(7).optional(),
+  current_step: z.number().int().min(1).max(8).optional(),
   seed_date: z.string().optional().nullable(),
   fertilizing_date: z.string().optional().nullable(),
+  planting_start_date: z.string().optional().nullable(),
   transplant_date: z.string().optional().nullable(),
   harvest_sale_date: z.string().optional().nullable(),
   sold_out_date: z.string().optional().nullable(),
@@ -42,7 +44,7 @@ const roundSchema = z.object({
 });
 
 const stepUpdateSchema = z.object({
-  step: z.number().int().min(1).max(7),
+  step: z.number().int().min(1).max(8),
   date: z.string().min(10, 'กรุณาระบุวันที่'),
   growing_days: z.number().int().min(1).optional(),
   crop_growing_days: z.record(z.string(), z.number()).optional(),
@@ -95,18 +97,21 @@ export function isRoundBookingCreated(round: any): boolean {
 
 export function computeCurrentStep(round: any): number {
   if (round.status === 'completed' || round.completed_date) {
-    return 7;
+    return 8;
   }
-  if (round.sold_out_date && Number(round.current_step) >= 6) {
-    return 7;
+  if (round.sold_out_date && Number(round.current_step) >= 7) {
+    return 8;
   }
-  if (round.harvest_sale_date && Number(round.current_step) >= 5) {
-    return 6;
+  if (round.harvest_sale_date && Number(round.current_step) >= 6) {
+    return 7;
   }
   if (round.current_step) {
     return Number(round.current_step);
   }
   if (round.transplant_date || round.status === 'growing' || round.status === 'booking_open' || round.status === 'booking_closed') {
+    return 5;
+  }
+  if (round.planting_start_date) {
     return 4;
   }
   if (round.fertilizing_date) {
@@ -131,6 +136,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         round_items (
           id,
           crop_id,
+          plant_count,
           estimated_qty_kg,
           bookable_qty_kg,
           actual_qty_kg,
@@ -231,6 +237,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         round_items (
           id,
           crop_id,
+          plant_count,
           estimated_qty_kg,
           bookable_qty_kg,
           actual_qty_kg,
@@ -358,7 +365,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       }
       const { data: activeCropRows, error: cropError } = await db
         .from('crops')
-        .select('id')
+        .select('id, slots_per_kg')
         .in('id', cropIds)
         .eq('is_active', true);
       if (cropError || (activeCropRows || []).length !== cropIds.length) {
@@ -366,27 +373,52 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
 
+      for (const item of items) {
+        if (item.plant_count != null) {
+          const crop = activeCropRows?.find((crop) => crop.id === item.crop_id);
+          const weightKg = plantCountToKg(item.plant_count, Number(crop?.slots_per_kg) || 4);
+          item.estimated_qty_kg = weightKg;
+          item.bookable_qty_kg = weightKg;
+        }
+      }
+
       const selectedPlotIds = items.flatMap((item) => item.plot_ids || []);
       const uniquePlotIds = [...new Set(selectedPlotIds)];
-      if (items.some((item) => !item.plot_ids?.length) || uniquePlotIds.length !== selectedPlotIds.length) {
-        res.status(400).json({ error: 'กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก โดยไม่ใช้แปลงซ้ำกันในรอบเดียว' });
+      if (items.some((item) => !item.plot_ids?.length || new Set(item.plot_ids).size !== item.plot_ids.length)) {
+        res.status(400).json({ error: 'กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก และไม่เลือกแปลงเดิมซ้ำในรายการผักเดียวกัน' });
         return;
       }
       const { data: selectedPlots, error: plotsError } = await db
         .from('plots')
-        .select('id, crop_id, is_active')
-        .in('id', uniquePlotIds);
+        .select('id, crop_id, crop_ids, is_active, slot_capacity')
+        .in('id', uniquePlotIds)
+        .order('zone_name', { ascending: true })
+        .order('name', { ascending: true });
       if (plotsError || (selectedPlots || []).length !== uniquePlotIds.length) {
         res.status(400).json({ error: 'ไม่พบแปลงปลูกที่เลือก กรุณาโหลดข้อมูลแปลงใหม่' });
         return;
       }
       const selectedPlotMap = new Map((selectedPlots || []).map((plot) => [plot.id, plot]));
+      const remainingSlots = new Map((selectedPlots || []).map((plot) => [plot.id, Number(plot.slot_capacity)]));
       for (const item of items) {
         if (!item.plot_ids?.every((plotId) => {
           const plot = selectedPlotMap.get(plotId);
-          return plot?.is_active && plot.crop_id === item.crop_id;
+          return plot?.is_active && getPlotCropIds(plot).includes(item.crop_id);
         })) {
           res.status(400).json({ error: 'เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น' });
+          return;
+        }
+        const crop = activeCropRows?.find((crop) => crop.id === item.crop_id);
+        let needed = item.plant_count ?? Math.round(Math.max(item.estimated_qty_kg, item.bookable_qty_kg) * (Number(crop?.slots_per_kg) || 4));
+        for (const plot of selectedPlots || []) {
+          if (!item.plot_ids.includes(plot.id)) continue;
+          const available = remainingSlots.get(plot.id) || 0;
+          const allocated = Math.min(available, needed);
+          remainingSlots.set(plot.id, available - allocated);
+          needed -= allocated;
+        }
+        if (needed > 0) {
+          res.status(400).json({ error: 'พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิดที่ใช้แปลงร่วมกัน กรุณาปรับจำนวนปลูกหรือเพิ่มแปลง' });
           return;
         }
       }
@@ -403,6 +435,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       status: 'draft',
       seed_date: initialSeedDate,
       fertilizing_date: null,
+      planting_start_date: null,
       transplant_date: null,
       harvest_sale_date: null,
       sold_out_date: null,
@@ -413,8 +446,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       booking_opens_at: inputRoundData.booking_opens_at || new Date().toISOString(),
       booking_closes_at: null,
       fulfillment_date: inputRoundData.fulfillment_date || initialHarvestDate,
-      pickup_start_time: inputRoundData.pickup_start_time || '09:00:00',
-      pickup_end_time: inputRoundData.pickup_end_time || '17:00:00',
       delivery_start_time: inputRoundData.delivery_start_time || '13:00:00',
       delivery_end_time: inputRoundData.delivery_end_time || '16:30:00',
       notes: (() => {
@@ -458,6 +489,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       const itemsToInsert = items.map((i) => ({
         round_id: createdRound.id,
         crop_id: i.crop_id,
+        plant_count: i.plant_count ?? null,
         estimated_qty_kg: i.estimated_qty_kg || i.bookable_qty_kg,
         bookable_qty_kg: i.bookable_qty_kg,
         price_per_kg: i.price_per_kg,
@@ -494,7 +526,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
   }
 });
 
-// PATCH /api/admin/rounds/:id/step - Stepper Lifecycle Progression (6 Steps)
+// PATCH /api/admin/rounds/:id/step - Stepper Lifecycle Progression (8 Steps)
 router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
@@ -519,11 +551,11 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
     }
 
     const currentStep = Number(currentRound.current_step || 1);
-    if (step > currentStep && !(step === 7 && currentStep === 6)) {
+    if (step > currentStep && !(step === 8 && currentStep === 7)) {
       res.status(400).json({ error: 'กรุณายืนยันสถานะก่อนหน้าให้ครบก่อนจึงจะไปสถานะถัดไปได้' });
       return;
     }
-    if (step === 4 && (
+    if (step === 5 && (
       currentRound.status !== 'booking_open'
       || !currentRound.booking_opens_at
       || new Date(currentRound.booking_opens_at).getTime() > Date.now()
@@ -562,14 +594,20 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
         break;
       }
       case 2: {
-        // Step 2: วันใส่ปุ๋ย ➔ ไปสถานะถัดไป (ปลูกจริง)
+        // Step 2: วันใส่ปุ๋ย ➔ ไปสถานะถัดไป (เริ่มปลูก)
         updatePayload.fertilizing_date = date;
         updatePayload.current_step = 3;
         updatePayload.status = 'draft';
         break;
       }
       case 3: {
-        // Step 3: วันปลูกจริง ➔ ระบบคำนวณวันเก็บเกี่ยวตามเวลาปลูกผัก ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)
+        updatePayload.planting_start_date = date;
+        updatePayload.current_step = 4;
+        updatePayload.status = 'draft';
+        break;
+      }
+      case 4: {
+        // Step 4: วันปลูกจริง ➔ ระบบคำนวณวันเก็บเกี่ยวตามเวลาปลูกผัก ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)
         let days = growing_days || currentRound.growing_days || 45;
         if (crop_growing_days && Object.keys(crop_growing_days).length > 0) {
           const maxDays = Math.max(...Object.values(crop_growing_days));
@@ -582,33 +620,33 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
         updatePayload.growing_days = days;
         updatePayload.expected_harvest_date = calculatedHarvest;
         updatePayload.fulfillment_date = calculatedHarvest;
-        updatePayload.current_step = 4;
+        updatePayload.current_step = 5;
         updatePayload.status = 'growing';
         break;
       }
-      case 4: {
-        // The booking page owns the opening schedule; this confirmation advances after booking is live.
-        updatePayload.current_step = 5;
-        break;
-      }
       case 5: {
-        // Step 5: วันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)
-        updatePayload.harvest_sale_date = date;
+        // The booking page owns the opening schedule; this confirmation advances after booking is live.
         updatePayload.current_step = 6;
         break;
       }
       case 6: {
-        // Step 6: วันที่ขายหมด ➔ ปิดรับจอง ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)
-        updatePayload.sold_out_date = date;
-        updatePayload.booking_closes_at = new Date().toISOString();
-        updatePayload.current_step = 6;
-        updatePayload.status = 'booking_closed';
+        // Step 6: วันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)
+        updatePayload.harvest_sale_date = date;
+        updatePayload.current_step = 7;
         break;
       }
       case 7: {
-        // Step 7: สถานะสิ้นสุด ➔ ปิดรอบสมบูรณ์
-        updatePayload.completed_date = date;
+        // Step 7: วันที่ขายหมด ➔ ปิดรับจอง ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)
+        updatePayload.sold_out_date = date;
+        updatePayload.booking_closes_at = new Date().toISOString();
         updatePayload.current_step = 7;
+        updatePayload.status = 'booking_closed';
+        break;
+      }
+      case 8: {
+        // Step 8: สถานะสิ้นสุด ➔ ปิดรอบสมบูรณ์
+        updatePayload.completed_date = date;
+        updatePayload.current_step = 8;
         updatePayload.status = 'completed';
         break;
       }
@@ -716,6 +754,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           await db
             .from('round_items')
             .update({
+              ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
               estimated_qty_kg: item.estimated_qty_kg,
               bookable_qty_kg: item.bookable_qty_kg,
               price_per_kg: item.price_per_kg,
@@ -728,6 +767,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
             .insert({
               round_id: id,
               crop_id: item.crop_id,
+              ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
               estimated_qty_kg: item.estimated_qty_kg,
               bookable_qty_kg: item.bookable_qty_kg,
               price_per_kg: item.price_per_kg,
@@ -838,8 +878,6 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
     const {
       booking_opens_at,
       fulfillment_date,
-      pickup_start_time,
-      pickup_end_time,
       delivery_start_time,
       delivery_end_time,
     } = req.body;
@@ -859,15 +897,13 @@ router.post('/:id/open-booking', async (req: AuthenticatedRequest, res: Response
 
     const updatePayload: Record<string, any> = {
       status: 'booking_open',
-      current_step: currentRound.current_step || 4,
+      current_step: currentRound.current_step || 5,
       booking_opens_at: opensAt.toISOString(),
       booking_closes_at: null,
       updated_at: new Date().toISOString(),
     };
 
     if (fulfillment_date) updatePayload.fulfillment_date = fulfillment_date;
-    if (pickup_start_time) updatePayload.pickup_start_time = pickup_start_time;
-    if (pickup_end_time) updatePayload.pickup_end_time = pickup_end_time;
     if (delivery_start_time) updatePayload.delivery_start_time = delivery_start_time;
     if (delivery_end_time) updatePayload.delivery_end_time = delivery_end_time;
 
@@ -966,8 +1002,6 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
       name,
       booking_opens_at,
       fulfillment_date,
-      pickup_start_time,
-      pickup_end_time,
       delivery_start_time,
       delivery_end_time,
       status,
@@ -995,8 +1029,6 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
       updatePayload.booking_opens_at = opensAt.toISOString();
     }
     if (fulfillment_date !== undefined) updatePayload.fulfillment_date = fulfillment_date;
-    if (pickup_start_time !== undefined) updatePayload.pickup_start_time = pickup_start_time;
-    if (pickup_end_time !== undefined) updatePayload.pickup_end_time = pickup_end_time;
     if (delivery_start_time !== undefined) updatePayload.delivery_start_time = delivery_start_time;
     if (delivery_end_time !== undefined) updatePayload.delivery_end_time = delivery_end_time;
 
@@ -1012,7 +1044,7 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
     if (status) {
       updatePayload.status = status;
       if (status === 'booking_open') {
-        updatePayload.current_step = 4;
+        updatePayload.current_step = 5;
       }
     }
 

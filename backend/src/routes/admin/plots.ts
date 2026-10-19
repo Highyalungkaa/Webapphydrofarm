@@ -4,13 +4,17 @@ import { getSupabaseClient } from '../../config/supabase.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewares/auth.js';
 import { recordAuditLog } from '../../services/audit.js';
 
+import { getPlotCropIds } from '../../services/plotCrops.js';
+import { getPlotRoundTimeline } from '../../services/plotRoundTimeline.js';
+
 const router = Router();
 router.use(requireAuth, requireAdmin);
 
 const plotSchema = z.object({
   name: z.string().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
   zone_name: z.string().min(1, 'กรุณาระบุชื่อโซน').max(100),
-  slot_capacity: z.number().int().min(1, 'จำนวนช่องปลูก (slot) ต้องมากกว่า 0'),
+  slot_capacity: z.number().int().min(1, 'จำนวนต้น ต้องมากกว่า 0'),
+  crop_ids: z.array(z.string().uuid('รหัสชนิดผักไม่ถูกต้อง')).optional(),
   crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง').optional().nullable(),
   is_active: z.boolean().default(true),
   notes: z.string().optional().nullable(),
@@ -42,7 +46,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       query = query.eq('is_active', is_active === 'true');
     }
     if (crop_id && typeof crop_id === 'string') {
-      query = query.eq('crop_id', crop_id);
+      query = query.contains('crop_ids', [crop_id]);
     }
 
     const { data: plots, error } = await query;
@@ -69,13 +73,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     // Normalize plots to ensure is_active is boolean
     const normalizedPlots = (plots || []).map((p: any) => ({
       ...p,
+      crop_ids: getPlotCropIds(p),
       is_active: p.is_active !== undefined ? !!p.is_active : p.status !== 'empty',
     }));
 
     const usage = new Map<string, {
       used_slots: number;
       crop_names: string[];
-      occupying_rounds: Array<{ id: string; name: string; crop_name: string; used_slots: number }>;
+      occupying_rounds: Array<{ id: string; name: string; crop_name: string; used_slots: number } & ReturnType<typeof getPlotRoundTimeline>>;
     }>();
     for (const plot of normalizedPlots) {
       usage.set(plot.id, { used_slots: 0, crop_names: [], occupying_rounds: [] });
@@ -86,9 +91,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       .from('planting_rounds')
       .select(`
         id, name, status, current_step, completed_date, sold_out_date, notes,
+        seed_date, fertilizing_date, planting_start_date, transplant_date, planted_at, growing_days,
         round_items (
-          crop_id, estimated_qty_kg, bookable_qty_kg,
-          crops (name, slots_per_kg)
+          crop_id, plant_count, estimated_qty_kg, bookable_qty_kg,
+          crops (name, slots_per_kg, growing_days)
         )
       `)
       .order('created_at', { ascending: true });
@@ -99,7 +105,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     for (const round of rounds || []) {
       if (round.status === 'completed' || round.status === 'cancelled' || round.completed_date ||
-          Number(round.current_step) >= 7 || (round.sold_out_date && Number(round.current_step) >= 6)) continue;
+          Number(round.current_step) >= 8 || (round.sold_out_date && Number(round.current_step) >= 7)) continue;
 
       let notedPlotIds: Record<string, string[]> = {};
       try {
@@ -112,12 +118,12 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       for (const item of round.round_items || []) {
         const crop = item.crops as { name?: string; slots_per_kg?: number } | null;
         const slotsPerKg = Number(crop?.slots_per_kg) > 0 ? Number(crop?.slots_per_kg) : 4;
-        let slotsNeeded = Math.max(0, Math.round(Math.max(Number(item.estimated_qty_kg || 0), Number(item.bookable_qty_kg || 0)) * slotsPerKg));
+        let slotsNeeded = item.plant_count ?? Math.max(0, Math.round(Math.max(Number(item.estimated_qty_kg || 0), Number(item.bookable_qty_kg || 0)) * slotsPerKg));
         const fromNotes = notedPlotIds[item.crop_id];
         const assignedIds = Array.isArray(fromNotes) ? fromNotes : [];
         const assignedPlots = assignedIds.length > 0
           ? normalizedPlots.filter((plot) => assignedIds.includes(plot.id))
-          : normalizedPlots.filter((plot) => plot.crop_id === item.crop_id);
+          : normalizedPlots.filter((plot) => getPlotCropIds(plot).includes(item.crop_id));
         if (slotsNeeded > 0 && assignedPlots.length === 0) {
           unassignedRoundItems.push({
             round_id: round.id,
@@ -135,7 +141,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           plotUsage.used_slots += usedHere;
           const cropName = crop?.name || 'ไม่ระบุชนิดผัก';
           if (!plotUsage.crop_names.includes(cropName)) plotUsage.crop_names.push(cropName);
-          plotUsage.occupying_rounds.push({ id: round.id, name: round.name, crop_name: cropName, used_slots: usedHere });
+          plotUsage.occupying_rounds.push({
+            id: round.id, name: round.name, crop_name: cropName, used_slots: usedHere,
+            ...getPlotRoundTimeline(round, item),
+          });
           slotsNeeded -= usedHere;
         }
       }
@@ -167,13 +176,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    const { name, zone_name, slot_capacity, crop_id, is_active, notes } = parsed.data;
+    const { name, zone_name, slot_capacity, crop_id, crop_ids, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
-    if (crop_id) {
-      const { data: crop, error: cropError } = await db.from('crops').select('id, is_active').eq('id', crop_id).maybeSingle();
-      if (cropError || !crop || !crop.is_active) {
-        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งาน' });
+    const selectedCropIds = [...new Set(crop_ids ?? (crop_id ? [crop_id] : []))];
+    if (selectedCropIds.length) {
+      const { data: selectedCrops, error: cropError } = await db.from('crops').select('id, is_active').in('id', selectedCropIds);
+      if (cropError || selectedCrops?.length !== selectedCropIds.length || selectedCrops.some((crop) => !crop.is_active)) {
+        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งานและมีอยู่ในระบบ' });
         return;
       }
     }
@@ -195,7 +205,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     // 3. Capacity check
     if (slot_capacity > availableSlots) {
       res.status(400).json({
-        error: `จำนวนช่องปลูกของแปลงนี้ (${slot_capacity.toLocaleString()} ช่อง) เกินโควตาที่จัดสรรได้ (ความจุฟาร์มทั้งหมด: ${farmTotalSlots.toLocaleString()} ช่อง, จัดสรรไปแล้ว: ${currentAllocated.toLocaleString()} ช่อง, เหลือสร้างได้อีกเพียง: ${Math.max(0, availableSlots).toLocaleString()} ช่อง)`,
+        error: `จำนวนต้นของแปลงนี้ (${slot_capacity.toLocaleString()} ต้น) เกินโควตาที่จัดสรรได้ (ความจุฟาร์มทั้งหมด: ${farmTotalSlots.toLocaleString()} ต้น, จัดสรรไปแล้ว: ${currentAllocated.toLocaleString()} ต้น, เหลือสร้างได้อีกเพียง: ${Math.max(0, availableSlots).toLocaleString()} ต้น)`,
       });
       return;
     }
@@ -207,7 +217,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         name: name.trim(),
         zone_name: zone_name.trim(),
         slot_capacity,
-        crop_id: crop_id || null,
+        crop_id: selectedCropIds[0] || null,
+        crop_ids: selectedCropIds,
         is_active,
         status: is_active ? 'growing' : 'empty', // backward compatibility
         notes: notes ? notes.trim() : null,
@@ -255,7 +266,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
-    const { name, zone_name, slot_capacity, crop_id, is_active, notes } = parsed.data;
+    const { name, zone_name, slot_capacity, crop_id, crop_ids, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
     // 1. Get farm_total_slots
@@ -278,17 +289,23 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     // 3. Capacity check
     if (slot_capacity > availableForThis) {
       res.status(400).json({
-        error: `จำนวนช่องปลูก (${slot_capacity.toLocaleString()} ช่อง) เกินโควตาความจุฟาร์ม (ความจุฟาร์ม: ${farmTotalSlots.toLocaleString()} ช่อง, แปลงอื่นๆ ใช้ไป: ${otherAllocated.toLocaleString()} ช่อง, แปลงนี้เพิ่มได้สูงสุด: ${Math.max(0, availableForThis).toLocaleString()} ช่อง)`,
+        error: `จำนวนต้น (${slot_capacity.toLocaleString()} ต้น) เกินโควตาความจุฟาร์ม (ความจุฟาร์ม: ${farmTotalSlots.toLocaleString()} ต้น, แปลงอื่นๆ ใช้ไป: ${otherAllocated.toLocaleString()} ต้น, แปลงนี้เพิ่มได้สูงสุด: ${Math.max(0, availableForThis).toLocaleString()} ต้น)`,
       });
       return;
     }
 
     const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
 
-    if (crop_id && crop_id !== oldPlot?.crop_id) {
-      const { data: crop, error: cropError } = await db.from('crops').select('id, is_active').eq('id', crop_id).maybeSingle();
-      if (cropError || !crop || !crop.is_active) {
-        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งาน' });
+    if (!oldPlot) {
+      res.status(404).json({ error: 'ไม่พบแปลงปลูก' });
+      return;
+    }
+    const selectedCropIds = [...new Set(crop_ids ?? (crop_id !== undefined ? (crop_id ? [crop_id] : []) : getPlotCropIds(oldPlot)))];
+    if (selectedCropIds.length) {
+      const { data: selectedCrops, error: cropError } = await db.from('crops').select('id, is_active').in('id', selectedCropIds);
+      const previousIds = getPlotCropIds(oldPlot);
+      if (cropError || selectedCrops?.length !== selectedCropIds.length || selectedCrops.some((crop) => !crop.is_active && !previousIds.includes(crop.id))) {
+        res.status(400).json({ error: 'เพิ่มได้เฉพาะชนิดผักที่เปิดใช้งานและมีอยู่ในระบบ' });
         return;
       }
     }
@@ -300,7 +317,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         name: name.trim(),
         zone_name: zone_name.trim(),
         slot_capacity,
-        crop_id: crop_id || null,
+        crop_id: selectedCropIds[0] || null,
+        crop_ids: selectedCropIds,
         is_active,
         status: is_active ? 'growing' : 'empty', // backward compatibility
         notes: notes ? notes.trim() : null,

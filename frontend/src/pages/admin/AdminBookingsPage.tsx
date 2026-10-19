@@ -58,8 +58,6 @@ export const AdminBookingsPage: React.FC = () => {
   const [roundName, setRoundName] = useState('');
   const [bookingOpensAt, setBookingOpensAt] = useState('');
   const [fulfillmentDate, setFulfillmentDate] = useState('');
-  const [pickupStartTime, setPickupStartTime] = useState('09:00');
-  const [pickupEndTime, setPickupEndTime] = useState('17:00');
   const [deliveryStartTime, setDeliveryStartTime] = useState('13:00');
   const [deliveryEndTime, setDeliveryEndTime] = useState('16:30');
   const [editableItems, setEditableItems] = useState<EditableCropItem[]>([]);
@@ -122,8 +120,6 @@ export const AdminBookingsPage: React.FC = () => {
       setRoundName(targetRound.name || '');
       setFulfillmentDate(targetRound.expected_harvest_date || targetRound.fulfillment_date || '');
       setBookingOpensAt(targetRound.booking_opens_at ? formatBangkokDateTimeInput(targetRound.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
-      setPickupStartTime(targetRound.pickup_start_time ? targetRound.pickup_start_time.slice(0, 5) : '09:00');
-      setPickupEndTime(targetRound.pickup_end_time ? targetRound.pickup_end_time.slice(0, 5) : '17:00');
       setDeliveryStartTime(targetRound.delivery_start_time ? targetRound.delivery_start_time.slice(0, 5) : '13:00');
       setDeliveryEndTime(targetRound.delivery_end_time ? targetRound.delivery_end_time.slice(0, 5) : '16:30');
       setEditableItems(mapItemsToEditable(targetRound));
@@ -149,8 +145,6 @@ export const AdminBookingsPage: React.FC = () => {
     const opensAtDefault = new Date(today);
     opensAtDefault.setHours(8, 0, 0, 0);
     setBookingOpensAt(round.booking_opens_at ? formatBangkokDateTimeInput(round.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
-    setPickupStartTime(round.pickup_start_time ? round.pickup_start_time.slice(0, 5) : '09:00');
-    setPickupEndTime(round.pickup_end_time ? round.pickup_end_time.slice(0, 5) : '17:00');
     setDeliveryStartTime(round.delivery_start_time ? round.delivery_start_time.slice(0, 5) : '13:00');
     setDeliveryEndTime(round.delivery_end_time ? round.delivery_end_time.slice(0, 5) : '16:30');
     setEditableItems(mapItemsToEditable(round));
@@ -201,8 +195,6 @@ export const AdminBookingsPage: React.FC = () => {
         name: roundName,
         booking_opens_at: parseBangkokDateTime(bookingOpensAt).toISOString(),
         fulfillment_date: fulfillmentDate,
-        pickup_start_time: pickupStartTime ? pickupStartTime + ':00' : '09:00:00',
-        pickup_end_time: pickupEndTime ? pickupEndTime + ':00' : '17:00:00',
         delivery_start_time: deliveryStartTime ? deliveryStartTime + ':00' : '13:00:00',
         delivery_end_time: deliveryEndTime ? deliveryEndTime + ':00' : '16:30:00',
         items: editableItems.map((it) => ({
@@ -707,39 +699,17 @@ export const AdminBookingsPage: React.FC = () => {
                   <p className="text-[10px] text-slate-400 mt-1">ลูกค้าจะเริ่มเห็นรอบและสั่งจองได้ตั้งแต่เวลานี้</p>
               </div>
 
-              {/* 3. Fulfillment Date & Hours */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-800 block mb-1">
-                    วันส่งมอบ / วันเก็บเกี่ยว
-                  </label>
-                  <input
-                    type="date"
-                    value={fulfillmentDate}
-                    onChange={(e) => setFulfillmentDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="font-bold text-slate-700 block mb-1 text-[11px]">เวลารับเอง</label>
-                    <input
-                      type="time"
-                      value={pickupStartTime}
-                      onChange={(e) => setPickupStartTime(e.target.value)}
-                      className="w-full p-2 rounded-xl border border-slate-200 text-xs"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="font-bold text-slate-700 block mb-1 text-[11px]">ถึง</label>
-                    <input
-                      type="time"
-                      value={pickupEndTime}
-                      onChange={(e) => setPickupEndTime(e.target.value)}
-                      className="w-full p-2 rounded-xl border border-slate-200 text-xs"
-                    />
-                  </div>
-                </div>
+              {/* 3. Fulfillment Date */}
+              <div>
+                <label className="font-bold text-slate-800 block mb-1">
+                  วันส่งมอบ / วันเก็บเกี่ยว
+                </label>
+                <input
+                  type="date"
+                  value={fulfillmentDate}
+                  onChange={(e) => setFulfillmentDate(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
               {/* 4. Editable Vegetables List with Gauges & Numbers */}
