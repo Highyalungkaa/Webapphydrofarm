@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { CartProvider } from './context/CartContext.js';
@@ -10,40 +10,40 @@ import { AdminLayout } from './components/layout/AdminLayout.js';
 import { EquipmentAdminLayout } from './components/layout/EquipmentAdminLayout.js';
 
 // Customer Pages
-import { HomePage } from './pages/customer/HomePage.js';
-import { RoundDetailPage } from './pages/customer/RoundDetailPage.js';
-import { CheckoutPage } from './pages/customer/CheckoutPage.js';
-import { BookingReviewPage } from './pages/customer/BookingReviewPage.js';
-import { OrdersPage } from './pages/customer/OrdersPage.js';
-import { OrderDetailPage } from './pages/customer/OrderDetailPage.js';
-import { EquipmentOrderDetailPage } from './pages/customer/EquipmentOrderDetailPage.js';
-import { ProfilePage } from './pages/customer/ProfilePage.js';
-import { LoginPage } from './pages/customer/LoginPage.js';
-import { EquipmentShopPage } from './pages/customer/EquipmentShopPage.js';
-import { EquipmentCheckoutPage } from './pages/customer/EquipmentCheckoutPage.js';
+const HomePage = React.lazy(() => import('./pages/customer/HomePage.js').then((module) => ({ default: module.HomePage })));
+const RoundDetailPage = React.lazy(() => import('./pages/customer/RoundDetailPage.js').then((module) => ({ default: module.RoundDetailPage })));
+const CheckoutPage = React.lazy(() => import('./pages/customer/CheckoutPage.js').then((module) => ({ default: module.CheckoutPage })));
+const BookingReviewPage = React.lazy(() => import('./pages/customer/BookingReviewPage.js').then((module) => ({ default: module.BookingReviewPage })));
+const OrdersPage = React.lazy(() => import('./pages/customer/OrdersPage.js').then((module) => ({ default: module.OrdersPage })));
+const OrderDetailPage = React.lazy(() => import('./pages/customer/OrderDetailPage.js').then((module) => ({ default: module.OrderDetailPage })));
+const EquipmentOrderDetailPage = React.lazy(() => import('./pages/customer/EquipmentOrderDetailPage.js').then((module) => ({ default: module.EquipmentOrderDetailPage })));
+const ProfilePage = React.lazy(() => import('./pages/customer/ProfilePage.js').then((module) => ({ default: module.ProfilePage })));
+const LoginPage = React.lazy(() => import('./pages/customer/LoginPage.js').then((module) => ({ default: module.LoginPage })));
+const EquipmentShopPage = React.lazy(() => import('./pages/customer/EquipmentShopPage.js').then((module) => ({ default: module.EquipmentShopPage })));
+const EquipmentCheckoutPage = React.lazy(() => import('./pages/customer/EquipmentCheckoutPage.js').then((module) => ({ default: module.EquipmentCheckoutPage })));
 
 // Admin Pages
-import { AdminDashboardPage } from './pages/admin/AdminDashboardPage.js';
-import { AdminRoundsPage } from './pages/admin/AdminRoundsPage.js';
-import { AdminRoundDetailPage } from './pages/admin/AdminRoundDetailPage.js';
-import { AdminRoundsHistoryPage } from './pages/admin/AdminRoundsHistoryPage.js';
-import { AdminOrdersPage } from './pages/admin/AdminOrdersPage.js';
-import { AdminCropsPage } from './pages/admin/AdminCropsPage.js';
-import { AdminDistrictsPage } from './pages/admin/AdminDistrictsPage.js';
-import { AdminAdminsPage } from './pages/admin/AdminAdminsPage.js';
-import { AdminSettingsPage } from './pages/admin/AdminSettingsPage.js';
-import { AdminAuditPage } from './pages/admin/AdminAuditPage.js';
-import { AdminCustomersPage } from './pages/admin/AdminCustomersPage.js';
-import { AdminFarmPage } from './pages/admin/AdminFarmPage.js';
-import { AdminPlotsPage } from './pages/admin/AdminPlotsPage.js';
-import { AdminBookingsPage } from './pages/admin/AdminBookingsPage.js';
-import { AdminReportsPage } from './pages/admin/AdminReportsPage.js';
-import { AdminEquipmentPage } from './pages/admin/AdminEquipmentPage.js';
-import { AdminEquipmentDashboardPage } from './pages/admin/AdminEquipmentDashboardPage.js';
-import { AdminEquipmentOrdersPage } from './pages/admin/AdminEquipmentOrdersPage.js';
-import { AdminEquipmentOrderHistoryPage } from './pages/admin/AdminEquipmentOrderHistoryPage.js';
-import { AdminEquipmentReportsPage } from './pages/admin/AdminEquipmentReportsPage.js';
-import { AdminEquipmentShippingPage } from './pages/admin/AdminEquipmentShippingPage.js';
+const AdminDashboardPage = React.lazy(() => import('./pages/admin/AdminDashboardPage.js').then((module) => ({ default: module.AdminDashboardPage })));
+const AdminRoundsPage = React.lazy(() => import('./pages/admin/AdminRoundsPage.js').then((module) => ({ default: module.AdminRoundsPage })));
+const AdminRoundDetailPage = React.lazy(() => import('./pages/admin/AdminRoundDetailPage.js').then((module) => ({ default: module.AdminRoundDetailPage })));
+const AdminRoundsHistoryPage = React.lazy(() => import('./pages/admin/AdminRoundsHistoryPage.js').then((module) => ({ default: module.AdminRoundsHistoryPage })));
+const AdminOrdersPage = React.lazy(() => import('./pages/admin/AdminOrdersPage.js').then((module) => ({ default: module.AdminOrdersPage })));
+const AdminCropsPage = React.lazy(() => import('./pages/admin/AdminCropsPage.js').then((module) => ({ default: module.AdminCropsPage })));
+const AdminDistrictsPage = React.lazy(() => import('./pages/admin/AdminDistrictsPage.js').then((module) => ({ default: module.AdminDistrictsPage })));
+const AdminAdminsPage = React.lazy(() => import('./pages/admin/AdminAdminsPage.js').then((module) => ({ default: module.AdminAdminsPage })));
+const AdminSettingsPage = React.lazy(() => import('./pages/admin/AdminSettingsPage.js').then((module) => ({ default: module.AdminSettingsPage })));
+const AdminAuditPage = React.lazy(() => import('./pages/admin/AdminAuditPage.js').then((module) => ({ default: module.AdminAuditPage })));
+const AdminCustomersPage = React.lazy(() => import('./pages/admin/AdminCustomersPage.js').then((module) => ({ default: module.AdminCustomersPage })));
+const AdminFarmPage = React.lazy(() => import('./pages/admin/AdminFarmPage.js').then((module) => ({ default: module.AdminFarmPage })));
+const AdminPlotsPage = React.lazy(() => import('./pages/admin/AdminPlotsPage.js').then((module) => ({ default: module.AdminPlotsPage })));
+const AdminBookingsPage = React.lazy(() => import('./pages/admin/AdminBookingsPage.js').then((module) => ({ default: module.AdminBookingsPage })));
+const AdminReportsPage = React.lazy(() => import('./pages/admin/AdminReportsPage.js').then((module) => ({ default: module.AdminReportsPage })));
+const AdminEquipmentPage = React.lazy(() => import('./pages/admin/AdminEquipmentPage.js').then((module) => ({ default: module.AdminEquipmentPage })));
+const AdminEquipmentDashboardPage = React.lazy(() => import('./pages/admin/AdminEquipmentDashboardPage.js').then((module) => ({ default: module.AdminEquipmentDashboardPage })));
+const AdminEquipmentOrdersPage = React.lazy(() => import('./pages/admin/AdminEquipmentOrdersPage.js').then((module) => ({ default: module.AdminEquipmentOrdersPage })));
+const AdminEquipmentOrderHistoryPage = React.lazy(() => import('./pages/admin/AdminEquipmentOrderHistoryPage.js').then((module) => ({ default: module.AdminEquipmentOrderHistoryPage })));
+const AdminEquipmentReportsPage = React.lazy(() => import('./pages/admin/AdminEquipmentReportsPage.js').then((module) => ({ default: module.AdminEquipmentReportsPage })));
+const AdminEquipmentShippingPage = React.lazy(() => import('./pages/admin/AdminEquipmentShippingPage.js').then((module) => ({ default: module.AdminEquipmentShippingPage })));
 
 // Route Guard for authenticated customers
 const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -68,6 +68,7 @@ export const App: React.FC = () => {
       <AuthProvider>
         <CartProvider>
         <EquipmentCartProvider>
+          <Suspense fallback={<div className="py-20 text-center text-sm text-slate-500">กำลังโหลดหน้า...</div>}>
           <Routes>
             {/* Customer Routes */}
             <Route element={<CustomerLayout />}>
@@ -145,6 +146,7 @@ export const App: React.FC = () => {
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </EquipmentCartProvider>
         </CartProvider>
       </AuthProvider>

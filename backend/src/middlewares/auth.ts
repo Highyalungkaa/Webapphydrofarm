@@ -32,41 +32,18 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 
     // Check if the user is in admin_users table
     // 1. Direct query with supabaseAdmin
-    const { data: adminRecord } = await supabaseAdmin
+    const { data: adminRecord, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('email')
       .ilike('email', user.email.trim())
+      .limit(1)
       .maybeSingle();
-
-    // 2. RPC call with user's token (works even if service role key is not yet set)
-    let isRpcAdmin = false;
-    try {
-      const { data: rpcResult } = await supabaseAdmin.rpc('is_admin');
-      if (rpcResult) isRpcAdmin = true;
-    } catch {
-      // ignore
+    if (adminError) {
+      console.error('Admin lookup error:', adminError);
+      res.status(500).json({ error: 'ไม่สามารถตรวจสอบสิทธิ์ผู้ดูแลระบบได้' });
+      return;
     }
-
-    // 3. Fallback: check with user-scoped client if direct query blocked by RLS
-    if (!adminRecord && !isRpcAdmin) {
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const userClient = createClient(
-          process.env.SUPABASE_URL || '',
-          process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-          {
-            global: { headers: { Authorization: `Bearer ${token}` } },
-            auth: { persistSession: false },
-          }
-        );
-        const { data: userRpc } = await userClient.rpc('is_admin');
-        if (userRpc) isRpcAdmin = true;
-      } catch (err) {
-        console.warn('RPC check fallback error:', err);
-      }
-    }
-
-    const isAdmin = !!adminRecord || isRpcAdmin;
+    const isAdmin = !!adminRecord;
 
     req.user = {
       id: user.id,
