@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { EquipmentProduct } from '../types/index.js';
 import { useAuth } from './AuthContext.js';
 
@@ -9,35 +9,54 @@ interface EquipmentCartValue {
   remove: (productId: string) => void; clear: () => void;
 }
 const CartContext = createContext<EquipmentCartValue | undefined>(undefined);
+const cartKey = (userId: string) => `hydrofarm_equipment_cart:${userId}`;
+
+const readCart = (userId: string): EquipmentCartLine[] => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(cartKey(userId)) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+};
 
 export const EquipmentCartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
-  const previousUserId = useRef<string | null>(null);
-  const [items, setItems] = useState<EquipmentCartLine[]>(() => {
-    try { return JSON.parse(localStorage.getItem('hydrofarm_equipment_cart') || '[]'); } catch { return []; }
-  });
-  useEffect(() => localStorage.setItem('hydrofarm_equipment_cart', JSON.stringify(items)), [items]);
+  const [cart, setCart] = useState<{ userId: string | null; items: EquipmentCartLine[] }>({ userId: null, items: [] });
+
   useEffect(() => {
     if (isLoading) return;
-    if (previousUserId.current && previousUserId.current !== user?.id) {
-      setItems([]);
-      localStorage.removeItem('hydrofarm_equipment_cart');
-    }
-    previousUserId.current = user?.id ?? null;
+    setCart(user ? { userId: user.id, items: readCart(user.id) } : { userId: null, items: [] });
   }, [user?.id, isLoading]);
+
+  useEffect(() => {
+    if (cart.userId && cart.userId === user?.id) {
+      localStorage.setItem(cartKey(cart.userId), JSON.stringify(cart.items));
+    }
+  }, [cart, user?.id]);
+
+  const items = !isLoading && user?.id === cart.userId ? cart.items : [];
+  const updateItems = (change: (current: EquipmentCartLine[]) => EquipmentCartLine[]) => {
+    if (!user || isLoading) return;
+    setCart((current) => ({
+      userId: user.id,
+      items: change(current.userId === user.id ? current.items : readCart(user.id)),
+    }));
+  };
+
   const value = useMemo<EquipmentCartValue>(() => ({
     items,
     itemCount: items.reduce((sum, row) => sum + row.quantity, 0),
     totalAmount: items.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0),
-    add: (product) => setItems((current) => {
+    add: (product) => updateItems((current) => {
       const existing = current.find((row) => row.product.id === product.id);
       if (!existing) return [...current, { product, quantity: 1 }];
       return current.map((row) => row.product.id === product.id ? { ...row, product, quantity: Math.min(row.quantity + 1, product.stock_quantity) } : row);
     }),
-    setQuantity: (productId, quantity) => setItems((current) => current.map((row) => row.product.id === productId ? { ...row, quantity: Math.max(1, Math.min(quantity, row.product.stock_quantity)) } : row)),
-    remove: (productId) => setItems((current) => current.filter((row) => row.product.id !== productId)),
-    clear: () => setItems([]),
-  }), [items]);
+    setQuantity: (productId, quantity) => updateItems((current) => current.map((row) => row.product.id === productId ? { ...row, quantity: Math.max(1, Math.min(quantity, row.product.stock_quantity)) } : row)),
+    remove: (productId) => updateItems((current) => current.filter((row) => row.product.id !== productId)),
+    clear: () => updateItems(() => []),
+  }), [items, user?.id, isLoading]);
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 

@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, PackageCheck, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Truck, Wrench, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EquipmentProduct } from '../../types/index.js';
 import { useEquipmentCart } from '../../context/EquipmentCartContext.js';
+import { useAuth } from '../../context/AuthContext.js';
 
 const money = (amount: number) => `฿${Number(amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 type SortMode = 'recommended' | 'price-low' | 'price-high' | 'name';
 
 export const EquipmentShopPage: React.FC = () => {
   const { id } = useParams();
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { items, itemCount, totalAmount, add } = useEquipmentCart();
   const [products, setProducts] = useState<EquipmentProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +45,11 @@ export const EquipmentShopPage: React.FC = () => {
   const cartQuantityFor = (productId: string) => items.find((item) => item.product.id === productId)?.quantity || 0;
   const addProduct = (product: EquipmentProduct) => {
     if (product.stock_quantity < 1 || cartQuantityFor(product.id) >= product.stock_quantity) return;
+    if (isLoading) return;
+    if (!user) {
+      navigate('/login', { state: { returnTo: `${location.pathname}${location.search}` } });
+      return;
+    }
     add(product);
     setAddedProduct(product.id);
     window.setTimeout(() => setAddedProduct((current) => current === product.id ? null : current), 3500);

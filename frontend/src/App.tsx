@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { CartProvider } from './context/CartContext.js';
 import { EquipmentCartProvider } from './context/EquipmentCartContext.js';
@@ -47,6 +47,7 @@ import { AdminEquipmentShippingPage } from './pages/admin/AdminEquipmentShipping
 // Route Guard for authenticated customers
 const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
   if (isLoading) {
     return (
       <div className="py-20 text-center">
@@ -55,7 +56,7 @@ const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ returnTo: `${location.pathname}${location.search}` }} replace />;
   }
   return <>{children}</>;
 };
@@ -75,7 +76,7 @@ export const App: React.FC = () => {
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/equipment" element={<EquipmentShopPage />} />
               <Route path="/equipment/:id" element={<EquipmentShopPage />} />
-              <Route path="/equipment/checkout" element={<EquipmentCheckoutPage />} />
+              <Route path="/equipment/checkout" element={<ProtectedCustomerRoute><EquipmentCheckoutPage /></ProtectedCustomerRoute>} />
               <Route
                 path="/orders"
                 element={
