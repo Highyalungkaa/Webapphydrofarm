@@ -56,6 +56,13 @@ function addDaysToDateStr(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0];
 }
 
+function closesBeforeBookingOpens(opensAt: string | null | undefined, closesAt: string | null | undefined): boolean {
+  if (!opensAt || !closesAt) return false;
+  const opening = new Date(opensAt).getTime();
+  const closing = new Date(closesAt).getTime();
+  return Number.isFinite(opening) && Number.isFinite(closing) && closing <= opening;
+}
+
 export function extractCropGrowingDays(roundNotes: string | null | undefined): Record<string, number> {
   if (!roundNotes) return {};
   try {
@@ -358,6 +365,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     const db = getSupabaseClient(req);
 
     if (items?.length) {
+      const missingDaysIndex = items.findIndex((item) => item.growing_days == null);
+      if (missingDaysIndex !== -1) {
+        res.status(400).json({ error: `กรุณาระบุวันปลูกของผักรายการที่ ${missingDaysIndex + 1}` });
+        return;
+      }
       const cropIds = [...new Set(items.map((item) => item.crop_id))];
       if (cropIds.length !== items.length) {
         res.status(400).json({ error: 'ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน' });
@@ -556,12 +568,10 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
     if (step === 5 && (
-      currentRound.status !== 'booking_open'
+      !['booking_open', 'booking_closed'].includes(currentRound.status)
       || !currentRound.booking_opens_at
-      || new Date(currentRound.booking_opens_at).getTime() > Date.now()
-      || !!currentRound.booking_closes_at
     )) {
-      res.status(400).json({ error: 'กรุณาเปิดรับจองก่อน และรอจนถึงเวลาเปิดจริงก่อนยืนยันไปสถานะถัดไป' });
+      res.status(400).json({ error: 'กรุณาเปิดรอบจองก่อนยืนยันไปสถานะถัดไป' });
       return;
     }
 
@@ -638,13 +648,19 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
       case 7: {
         // Step 7: วันที่ขายหมด ➔ ปิดรับจอง ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)
         updatePayload.sold_out_date = date;
-        updatePayload.booking_closes_at = new Date().toISOString();
+        const closedAt = new Date().toISOString();
+        updatePayload.booking_closes_at = closesBeforeBookingOpens(currentRound.booking_opens_at, closedAt) ? null : closedAt;
         updatePayload.current_step = 7;
         updatePayload.status = 'booking_closed';
         break;
       }
       case 8: {
         // Step 8: สถานะสิ้นสุด ➔ ปิดรอบสมบูรณ์
+        // Older closed rounds may have a close time before their scheduled opening.
+        // The database only permits that combination while status is booking_closed.
+        if (closesBeforeBookingOpens(currentRound.booking_opens_at, currentRound.booking_closes_at)) {
+          updatePayload.booking_closes_at = null;
+        }
         updatePayload.completed_date = date;
         updatePayload.current_step = 8;
         updatePayload.status = 'completed';

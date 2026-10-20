@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
+import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
 import { PlantingRound } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -45,6 +45,7 @@ const formatBangkokDateTimeInput = (value: Date | string) => {
 };
 
 const parseBangkokDateTime = (value: string) => new Date(`${value}:00+07:00`);
+const parseBangkokBookingDate = (value: string) => new Date(`${value}T00:00:00+07:00`);
 
 export const AdminBookingsPage: React.FC = () => {
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
@@ -103,9 +104,7 @@ export const AdminBookingsPage: React.FC = () => {
 
   const openCreateBookingModal = (presetRoundId?: string) => {
     setModalMode('create');
-    const today = new Date();
-    const opensAtDefault = new Date(today);
-    opensAtDefault.setHours(8, 0, 0, 0);
+    const today = toBangkokDateString(new Date().toISOString()) || '';
 
     const activePlantingRounds = rounds.filter(
       (r) => r.status !== 'completed' && r.status !== 'cancelled'
@@ -119,7 +118,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSelectedRoundId(targetRound.id);
       setRoundName(targetRound.name || '');
       setFulfillmentDate(targetRound.expected_harvest_date || targetRound.fulfillment_date || '');
-      setBookingOpensAt(targetRound.booking_opens_at ? formatBangkokDateTimeInput(targetRound.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
+      setBookingOpensAt(toBangkokDateString(targetRound.booking_opens_at) || today);
       setDeliveryStartTime(targetRound.delivery_start_time ? targetRound.delivery_start_time.slice(0, 5) : '13:00');
       setDeliveryEndTime(targetRound.delivery_end_time ? targetRound.delivery_end_time.slice(0, 5) : '16:30');
       setEditableItems(mapItemsToEditable(targetRound));
@@ -127,7 +126,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSelectedRoundId('');
       setRoundName('');
       setFulfillmentDate('');
-      setBookingOpensAt(formatBangkokDateTimeInput(opensAtDefault));
+      setBookingOpensAt(today);
       setEditableItems([]);
     }
 
@@ -141,10 +140,7 @@ export const AdminBookingsPage: React.FC = () => {
     setRoundName(round.name || '');
     setFulfillmentDate(round.expected_harvest_date || round.fulfillment_date || '');
     
-    const today = new Date();
-    const opensAtDefault = new Date(today);
-    opensAtDefault.setHours(8, 0, 0, 0);
-    setBookingOpensAt(round.booking_opens_at ? formatBangkokDateTimeInput(round.booking_opens_at) : formatBangkokDateTimeInput(opensAtDefault));
+    setBookingOpensAt(toBangkokDateString(round.booking_opens_at) || toBangkokDateString(new Date().toISOString()) || '');
     setDeliveryStartTime(round.delivery_start_time ? round.delivery_start_time.slice(0, 5) : '13:00');
     setDeliveryEndTime(round.delivery_end_time ? round.delivery_end_time.slice(0, 5) : '16:30');
     setEditableItems(mapItemsToEditable(round));
@@ -161,7 +157,7 @@ export const AdminBookingsPage: React.FC = () => {
       if (chosen.expected_harvest_date || chosen.fulfillment_date) {
         setFulfillmentDate(chosen.expected_harvest_date || chosen.fulfillment_date);
       }
-      if (chosen.booking_opens_at) setBookingOpensAt(formatBangkokDateTimeInput(chosen.booking_opens_at));
+      setBookingOpensAt(toBangkokDateString(chosen.booking_opens_at) || toBangkokDateString(new Date().toISOString()) || '');
       setEditableItems(mapItemsToEditable(chosen));
     } else {
       setEditableItems([]);
@@ -184,8 +180,8 @@ export const AdminBookingsPage: React.FC = () => {
       return;
     }
 
-    if (!bookingOpensAt || Number.isNaN(parseBangkokDateTime(bookingOpensAt).getTime())) {
-      setModalError('กรุณาระบุวัน-เวลาเปิดจองให้ถูกต้อง');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingOpensAt) || Number.isNaN(parseBangkokBookingDate(bookingOpensAt).getTime())) {
+      setModalError('กรุณาระบุวันเปิดจองให้ถูกต้อง');
       return;
     }
 
@@ -193,7 +189,7 @@ export const AdminBookingsPage: React.FC = () => {
       setSaving(true);
       const payload: Record<string, any> = {
         name: roundName,
-        booking_opens_at: parseBangkokDateTime(bookingOpensAt).toISOString(),
+        booking_opens_at: parseBangkokBookingDate(bookingOpensAt).toISOString(),
         fulfillment_date: fulfillmentDate,
         delivery_start_time: deliveryStartTime ? deliveryStartTime + ':00' : '13:00:00',
         delivery_end_time: deliveryEndTime ? deliveryEndTime + ':00' : '16:30:00',
@@ -212,8 +208,8 @@ export const AdminBookingsPage: React.FC = () => {
       setIsModalOpen(false);
 
       if (openImmediately) {
-        setActionSuccess(parseBangkokDateTime(bookingOpensAt) > new Date()
-          ? `บันทึกรอบแล้ว ลูกค้าจะเริ่มจองได้ตั้งแต่ ${formatDateTimeDMY(parseBangkokDateTime(bookingOpensAt).toISOString())}`
+        setActionSuccess(parseBangkokBookingDate(bookingOpensAt) > new Date()
+          ? `บันทึกรอบแล้ว ลูกค้าจะเริ่มจองได้ตั้งแต่วันที่ ${formatDateDMY(bookingOpensAt)}`
           : 'เปิดรอบสั่งจองล่วงหน้าสำเร็จ! ลูกค้าสามารถสั่งจองได้แล้ว');
       } else {
         setActionSuccess('บันทึกข้อมูลและกำหนดการรอบจองเรียบร้อยแล้ว (ยังไม่เปิดรับจอง)');
@@ -624,8 +620,8 @@ export const AdminBookingsPage: React.FC = () => {
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {modalMode === 'edit'
-                    ? 'แก้ไขชื่อรอบ วัน-เวลาเปิดปิดจอง วันส่งมอบ และปรับจำนวนผัก/ราคาเปิดจอง'
-                    : 'เลือกรอบการปลูกที่ต้องการเปิดจอง และกำหนดช่วงเวลาเปิด-ปิดการจอง'}
+                    ? 'แก้ไขชื่อรอบ วันเปิดจอง วัน-เวลาปิดจอง วันส่งมอบ และปรับจำนวนผัก/ราคาเปิดจอง'
+                    : 'เลือกรอบการปลูกที่ต้องการเปิดจอง และกำหนดวันเปิดกับวัน-เวลาปิดการจอง'}
                 </p>
               </div>
               <button
@@ -687,16 +683,16 @@ export const AdminBookingsPage: React.FC = () => {
               {/* 2. Booking Opens At */}
               <div>
                   <label className="font-bold text-slate-800 block mb-1">
-                    วัน-เวลาเปิดรอบจอง <span className="text-rose-500">*</span>
+                    วันเปิดรอบจอง <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="datetime-local"
+                    type="date"
                     value={bookingOpensAt}
                     onChange={(e) => setBookingOpensAt(e.target.value)}
                     required
                     className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">ลูกค้าจะเริ่มเห็นรอบและสั่งจองได้ตั้งแต่เวลานี้</p>
+                  <p className="text-[10px] text-slate-400 mt-1">ลูกค้าจะเริ่มเห็นรอบและสั่งจองได้ตั้งแต่ต้นวันตามเวลาไทย</p>
               </div>
 
               {/* 3. Fulfillment Date */}

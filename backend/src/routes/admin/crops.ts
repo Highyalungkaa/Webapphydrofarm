@@ -8,26 +8,70 @@ import { recordAuditLog } from '../../services/audit.js';
 const router = Router();
 router.use(requireAuth, requireAdmin);
 
+const CROP_IMAGE_BUCKET = 'crop-images';
+const CROP_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const CROP_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+
+async function ensureCropImageBucket(): Promise<void> {
+  const storage = supabaseAdmin.storage;
+  let { data: bucket, error } = await storage.getBucket(CROP_IMAGE_BUCKET);
+  if (error) {
+    if (error.status !== 404) throw error;
+    const created = await storage.createBucket(CROP_IMAGE_BUCKET, {
+      public: true,
+      fileSizeLimit: CROP_IMAGE_MAX_BYTES,
+      allowedMimeTypes: CROP_IMAGE_MIME_TYPES,
+    });
+    if (created.error) {
+      // Another upload may have created the bucket while this request was waiting.
+      const retry = await storage.getBucket(CROP_IMAGE_BUCKET);
+      if (retry.error) throw created.error;
+      bucket = retry.data;
+    } else {
+      return;
+    }
+  }
+  if (!bucket) throw new Error('ไม่พบ bucket สำหรับรูปภาพผัก');
+  const allowed = bucket.allowed_mime_types;
+  if (!bucket.public || (bucket.file_size_limit || 0) < CROP_IMAGE_MAX_BYTES
+      || (allowed && CROP_IMAGE_MIME_TYPES.some((mime) => !allowed.includes(mime)))) {
+    const updated = await storage.updateBucket(CROP_IMAGE_BUCKET, {
+      public: true,
+      fileSizeLimit: Math.max(bucket.file_size_limit || 0, CROP_IMAGE_MAX_BYTES),
+      allowedMimeTypes: allowed ? [...new Set([...allowed, ...CROP_IMAGE_MIME_TYPES])] : null,
+    });
+    if (updated.error) throw updated.error;
+  }
+}
+
 // POST /api/admin/crops/image - Upload a crop image from an admin device
 router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const parsed = z.object({
-    mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+    mime_type: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']),
     data: z.string().min(1),
   }).safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'กรุณาเลือกรูปภาพ JPEG, PNG, WebP หรือ GIF' });
+    res.status(400).json({ error: 'กรุณาเลือกรูปภาพ JPEG, PNG, WebP, GIF หรือ SVG' });
     return;
   }
 
   try {
     const buffer = Buffer.from(parsed.data.data, 'base64');
-    if (!buffer.length || buffer.length > 5 * 1024 * 1024) {
+    if (!buffer.length || buffer.length > CROP_IMAGE_MAX_BYTES) {
       res.status(400).json({ error: 'ขนาดรูปภาพต้องไม่เกิน 5 MB' });
       return;
     }
-    const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' } as const)[parsed.data.mime_type];
+    if (parsed.data.mime_type === 'image/svg+xml') {
+      const svg = buffer.toString('utf8');
+      if (!/<svg\b/i.test(svg) || /<\s*(script|foreignObject|iframe|object|embed)\b|\bon\w+\s*=|javascript:/i.test(svg)) {
+        res.status(400).json({ error: 'ไฟล์ SVG ไม่ถูกต้องหรือมีเนื้อหาที่ไม่อนุญาต' });
+        return;
+      }
+    }
+    const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' } as const)[parsed.data.mime_type];
     const path = `${randomUUID()}.${extension}`;
-    const { error } = await supabaseAdmin.storage.from('crop-images').upload(path, buffer, {
+    await ensureCropImageBucket();
+    const { error } = await supabaseAdmin.storage.from(CROP_IMAGE_BUCKET).upload(path, buffer, {
       contentType: parsed.data.mime_type,
       upsert: false,
     });
@@ -35,7 +79,7 @@ router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<
       res.status(400).json({ error: `อัปโหลดรูปไม่สำเร็จ: ${error.message}` });
       return;
     }
-    const { data } = supabaseAdmin.storage.from('crop-images').getPublicUrl(path);
+    const { data } = supabaseAdmin.storage.from(CROP_IMAGE_BUCKET).getPublicUrl(path);
     res.status(201).json({ image_url: data.publicUrl });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'อัปโหลดรูปไม่สำเร็จ' });

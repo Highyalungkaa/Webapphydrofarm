@@ -21,7 +21,14 @@ function setup(initialRound = {}) {
         eq() { return query; },
         update(payload) { update = payload; return query; },
         async single() {
-          if (update) round = { ...round, ...update };
+          if (update) {
+            const nextRound = { ...round, ...update };
+            if (nextRound.booking_closes_at && nextRound.status !== 'booking_closed'
+                && new Date(nextRound.booking_closes_at) <= new Date(nextRound.booking_opens_at)) {
+              return { data: null, error: { message: 'check_booking_window' } };
+            }
+            round = nextRound;
+          }
           return { data: { ...round }, error: null };
         },
       };
@@ -94,4 +101,29 @@ test('date-based fallback recognizes the inserted milestone', () => {
   assert.equal(computeCurrentStep({ planting_start_date: '2026-10-19' }), 4);
   assert.equal(computeCurrentStep({ transplant_date: '2026-10-19' }), 5);
   assert.equal(computeCurrentStep({ current_step: 7, sold_out_date: '2026-10-19' }), 8);
+});
+
+test('completion succeeds when booking was closed before its scheduled opening', async () => {
+  const app = setup({
+    current_step: 7,
+    status: 'booking_closed',
+    booking_opens_at: '2027-01-01T00:00:00Z',
+    booking_closes_at: '2026-10-19T00:00:00Z',
+  });
+  const result = await app.confirm(8);
+  assert.equal(result.statusCode, 200);
+  assert.equal(app.round().status, 'completed');
+  assert.equal(app.round().booking_closes_at, null);
+});
+
+test('closing a scheduled booking before opening keeps the round completable', async () => {
+  const app = setup({
+    current_step: 7,
+    status: 'booking_open',
+    booking_opens_at: '2027-01-01T00:00:00Z',
+    booking_closes_at: null,
+  });
+  assert.equal((await app.confirm(7)).statusCode, 200);
+  assert.equal(app.round().booking_closes_at, null);
+  assert.equal((await app.confirm(8)).statusCode, 200);
 });

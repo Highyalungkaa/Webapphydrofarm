@@ -68,6 +68,17 @@ const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const imageMimeTypesByExtension: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml',
+};
+
+const cropImageMimeType = (file: File): string => {
+  const extension = file.name.split('.').pop()?.toLowerCase() || '';
+  return imageMimeTypesByExtension[extension]
+    || (['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'].includes(file.type) ? file.type : '');
+};
+
 export const AdminCropsPage: React.FC = () => {
   const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,7 +183,7 @@ export const AdminCropsPage: React.FC = () => {
       let savedImageUrl = imageUrl.trim();
       if (imageFile) {
         const uploaded = await api.post<{ image_url: string }>('/admin/crops/image', {
-          mime_type: imageFile.type,
+          mime_type: cropImageMimeType(imageFile),
           data: await fileToBase64(imageFile),
         });
         savedImageUrl = uploaded.image_url;
@@ -504,13 +515,13 @@ export const AdminCropsPage: React.FC = () => {
                     เลือกรูปจากอุปกรณ์
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-                          setError('กรุณาเลือกรูปภาพ JPEG, PNG, WebP หรือ GIF');
+                        if (!cropImageMimeType(file)) {
+                          setError('กรุณาเลือกรูปภาพ JPEG, PNG, WebP, GIF หรือ SVG');
                           e.currentTarget.value = '';
                           return;
                         }
@@ -528,7 +539,7 @@ export const AdminCropsPage: React.FC = () => {
                   </label>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-slate-700">{imageFile?.name || (imageUrl ? 'กำลังใช้รูปจากลิงก์' : 'เลือกจากคอมพิวเตอร์หรือโทรศัพท์')}</p>
-                    <p className="text-[11px] text-slate-500">JPEG, PNG, WebP หรือ GIF · ไม่เกิน 5 MB</p>
+                    <p className="text-[11px] text-slate-500">JPEG, PNG, WebP, GIF หรือ SVG · ไม่เกิน 5 MB</p>
                   </div>
                   {(imageFile || imageUrl) && (
                     <button type="button" onClick={() => { setImageFile(null); setImageUrl(''); }} className="font-bold text-rose-600 hover:text-rose-700">

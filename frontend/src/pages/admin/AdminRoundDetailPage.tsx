@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
+import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
 import { PlantingRound, Plot } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -134,16 +135,10 @@ export const AdminRoundDetailPage: React.FC = () => {
   const [updatingStep, setUpdatingStep] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [itemDaysMap, setItemDaysMap] = useState<Record<string, number>>({});
-  const [clockNow, setClockNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (id) loadRound();
   }, [id]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setClockNow(Date.now()), 30000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const loadRound = async () => {
     try {
@@ -182,9 +177,9 @@ export const AdminRoundDetailPage: React.FC = () => {
     } else if (stepNum === 2) {
       defaultVal = currentRound.fertilizing_date || (currentRound.seed_date ? addDaysToDateStr(currentRound.seed_date, 7) : today);
     } else if (stepNum === 3) {
-      defaultVal = currentRound.planting_start_date || currentRound.fertilizing_date || today;
+      defaultVal = plantingStartDate(currentRound) || today;
     } else if (stepNum === 4) {
-      defaultVal = currentRound.transplant_date || currentRound.planted_at || (currentRound.seed_date ? addDaysToDateStr(currentRound.seed_date, 14) : today);
+      defaultVal = transplantDate(currentRound) || today;
     } else if (stepNum === 5) {
       defaultVal = toBangkokDateString(currentRound.booking_opens_at) || today;
     } else if (stepNum === 6) {
@@ -207,8 +202,8 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const handleConfirmStepUpdate = async () => {
     if (!round || !inputDate) return;
-    if (activeStepTab === 5 && !isBookingActuallyOpen) {
-      setError('กรุณาเปิดรับจองที่หน้า “การเปิดสั่งจองล่วงหน้า” และรอจนถึงเวลาเปิดก่อน จึงจะยืนยันไปสถานะถัดไปได้');
+    if (activeStepTab === 5 && !isBookingConfirmed) {
+      setError('กรุณาเปิดรอบจองที่หน้า “การเปิดสั่งจองล่วงหน้า” ก่อน จึงจะยืนยันไปสถานะถัดไปได้');
       return;
     }
 
@@ -286,10 +281,8 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const currentStep = round.current_step || 1;
   const isRoundCompleted = round.status === 'completed' || !!round.completed_date;
-  const isBookingActuallyOpen = round.status === 'booking_open'
-    && !!round.booking_opens_at
-    && new Date(round.booking_opens_at).getTime() <= clockNow
-    && !round.booking_closes_at;
+  const isBookingConfirmed = ['booking_open', 'booking_closed'].includes(round.status)
+    && !!round.booking_opens_at;
   const growingDays = round.growing_days || 45;
   const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
@@ -467,10 +460,10 @@ export const AdminRoundDetailPage: React.FC = () => {
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
             {activeStepTab === 5 ? (
-              <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${isBookingActuallyOpen ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-                {isBookingActuallyOpen
-                  ? `รับจองเปิดแล้วตั้งแต่ ${formatDateTimeDMY(round.booking_opens_at)} ยืนยันเพื่อไปยังขั้นตอนถัดไปได้`
-                  : 'ขั้นตอนนี้ต้องเปิดรับจองจากหน้า “การเปิดสั่งจองล่วงหน้า” ก่อน ปุ่มยืนยันสถานะถัดไปจะแสดงเมื่อถึงเวลาเปิดจริง'}
+              <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${isBookingConfirmed ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                {isBookingConfirmed
+                  ? `เปิดรอบจองแล้ว (กำหนดเริ่มรับจอง ${formatDateTimeDMY(round.booking_opens_at)}) ยืนยันเพื่อไปยังขั้นตอนถัดไปได้`
+                  : 'ขั้นตอนนี้ต้องเปิดรอบจองจากหน้า “การเปิดสั่งจองล่วงหน้า” ก่อน จึงจะยืนยันสถานะถัดไปได้'}
               </div>
             ) : <div>
               <label className="font-bold text-slate-800 block text-xs sm:text-sm mb-1.5">
@@ -674,7 +667,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                   <span>สิ้นสุดรอบการปลูกแล้ว{round.completed_date ? ` เมื่อ ${formatDateDMY(round.completed_date)}` : ''}</span>
                 </div>
               ) : <>
-              {(activeStepTab !== 5 || isBookingActuallyOpen) && <button
+              {(activeStepTab !== 5 || isBookingConfirmed) && <button
                 type="button"
                 onClick={handleConfirmStepUpdate}
                 disabled={updatingStep || !inputDate}
@@ -703,7 +696,7 @@ export const AdminRoundDetailPage: React.FC = () => {
               </button>}
 
               {activeStepTab === 5 && (
-                !isBookingActuallyOpen ? (
+                !isBookingConfirmed ? (
                   <Link
                     to="/admin/bookings"
                     className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors"

@@ -17,6 +17,15 @@ export function differenceInBangkokCalendarDays(start?: string | null, end?: str
   return Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000);
 }
 
+/** Add calendar days to a date-only value without depending on the browser time zone. */
+export function addCalendarDays(value: string | null | undefined, days: number): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value.slice(0, 10))) return null;
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 /** Display dates in day/month/year order while preserving date-only values as local calendar dates. */
 export function formatDateDMY(value?: string | null): string {
   if (!value) return '-';

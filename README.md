@@ -66,6 +66,7 @@ WEBAPPHYDROFARM/
    - รัน `supabase/migrations/026_plot_multiple_crops.sql` เพื่อให้แต่ละแปลงกำหนดชนิดผักได้หลายชนิด โดยเก็บผักเดิมไว้ และใช้ความจุช่องปลูกร่วมกัน
    - รัน `supabase/migrations/027_round_item_plant_count.sql` ก่อนสร้างรอบปลูกด้วยจำนวนต้น ระบบเก็บจำนวนต้นจริงเพื่อคำนวณความจุ และคำนวณน้ำหนักเป็นจำนวนเต็มด้วยสูตรปัดลงจากจำนวนต้น ÷ จำนวนต้นต่อกิโลกรัม
    - รัน `supabase/migrations/028_equipment_transfer_payment.sql` เพื่อเพิ่มวิธีโอนเงินพร้อมสลิปสำหรับร้านอุปกรณ์ จากนั้นอัปโหลด QR Code หรือกรอกเลขบัญชี / เบอร์พร้อมเพย์ที่ **หลังบ้านอุปกรณ์ → ค่าส่ง / การชำระเงิน** ลูกค้าต้องแนบสลิปก่อนยืนยันออเดอร์ ร้านตรวจสอบแล้วจึงเปลี่ยนสถานะเป็นชำระแล้ว สลิปเก็บใน private bucket และเปิดผ่านลิงก์ชั่วคราวเฉพาะเจ้าของออเดอร์หรือแอดมิน
+   - รัน `supabase/migrations/029_crop_images_svg_bucket.sql` เพื่อเตรียม bucket รูปภาพผักและรองรับไฟล์ SVG (หากยังไม่ได้รัน migration 023 ไฟล์นี้จะสร้าง bucket ให้)
 3. เปิดใช้งาน **Google OAuth** ใน Supabase:
    - ไปที่ `Authentication` → `Providers` → `Google` → เปิด Enabled
    - กรอก Google Client ID และ Secret (จาก Google Cloud Console)

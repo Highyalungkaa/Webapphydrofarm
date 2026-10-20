@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
+import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
 import { PlantingRound, Order } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -81,8 +82,8 @@ export const AdminDashboardPage: React.FC = () => {
     let dueDate: string | null = null;
 
     if (nextStep === 2) dueDate = round.fertilizing_date || addDays(round.seed_date, 7);
-    else if (nextStep === 3) dueDate = round.planting_start_date || null;
-    else if (nextStep === 4) dueDate = round.transplant_date || addDays(round.seed_date, 14);
+    else if (nextStep === 3) dueDate = plantingStartDate(round);
+    else if (nextStep === 4) dueDate = transplantDate(round);
     else if (nextStep === 5) dueDate = round.booking_opens_at?.slice(0, 10) || null;
     else if (nextStep === 6) dueDate = round.harvest_sale_date || round.expected_harvest_date || null;
     else if (nextStep === 8) dueDate = round.fulfillment_date || null;

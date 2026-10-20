@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
+import { transplantDate } from '../../lib/roundStepDates.js';
 import { PlantingRound, Crop, Plot } from '../../types/index.js';
 import {
   CalendarDays,
@@ -30,7 +31,7 @@ interface RoundItemForm {
   selected_plot_ids: string[];
   plant_count: number;
   price_per_kg: number;
-  growing_days: number;
+  growing_days: number | '';
 }
 
 export const AdminRoundsPage: React.FC = () => {
@@ -205,7 +206,7 @@ export const AdminRoundsPage: React.FC = () => {
         selected_plot_ids: plotIds,
         plant_count: defaultPlantCount,
         price_per_kg: Number(availableCrop.default_price_per_kg) || 130,
-        growing_days: Number(availableCrop.growing_days) || 45,
+        growing_days: '',
       },
     ]);
   };
@@ -248,7 +249,7 @@ export const AdminRoundsPage: React.FC = () => {
           selected_plot_ids: plotIds,
           plant_count: defaultPlantCount,
           price_per_kg: selected ? Number(selected.default_price_per_kg) : it.price_per_kg,
-          growing_days: selected?.growing_days ? Number(selected.growing_days) : it.growing_days,
+          growing_days: '',
         };
       })
     );
@@ -392,6 +393,10 @@ export const AdminRoundsPage: React.FC = () => {
     for (const [itemIndex, it] of items.entries()) {
       const crop = crops.find((c) => c.id === it.crop_id);
       const cropName = crop?.name || 'ผัก';
+      if (it.growing_days === '' || !Number.isSafeInteger(it.growing_days) || it.growing_days < 1) {
+        setFormError(`กรุณาระบุวันปลูกของ ${cropName} เป็นจำนวนเต็มมากกว่า 0`);
+        return;
+      }
       if (!designatedCrops.some((designated) => designated.id === it.crop_id)) {
         setFormError(crop ? getRoundCropAvailability([crop], plots).issues[0]?.message || `${cropName} ยังไม่พร้อมปลูก` : 'ไม่พบชนิดผักที่เลือก กรุณาตรวจสอบแคตตาล็อกผัก');
         return;
@@ -445,9 +450,7 @@ export const AdminRoundsPage: React.FC = () => {
 
     try {
       setSaving(true);
-      const maxGrowingDays = items.length > 0
-        ? Math.max(...items.map((i) => Number(i.growing_days) || 45))
-        : 45;
+      const maxGrowingDays = Math.max(...items.map((i) => Number(i.growing_days)));
 
       const payload = {
         name: name.trim(),
@@ -460,7 +463,7 @@ export const AdminRoundsPage: React.FC = () => {
           estimated_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
           bookable_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
           price_per_kg: it.price_per_kg,
-          growing_days: it.growing_days,
+          growing_days: Number(it.growing_days),
           plot_ids: it.selected_plot_ids || [],
         })),
       };
@@ -514,7 +517,7 @@ export const AdminRoundsPage: React.FC = () => {
       case 4:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200">
-            🌿 สเต็ป 4: ปลูกจริง ({formatDateDMY(round.transplant_date || round.planted_at)})
+            🌿 สเต็ป 4: ปลูกจริง ({formatDateDMY(transplantDate(round))})
           </span>
         );
       case 5:
@@ -1062,6 +1065,7 @@ export const AdminRoundsPage: React.FC = () => {
 
                       // Gauge bar calculation
                       const usagePercent = totalSelectedAvailableSlots > 0 ? Math.min(100, Math.round((requiredSlots / totalSelectedAvailableSlots) * 100)) : (isSelectedPlotsZeroFree ? 100 : 0);
+                      const invalidGrowingDays = it.growing_days === '' || !Number.isSafeInteger(it.growing_days) || it.growing_days < 1;
 
                       return (
                         <div
@@ -1111,17 +1115,23 @@ export const AdminRoundsPage: React.FC = () => {
 
                             {/* Growing Days */}
                             <div className="w-full sm:w-24 sm:shrink-0">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-0.5">วันปลูก</label>
+                              <label htmlFor={`growing-days-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">วันปลูก <span className="text-rose-600">*</span></label>
                               <input
+                                id={`growing-days-${idx}`}
                                 type="number"
                                 min="1"
+                                step="1"
                                 value={it.growing_days}
                                 onChange={(e) =>
-                                  handleItemFieldChange(idx, 'growing_days', parseInt(e.target.value, 10) || 45)
+                                  handleItemFieldChange(idx, 'growing_days', e.target.value === '' ? '' : Number(e.target.value))
                                 }
+                                placeholder="จำนวนวัน"
+                                aria-invalid={invalidGrowingDays}
+                                aria-describedby={invalidGrowingDays ? `growing-days-warning-${idx}` : undefined}
                                 title="ระยะเวลาปลูก (วัน)"
-                                className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500"
+                                className={`w-full p-2.5 rounded-xl border bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 ${invalidGrowingDays ? 'border-rose-400' : 'border-slate-200'}`}
                               />
+                              {invalidGrowingDays && <p id={`growing-days-warning-${idx}`} className="mt-1 text-[10px] font-semibold text-rose-600">{it.growing_days === '' ? 'กรุณาระบุวันปลูก' : 'กรุณากรอกจำนวนเต็มมากกว่า 0'}</p>}
                             </div>
 
                             {/* Delete button */}
