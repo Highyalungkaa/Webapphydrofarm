@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
-import { ArrowLeft, BarChart3, Boxes, LayoutDashboard, LogOut, Menu, PackageSearch, Settings2, ShieldAlert, Truck, X } from 'lucide-react';
+import { ArrowLeft, BarChart3, Boxes, History, LayoutDashboard, LogOut, Menu, PackageSearch, Settings2, ShieldAlert, Truck, X } from 'lucide-react';
 
 export const EquipmentAdminLayout: React.FC = () => {
   const { user, profile, isAdmin, isLoading, signOut } = useAuth();
@@ -10,7 +10,8 @@ export const EquipmentAdminLayout: React.FC = () => {
   const navItems = [
     { to: '/admin/equipment', label: 'ภาพรวมร้านอุปกรณ์', icon: LayoutDashboard, end: true },
     { to: '/admin/equipment/products', label: 'สินค้าและสต็อก', icon: PackageSearch },
-    { to: '/admin/equipment/orders', label: 'คำสั่งซื้ออุปกรณ์', icon: Truck },
+    { to: '/admin/equipment/orders', label: 'คำสั่งซื้ออุปกรณ์', icon: Truck, end: true },
+    { to: '/admin/equipment/orders/history', label: 'ประวัติการสั่งซื้อ', icon: History },
     { to: '/admin/equipment/reports', label: 'รายงานอุปกรณ์', icon: BarChart3 },
     { to: '/admin/equipment/settings/shipping', label: 'ค่าส่ง / การชำระเงิน', icon: Settings2 },
   ];

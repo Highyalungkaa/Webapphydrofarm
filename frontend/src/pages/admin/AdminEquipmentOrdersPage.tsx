@@ -1,9 +1,11 @@
 import { EquipmentPaymentSlip, EquipmentPaymentBadge } from '../../components/common/EquipmentPaymentSlip.js';
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Check, Clock3, ImagePlus, MapPin, PackageCheck, Search, Truck, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { EquipmentOrder, EquipmentOrderStatus } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
+import { isEquipmentOrderInHistory } from '../../lib/equipmentOrderHistory.js';
 
 const money = (n: number) => `฿${Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
 const bangkokDate = (value: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
@@ -32,11 +34,15 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
   const [shipmentImageFile, setShipmentImageFile] = useState<File | null>(null);
   const [shipmentImagePreview, setShipmentImagePreview] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    try { setOrders(await api.get<EquipmentOrder[]>('/equipment/admin/orders')); }
+    try {
+      const allOrders = await api.get<EquipmentOrder[]>('/equipment/admin/orders');
+      setOrders(allOrders.filter((order) => !isEquipmentOrderInHistory(order)));
+    }
     catch (err: any) { setError(err.message || 'โหลดคำสั่งซื้อไม่สำเร็จ'); }
     finally { setLoading(false); }
   };
@@ -65,15 +71,23 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
       }
       await api.patch(`/equipment/admin/orders/${selectedOrder.id}`, { ...draft, ...(savingShipmentUpdate ? { delivery_update_image_url: imageUrl, delivery_update_message: shipmentMessage.trim() || null } : {}) });
       await load();
-      setDraft(draft);
+      if (isEquipmentOrderInHistory(draft)) {
+        setSelectedId(null);
+        setDraft(null);
+        setNotice('บันทึกสำเร็จแล้ว ย้ายคำสั่งซื้อนี้ไปหน้าประวัติการสั่งซื้อ');
+      } else {
+        setDraft(draft);
+        setNotice('');
+      }
       if (savingShipmentUpdate) { setShipmentImageFile(null); setShipmentImagePreview(''); }
     } catch (err: any) { setError(err.message || 'อัปเดตออเดอร์ไม่สำเร็จ'); }
     finally { setSaving(false); }
   };
 
   return <div className="space-y-5">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">HydroFarm Supply</p><h1 className="mt-1 text-2xl font-black text-slate-950">คำสั่งซื้ออุปกรณ์</h1><p className="mt-1 text-sm text-slate-500">ดูรายการทั้งหมดก่อน แล้วเลือกออเดอร์เพื่อจัดการรายละเอียด</p></div><div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-extrabold text-emerald-900">ทั้งหมด {orders.length} ออเดอร์</div></div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-emerald-700">HydroFarm Supply</p><h1 className="mt-1 text-2xl font-black text-slate-950">คำสั่งซื้ออุปกรณ์</h1><p className="mt-1 text-sm text-slate-500">จัดการออเดอร์ที่ยังไม่ชำระเงินหรือยังดำเนินการไม่สำเร็จ</p></div><div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-extrabold text-emerald-900">ทั้งหมด {orders.length} ออเดอร์</div></div>
     {error && <div className="flex items-start justify-between gap-3 rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-700"><span>{error}</span><button onClick={() => setError('')} className="shrink-0">ปิด</button></div>}
+    {notice && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-900"><span>{notice}</span><Link to="/admin/equipment/orders/history" className="underline">ดูประวัติการสั่งซื้อ</Link></div>}
 
     {selectedOrder && draft ? <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><button onClick={() => { setSelectedId(null); setDraft(null); setError(''); }} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100" title="กลับไปรายการ"><ArrowLeft className="h-4 w-4" /></button><div><p className="text-[11px] font-bold text-slate-400">ออเดอร์ #{selectedOrder.id.slice(0,8)} · {new Date(selectedOrder.created_at).toLocaleString('th-TH')}</p><h2 className="mt-0.5 font-black text-slate-900">{selectedOrder.profiles?.full_name || selectedOrder.profiles?.email || 'ลูกค้า'}</h2><p className="text-xs text-slate-500">{selectedOrder.contact_phone}</p></div></div><div className="text-right"><span className={`rounded-full px-3 py-1 text-xs font-black ${statusStyle(selectedOrder.status)}`}>{statusNames[selectedOrder.status]}</span><p className="mt-2 text-lg font-black text-emerald-800">{money(selectedOrder.total_amount)}</p></div></header>

@@ -41,6 +41,7 @@ import { AdminReportsPage } from './pages/admin/AdminReportsPage.js';
 import { AdminEquipmentPage } from './pages/admin/AdminEquipmentPage.js';
 import { AdminEquipmentDashboardPage } from './pages/admin/AdminEquipmentDashboardPage.js';
 import { AdminEquipmentOrdersPage } from './pages/admin/AdminEquipmentOrdersPage.js';
+import { AdminEquipmentOrderHistoryPage } from './pages/admin/AdminEquipmentOrderHistoryPage.js';
 import { AdminEquipmentReportsPage } from './pages/admin/AdminEquipmentReportsPage.js';
 import { AdminEquipmentShippingPage } from './pages/admin/AdminEquipmentShippingPage.js';
 
@@ -136,6 +137,7 @@ export const App: React.FC = () => {
               <Route index element={<AdminEquipmentDashboardPage />} />
               <Route path="products" element={<AdminEquipmentPage />} />
               <Route path="orders" element={<AdminEquipmentOrdersPage />} />
+              <Route path="orders/history" element={<AdminEquipmentOrderHistoryPage />} />
               <Route path="reports" element={<AdminEquipmentReportsPage />} />
               <Route path="settings/shipping" element={<AdminEquipmentShippingPage />} />
             </Route>
