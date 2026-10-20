@@ -86,7 +86,7 @@ export const AdminCustomersPage: React.FC = () => {
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase text-[11px] font-semibold">
                   <th className="py-3 px-4">ชื่อลูกค้า / อีเมล</th>
                   <th className="py-3 px-4">เบอร์โทรศัพท์</th>
-                  <th className="py-3 px-4">ที่อยู่จัดส่งเริ่มต้น</th>
+                  <th className="py-3 px-4">ที่อยู่ลูกค้า</th>
                   <th className="py-3 px-4">ประวัติไม่มารับ (No-show)</th>
                   <th className="py-3 px-4 text-right">วันที่ลงทะเบียน</th>
                 </tr>
