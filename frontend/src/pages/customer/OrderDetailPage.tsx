@@ -227,15 +227,6 @@ export const OrderDetailPage: React.FC = () => {
               <span>เบอร์ติดต่อที่บันทึกไว้: <strong>{order.contact_phone}</strong></span>
             </div>
 
-            {farmContactPhone && farmPhoneHref && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white p-3 text-slate-700">
-                <span>ติดต่อฟาร์ม: <strong>{farmContactPhone}</strong></span>
-                <a href={farmPhoneHref} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">
-                  <Phone className="h-3.5 w-3.5" />โทรหาฟาร์ม
-                </a>
-              </div>
-            )}
-
             {order.note && (
               <p className="text-xs text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-200">
                 หมายเหตุถึงฟาร์ม: {order.note}
