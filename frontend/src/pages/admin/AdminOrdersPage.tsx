@@ -90,6 +90,11 @@ export const AdminOrdersPage: React.FC = () => {
   const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
+    if (modalStatus === 'completed' && modalPaymentStatus !== 'paid'
+      && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) {
+      alert('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ');
+      return;
+    }
 
     try {
       setIsUpdating(true);
@@ -579,6 +584,9 @@ export const AdminOrdersPage: React.FC = () => {
               </section>
 
               {/* Payment Method (if paid) */}
+              {modalStatus === 'completed' && modalPaymentStatus !== 'paid' && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status) && (
+                <p role="alert" className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">กรุณาเลือก “ชำระเงินแล้ว” ก่อนปิดออเดอร์เป็นสำเร็จ</p>
+              )}
               {modalPaymentStatus === 'paid' && (
                 <div>
                   <label className="font-bold text-slate-700 block mb-2">ช่องทางการชำระ</label>
@@ -633,7 +641,7 @@ export const AdminOrdersPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdating || (selectedOrder.order_items || []).some((item) => {
+                  disabled={isUpdating || (modalStatus === 'completed' && modalPaymentStatus !== 'paid' && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) || (selectedOrder.order_items || []).some((item) => {
                     const input = substituteInputs[item.id];
                     const gross = Number(item.qty_kg) * Number(item.price_per_kg);
                     return Number(input?.qtyKg || 0) > Number(item.qty_kg) || (Number(input?.qtyKg || 0) === 0 && Number(input?.totalCost || 0) > 0) || Number(discountInputs[item.id] || 0) > gross;

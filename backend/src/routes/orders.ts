@@ -13,7 +13,15 @@ const createOrderSchema = z.object({
       round_item_id: z.string().uuid('รหัสรายการผักไม่ถูกต้อง'),
       qty_kg: z.number().min(0.5, 'จำนวนผักต้องไม่ต่ำกว่า 0.5 กก.'),
     })
-  ).min(1, 'กรุณาเลือกผักอย่างน้อย 1 ชนิด'),
+  ).min(1, 'กรุณาเลือกผักอย่างน้อย 1 ชนิด').superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    items.forEach((item, index) => {
+      if (seen.has(item.round_item_id)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [index, 'round_item_id'], message: 'รายการผักในออเดอร์ต้องไม่ซ้ำกัน' });
+      }
+      seen.add(item.round_item_id);
+    });
+  }),
   fulfillment_method: z.enum(['pickup', 'delivery'], {
     errorMap: () => ({ message: 'กรุณาเลือกวิธีรับของ (มารับเอง หรือ จัดส่ง)' }),
   }),

@@ -59,6 +59,8 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
   const openOrder = (order: EquipmentOrder) => { setSelectedId(order.id); setDraft(draftFrom(order)); setShipmentMessage(order.delivery_update_message || ''); setShipmentImageFile(null); setShipmentImagePreview(''); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const save = async () => {
     if (!selectedOrder || !draft) return;
+    if (draft.status === 'completed' && draft.payment_status !== 'paid'
+      && (draft.status !== selectedOrder.status || draft.payment_status !== selectedOrder.payment_status)) { setError('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ'); return; }
     if (draft.status === 'shipped' && selectedOrder.status !== 'shipped' && !shipmentImageFile && !selectedOrder.delivery_update_image_url) { setError('กรุณาแนบรูปก่อนยืนยันว่าจัดส่งแล้ว'); return; }
     if (draft.status === 'shipped' && selectedOrder.status !== 'shipped' && !shipmentMessage.trim()) { setError('กรุณาเขียนข้อความแจ้งลูกค้าก่อนยืนยันว่าจัดส่งแล้ว'); return; }
     setError(''); setSaving(true);

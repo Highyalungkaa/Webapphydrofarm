@@ -236,6 +236,11 @@ router.patch('/admin/orders/:id', async (req: AuthenticatedRequest, res: Respons
   if (!parsed.success) { res.status(400).json({ error: 'ข้อมูลอัปเดตออเดอร์ไม่ถูกต้อง' }); return; }
   const { data: existing, error: lookupError } = await supabaseAdmin.from('equipment_orders').select('*').eq('id', req.params.id).maybeSingle();
   if (lookupError || !existing) { res.status(404).json({ error: 'ไม่พบคำสั่งซื้อ' }); return; }
+  if ((parsed.data.status ?? existing.status) === 'completed' && (parsed.data.payment_status ?? existing.payment_status) !== 'paid'
+    && ((parsed.data.status !== undefined && parsed.data.status !== existing.status)
+      || (parsed.data.payment_status !== undefined && parsed.data.payment_status !== existing.payment_status))) {
+    res.status(400).json({ error: 'ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ' }); return;
+  }
   if (existing.status === 'cancelled' && parsed.data.status && parsed.data.status !== 'cancelled') { res.status(400).json({ error: 'ออเดอร์ที่ยกเลิกแล้วไม่สามารถเปิดกลับได้' }); return; }
   const transitions: Record<string, string[]> = {
     pending_confirmation: ['confirmed', 'cancelled'], confirmed: ['processing', 'cancelled'],

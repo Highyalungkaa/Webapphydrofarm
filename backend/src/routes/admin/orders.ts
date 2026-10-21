@@ -211,6 +211,14 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
       return;
     }
 
+    if ((parsed.data.status ?? currentOrder.status) === 'completed'
+      && (parsed.data.payment_status ?? currentOrder.payment_status) !== 'paid'
+      && ((parsed.data.status !== undefined && parsed.data.status !== currentOrder.status)
+        || (parsed.data.payment_status !== undefined && parsed.data.payment_status !== currentOrder.payment_status))) {
+      res.status(400).json({ error: 'ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ' });
+      return;
+    }
+
     let substituteItemsById: Map<string, { id: string; qty_kg: number; price_per_kg: number }> | undefined;
     if (parsed.data.substitute_items || parsed.data.item_discounts) {
       const { data: orderItems, error: itemsError } = await supabaseAdmin
