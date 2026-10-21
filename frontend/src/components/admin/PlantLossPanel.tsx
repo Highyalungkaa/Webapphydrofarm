@@ -39,9 +39,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
   const [count, setCount] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const [image, setImage] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
-  const [imagePath, setImagePath] = useState('');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [voidEntry, setVoidEntry] = useState<LossEntry | null>(null);
   const [voidReason, setVoidReason] = useState('');
@@ -53,11 +50,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [roundId]);
-  useEffect(() => {
-    if (!image) { setPreview(''); return; }
-    const url = URL.createObjectURL(image); setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [image]);
   const selected = data?.items.find(item => item.id === itemId);
   const quantity = Number(count);
   const validCount = !!selected && Number.isInteger(quantity) && quantity > 0 && quantity <= selected.remaining_plant_count;
@@ -70,24 +62,15 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
   const start = () => {
     const first = data?.items.find(item => item.remaining_plant_count > 0);
     setItemId(first?.id || ''); setPlotId(first?.plots.length === 1 ? first.plots[0].id : '');
-    setCount(''); setReason(''); setNote(''); setImage(null); setImagePath(''); setRequestId(crypto.randomUUID());
+    setCount(''); setReason(''); setNote(''); setRequestId(crypto.randomUUID());
     setDate(today); setError(''); setMessage(''); setVoidEntry(null); setOpen(true);
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); if (!validCount || !selected || saving) return;
     setSaving(true); setError(''); setMessage('');
     try {
-      let path = imagePath;
-      if (image && !path) {
-        const base64 = await new Promise<string>((resolve,reject) => {
-          const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]);
-          reader.onerror = () => reject(new Error('อ่านรูปภาพไม่สำเร็จ')); reader.readAsDataURL(image);
-        });
-        const uploaded = await api.post<{ path: string }>(`/admin/rounds/${roundId}/losses/image`, { mime_type: image.type, data: base64 });
-        path = uploaded.path; setImagePath(path);
-      }
       await api.post(`/admin/rounds/${roundId}/losses`, { request_id: requestId, round_item_id: itemId,
-        plot_id: plotId || null, loss_date: date, plant_count: quantity, reason, note, image_path: path || null });
+        plot_id: plotId || null, loss_date: date, plant_count: quantity, reason, note });
       setOpen(false); setMessage('บันทึกผักเสียหายแล้ว และคำนวณจำนวนต้นกับน้ำหนักคงเหลือใหม่เรียบร้อย');
       await load(); await onChanged();
     } catch (err: any) { setError(err.message || 'บันทึกผักเสียหายไม่สำเร็จ'); }
@@ -140,12 +123,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
           <label className="text-sm font-semibold text-slate-700">จำนวนเสียหาย (ต้น) <span className="text-rose-600">*</span><input type="number" inputMode="numeric" required min={1} max={selected?.remaining_plant_count} step={1} value={count} onChange={e => setCount(e.target.value)} className={inputClass} placeholder="เช่น 50" /></label>
           <label className="text-sm font-semibold text-slate-700 sm:col-span-2">สาเหตุ <span className="text-rose-600">*</span><input required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} className={inputClass} placeholder="เช่น รากเน่า แมลง โรค หรือไม่ทราบสาเหตุ" /></label>
           <label className="text-sm font-semibold text-slate-700 sm:col-span-2">หมายเหตุ (ถ้ามี)<textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputClass} /></label>
-          <label className="text-sm font-semibold text-slate-700 sm:col-span-2">รูปภาพประกอบ (ถ้ามี)<input type="file" accept="image/jpeg,image/png,image/webp" className="mt-2 block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-rose-100 file:px-3 file:py-2 file:font-bold file:text-rose-900" onChange={e => {
-            const file = e.target.files?.[0]; if (!file) return;
-            if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) { setError('กรุณาเลือกรูป JPEG, PNG หรือ WebP ขนาดไม่เกิน 5 MB'); e.target.value = ''; return; }
-            setImage(file); setImagePath(''); setError('');
-          }} /><span className="mt-1 block text-xs font-normal text-slate-500">JPEG, PNG หรือ WebP ไม่เกิน 5 MB</span></label>
-          {preview && <div className="sm:col-span-2"><img src={preview} alt="ภาพผักเสียหายที่เลือก" className="max-h-48 rounded-xl object-contain" /><button type="button" onClick={() => { setImage(null); setImagePath(''); }} className="mt-2 text-xs font-bold text-rose-700">นำรูปออก</button></div>}
         </fieldset>
         {validCount && <p role="status" className="rounded-xl bg-white p-3 text-sm text-slate-700">หลังบันทึก: เหลือ <strong>{number(afterCount)} ต้น</strong> ≈ <strong>{number(afterKg)} กก.</strong> · น้ำหนักคาดการณ์ลดลง <strong className="text-rose-700">{number(selected!.remaining_estimated_kg - afterKg)} กก.</strong></p>}
         <button disabled={saving || !validCount} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : 'ยืนยันบันทึกผักเสียหาย'}</button>
