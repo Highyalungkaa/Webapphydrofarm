@@ -6,19 +6,30 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { randomUUID } = require('node:crypto');
 const ids = { round: randomUUID(), item: randomUUID(), crop: randomUUID(), plot: randomUUID(), admin: randomUUID() };
-function setup({ publicRoute=false, missing=false, rpcError=null }={}) {
+function loadHelper(relative) {
+  const exports = {};
+  const file = path.resolve(__dirname,relative);
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
+    exports,require(name){return name.endsWith('/plotCrops.js')?loadHelper('../src/services/plotCrops.ts'):require(name);},
+  });
+  return exports;
+}
+function setup({ publicRoute=false, missing=false, rpcError=null, legacy=false, conflict=false }={}) {
   const routes=new Map(), calls=[], middleware=[];
   const router={ use: (...handlers)=>middleware.push(...handlers) };
   for(const method of ['get','post','put','patch','delete']) router[method]=(url,...handlers)=>routes.set(`${method} ${url}`,handlers.at(-1));
   const auth=()=>{}, admin=()=>{};
-  const round={ id:ids.round, status:'booking_open', current_step:5, notes:JSON.stringify({cropPlotIds:{[ids.crop]:[ids.plot]}}) };
+  const round={ id:ids.round, status:'booking_open', current_step:5, notes:JSON.stringify(legacy?{note:'legacy',cropGrowingDays:{[ids.crop]:30},bookingCreated:true}:{cropPlotIds:{[ids.crop]:[ids.plot]}}) };
   const items=[{id:ids.item,crop_id:ids.crop,plant_count:500,loss_baseline_plant_count:500,loss_plants_per_kg:5,
     lost_plant_count:50,estimated_qty_kg:100,remaining_estimated_qty_kg:90,bookable_qty_kg:100,crops:{name:'Green Oak',slots_per_kg:99}}];
+  round.round_items=items;
+  const noteUpdates=[];
   const db={
     from(table) {
-      const result=()=>({data:table==='planting_rounds'?(publicRoute?[round]:round):table==='round_items'?items:table==='plots'?[{id:ids.plot,name:'Plot 4'}]:table==='orders'?[{order_items:[{round_item_id:ids.item,qty_kg:95}]}]:table==='order_items'?[{round_item_id:ids.item,qty_kg:95}]:[],
+      let single=false,update;
+      const result=()=>({data:table==='planting_rounds'?(single?(update&&conflict?null:round):[round]):table==='round_items'?items:table==='plots'?[{id:ids.plot,name:'Plot 4',slot_capacity:1000,crop_ids:[ids.crop]}]:table==='orders'?[{order_items:[{round_item_id:ids.item,qty_kg:95}]}]:table==='order_items'?[{round_item_id:ids.item,qty_kg:95}]:[],
         error:missing&&table==='plant_losses'?{code:'PGRST205',message:'table not found'}:null});
-      const q={ select(){return q;},eq(){return q;},neq(){return q;},in(){return q;},lte(){return q;},order(){return q;},maybeSingle:async()=>result(),then:(resolve,reject)=>Promise.resolve(result()).then(resolve,reject) };return q;
+      const q={ select(){return q;},eq(){return q;},is(){return q;},neq(){return q;},in(){return q;},lte(){return q;},order(){return q;},update(payload){update=payload;noteUpdates.push(payload);return q;},maybeSingle:async()=>{single=true;return result();},then:(resolve,reject)=>Promise.resolve(result()).then(resolve,reject) };return q;
     },
     async rpc(name,payload){calls.push({name,payload});return {data:{id:'new-loss'},error:rpcError};},
     storage:{from(){return {createSignedUrl:async()=>({data:{signedUrl:'https://example.com/image'}})};}},
@@ -31,10 +42,12 @@ function setup({ publicRoute=false, missing=false, rpcError=null }={}) {
       if(name.endsWith('/supabase.js'))return {supabaseAdmin:db};
       if(name.endsWith('/auth.js'))return {requireAuth:auth,requireAdmin:admin};
       if(name.endsWith('/equipmentPayments.js'))return {};
+      if(name.endsWith('/plotPlantingAllocations.js'))return loadHelper('../src/services/plotPlantingAllocations.ts');
+      if(name.endsWith('/audit.js'))return {recordAuditLog:async()=>{}};
       return require(name);
     },
   });
-  return {calls,middleware,auth,admin,async request(route,body={}){
+  return {calls,middleware,auth,admin,noteUpdates,async request(route,body={}){
     const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;}};
     await routes.get(route)({params:{id:ids.round,lossId:randomUUID()},body,user:{id:ids.admin}},res);return res;
   }};
@@ -70,4 +83,21 @@ test('customer availability becomes zero after losses leave a shortage',async()=
   assert.equal(res.statusCode,200);assert.equal(res.body[0].items[0].available_qty_kg,0);
   assert.equal(res.body[0].items[0].bookable_qty_kg,90);assert.equal(res.body[0].total_available_kg,0);
   assert.equal(res.body[0].is_all_sold_out,true);
+});
+test('legacy rounds expose occupied plots and restore only the missing crop assignment before recording',async()=>{
+  const app=setup({legacy:true});
+  const summary=await app.request('get /:id/losses');
+  assert.equal(summary.body.items[0].plots[0].id,ids.plot);
+  const result=await app.request('post /:id/losses',valid());assert.equal(result.statusCode,201);
+  const notes=JSON.parse(app.noteUpdates[0].notes);
+  assert.deepEqual(notes.cropPlotIds[ids.crop],[ids.plot]);assert.equal(notes.note,'legacy');
+  assert.equal(notes.bookingCreated,true);assert.equal(notes.cropGrowingDays[ids.crop],30);
+});
+test('unoccupied plots are rejected server-side and concurrent note edits are not overwritten',async()=>{
+  const app=setup();
+  assert.equal((await app.request('post /:id/losses',{...valid(),plot_id:randomUUID()})).statusCode,400);
+  assert.equal(app.calls.length,0);assert.equal(app.noteUpdates.length,0);
+  const conflicting=setup({legacy:true,conflict:true});
+  assert.equal((await conflicting.request('post /:id/losses',valid())).statusCode,409);
+  assert.equal(conflicting.calls.length,0);
 });

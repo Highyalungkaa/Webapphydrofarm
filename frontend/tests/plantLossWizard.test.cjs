@@ -8,7 +8,7 @@ const exportsObject = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/lib/plantLossWizard.ts'),'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, { exports: exportsObject });
-const { getLossPlotChoices, getLossItemsForPlot, isValidLossDate, LOSS_WITHOUT_PLOT } = exportsObject;
+const { getLossPlotChoices, getLossItemsForPlot, isValidLossDate } = exportsObject;
 const plotA = { id:'a',name:'แปลง A' }, plotB = { id:'b',name:'แปลง B' };
 const items = [
   { id:'oak',crop_name:'Green Oak',remaining_plant_count:450,plots:[plotA,plotB] },
@@ -18,7 +18,7 @@ const items = [
 ];
 test('plot-first selection deduplicates shared plots and excludes plots with no surviving plants',()=>{
   const ids=Array.from(getLossPlotChoices(items),p=>p.id);
-  assert.deepEqual(ids,['a','b',LOSS_WITHOUT_PLOT]);
+  assert.deepEqual(ids,['a','b']);
 });
 test('only surviving crops planted in the selected plot are offered',()=>{
   assert.deepEqual(Array.from(getLossItemsForPlot(items,'a'),i=>i.id),['oak']);
@@ -28,7 +28,8 @@ test('only surviving crops planted in the selected plot are offered',()=>{
   assert.equal(getLossItemsForPlot(items,'empty').length,0);
 });
 test('legacy unassigned crops cannot appear in an unrelated plot',()=>{
-  assert.deepEqual(Array.from(getLossItemsForPlot(items,LOSS_WITHOUT_PLOT),i=>i.id),['legacy']);
+  assert.equal(getLossItemsForPlot(items,'__unassigned__').length,0);
+  assert.equal(getLossPlotChoices([items[3]]).length,0);
 });
 test('final step accepts real calendar dates within the planting period',()=>{
   assert.equal(isValidLossDate('2026-10-21','2026-10-01','2026-10-21'),true);

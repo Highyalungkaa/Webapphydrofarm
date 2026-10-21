@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../../config/supabase.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewares/auth.js';
 import { parseSlipImage } from '../../services/equipmentPayments.js';
+import { getPlotPlantingAllocations } from '../../services/plotPlantingAllocations.js';
+import { recordAuditLog } from '../../services/audit.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -11,7 +13,7 @@ const uuid = z.string().uuid();
 const lossSchema = z.object({
   request_id: uuid,
   round_item_id: uuid,
-  plot_id: uuid.nullable().optional(),
+  plot_id: z.string().uuid('กรุณาเลือกแปลงที่มีผักปลูกอยู่'),
   loss_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'กรุณาระบุวันที่ให้ถูกต้อง'),
   plant_count: z.number().int().positive('จำนวนเสียหายต้องเป็นจำนวนเต็มมากกว่า 0').max(2147483647),
   reason: z.string().trim().min(1, 'กรุณาระบุสาเหตุ').max(300),
@@ -26,6 +28,18 @@ const fail = (res: Response, error: any) => {
     : error?.message || 'ไม่สามารถบันทึกข้อมูลผักเสียหายได้' });
 };
 
+async function loadPlantingContext() {
+  const [plotsResult, roundsResult] = await Promise.all([
+    supabaseAdmin.from('plots').select('id,name,slot_capacity,crop_id,crop_ids').order('zone_name').order('name'),
+    supabaseAdmin.from('planting_rounds').select(`id,name,status,current_step,notes,updated_at,completed_date,sold_out_date,
+      round_items(id,crop_id,plant_count,estimated_qty_kg,bookable_qty_kg,crops(name,slots_per_kg))`).order('created_at'),
+  ]);
+  if (plotsResult.error || roundsResult.error) throw plotsResult.error || roundsResult.error;
+  const plots = plotsResult.data || [];
+  const rounds = roundsResult.data || [];
+  return { plots, rounds, ...getPlotPlantingAllocations(plots, rounds) };
+}
+
 router.get('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!uuid.safeParse(req.params.id).success) { res.status(400).json({ error: 'รหัสรอบปลูกไม่ถูกต้อง' }); return; }
@@ -33,16 +47,14 @@ router.get('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
       .select('id,notes,status,current_step,seed_date,created_at,sold_out_date,completed_date').eq('id', req.params.id).maybeSingle();
     if (roundError) { fail(res, roundError); return; }
     if (!round) { res.status(404).json({ error: 'ไม่พบรอบปลูก' }); return; }
-    const [itemResult, lossResult, plotResult, bookedResult] = await Promise.all([
+    const [itemResult, lossResult, planting, bookedResult] = await Promise.all([
       supabaseAdmin.from('round_items').select('*,crops(name,slots_per_kg)').eq('round_id', round.id),
       supabaseAdmin.from('plant_losses').select('*').eq('round_id', round.id).order('created_at', { ascending: false }),
-      supabaseAdmin.from('plots').select('id,name'),
+      loadPlantingContext(),
       supabaseAdmin.from('orders').select('status,order_items(round_item_id,qty_kg)').eq('round_id', round.id).neq('status', 'cancelled'),
     ]);
-    const error = itemResult.error || lossResult.error || plotResult.error || bookedResult.error;
+    const error = itemResult.error || lossResult.error || bookedResult.error;
     if (error) { fail(res, error); return; }
-    let plotIds: Record<string, string[]> = {};
-    try { plotIds = JSON.parse(round.notes || '{}').cropPlotIds || {}; } catch { /* legacy notes */ }
     const booked = new Map<string, number>();
     for (const order of bookedResult.data || []) for (const item of order.order_items || []) {
       booked.set(item.round_item_id, (booked.get(item.round_item_id) || 0) + Number(item.qty_kg));
@@ -57,7 +69,8 @@ router.get('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
         remaining_plant_count: original - lost, original_estimated_kg: originalKg, remaining_estimated_kg: remainingKg,
         lost_estimated_kg: Math.max(0, originalKg - remainingKg), plants_per_kg: rate, is_approximate: item.plant_count == null,
         shortage_kg: Math.max(0, (booked.get(item.id) || 0) - remainingKg),
-        plots: (plotResult.data || []).filter(p => Array.isArray(plotIds[item.crop_id]) && plotIds[item.crop_id].includes(p.id)),
+        plots: planting.plots.filter(plot => planting.allocations.some(allocation => allocation.round_id === round.id
+          && allocation.round_item_id === item.id && allocation.plot_id === plot.id && allocation.plant_count > 0)),
       };
     });
     const history = await Promise.all((lossResult.data || []).map(async entry => {
@@ -93,6 +106,33 @@ router.post('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
       res.status(400).json({ error: !parsed.success ? parsed.error.errors[0].message : 'รหัสรอบปลูกไม่ถูกต้อง' }); return;
     }
     const input = parsed.data;
+    const planting = await loadPlantingContext();
+    const allocations = planting.allocations.filter(allocation => allocation.round_id === req.params.id
+      && allocation.round_item_id === input.round_item_id && allocation.plant_count > 0);
+    if (!allocations.some(allocation => allocation.plot_id === input.plot_id)) {
+      res.status(400).json({ error: 'แปลงที่เลือกไม่มีผักชนิดนี้ปลูกอยู่ในรอบนี้ กรุณาโหลดข้อมูลใหม่' }); return;
+    }
+    const currentRound = planting.rounds.find(round => round.id === req.params.id)!;
+    let notes: Record<string, any> = {};
+    try {
+      const parsed = JSON.parse(currentRound.notes || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) notes = parsed;
+      else notes = { note: currentRound.notes || '' };
+    } catch { notes = { note: currentRound.notes || '' }; }
+    const cropId = allocations[0].crop_id;
+    const existingIds = notes.cropPlotIds?.[cropId];
+    if (!Array.isArray(existingIds) || !existingIds.length) {
+      // Older lifecycle updates dropped cropPlotIds. Restore only this crop's
+      // occupied plots using the same allocation rules as plot management.
+      const newNotes = { ...notes, cropPlotIds: { ...notes.cropPlotIds, [cropId]: allocations.map(a => a.plot_id) } };
+      let update = supabaseAdmin.from('planting_rounds').update({ notes: JSON.stringify(newNotes), updated_at: new Date().toISOString() }).eq('id', currentRound.id);
+      update = currentRound.notes == null ? update.is('notes', null) : update.eq('notes', currentRound.notes);
+      const { data: saved, error } = await update.select('id').maybeSingle();
+      if (error) { fail(res, error); return; }
+      if (!saved) { res.status(409).json({ error: 'ข้อมูลแปลงเปลี่ยนแปลงระหว่างบันทึก กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง' }); return; }
+      await recordAuditLog({ actorId: req.user!.id, actorEmail: req.user!.email, entityType: 'planting_rounds', entityId: currentRound.id,
+        action: 'update', oldData: { notes: currentRound.notes }, newData: { notes: newNotes, reason: 'restore_legacy_occupied_plots' } });
+    }
     const { data, error } = await supabaseAdmin.rpc('record_plant_loss', {
       p_round_id: req.params.id, p_round_item_id: input.round_item_id, p_actor_id: req.user!.id,
       p_request_id: input.request_id, p_loss_date: input.loss_date, p_plant_count: input.plant_count,

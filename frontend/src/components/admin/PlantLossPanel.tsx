@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react'
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
 import { plantCountToKg } from '../../lib/plantingQuantities.js';
-import { getLossPlotChoices, getLossItemsForPlot, isValidLossDate, LOSS_WITHOUT_PLOT } from '../../lib/plantLossWizard.js';
+import { getLossPlotChoices, getLossItemsForPlot, isValidLossDate } from '../../lib/plantLossWizard.js';
 
 interface LossItem {
   id: string; crop_name: string; original_plant_count: number; lost_plant_count: number;
@@ -83,7 +83,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
     setSaving(true); setError(''); setMessage('');
     try {
       await api.post(`/admin/rounds/${roundId}/losses`, { request_id: requestId, round_item_id: itemId,
-        plot_id: plotId === LOSS_WITHOUT_PLOT ? null : plotId, loss_date: date, plant_count: quantity, reason: reason.trim(), note: note.trim() });
+        plot_id: plotId, loss_date: date, plant_count: quantity, reason: reason.trim(), note: note.trim() });
       setOpen(false); setMessage('บันทึกผักเสียหายแล้ว และคำนวณจำนวนต้นกับน้ำหนักคงเหลือใหม่เรียบร้อย');
       await load(); await onChanged();
     } catch (err: any) { setError(err.message || 'บันทึกผักเสียหายไม่สำเร็จ'); }
@@ -134,7 +134,8 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
         <ol aria-label="ขั้นตอนบันทึกผักเสียหาย" className="grid grid-cols-5 gap-1.5">{lossSteps.map((label,index) => <li key={label} aria-current={formStep === index + 1 ? 'step' : undefined} className={`rounded-xl p-2 text-center ${formStep === index + 1 ? 'bg-rose-600 text-white' : index + 1 < formStep ? 'bg-emerald-100 text-emerald-900' : 'bg-white text-slate-400'}`}><span className="text-sm font-extrabold">{index + 1}</span><span className="mt-1 block text-[10px] font-semibold sm:text-xs">{label}</span></li>)}</ol>
         {formStep > 1 && <p className="text-xs leading-relaxed text-slate-500">แปลง: {selectedPlot?.name}{selected && ` · ผัก: ${selected.crop_name}`}{formStep > 3 && ` · เสียหาย ${number(quantity)} ต้น`}</p>}
         <fieldset disabled={saving} className="space-y-4">
-          {formStep === 1 && <label className="block text-sm font-semibold text-slate-700">แปลงที่พบผักเสียหาย <span className="text-rose-600">*</span><select required value={plotId} onChange={e => { setPlotId(e.target.value); setItemId(''); setCount(''); }} className={inputClass}><option value="">เลือกแปลงที่พบ</option>{plotChoices.map(plot => <option key={plot.id} value={plot.id}>{plot.name}</option>)}</select><span className="mt-2 block text-xs font-normal text-slate-500">แสดงเฉพาะแปลงในรอบนี้ที่ยังมีต้นคงเหลือ</span></label>}
+          {formStep === 1 && <label className="block text-sm font-semibold text-slate-700">แปลงที่พบผักเสียหาย <span className="text-rose-600">*</span><select required value={plotId} onChange={e => { setPlotId(e.target.value); setItemId(''); setCount(''); }} className={inputClass}><option value="">เลือกแปลงที่พบ</option>{plotChoices.map(plot => <option key={plot.id} value={plot.id}>{plot.name}</option>)}</select><span className="mt-2 block text-xs font-normal text-slate-500">แสดงเฉพาะแปลงที่มีผักปลูกอยู่ในรอบนี้</span></label>}
+          {formStep === 1 && !plotChoices.length && <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">ยังไม่พบแปลงที่มีผักปลูกในรอบนี้ กรุณาตรวจสอบข้อมูลที่ <a href="/admin/plots" target="_blank" rel="noreferrer" className="font-bold underline">จัดการแปลงปลูก</a> แล้วโหลดหน้านี้ใหม่</p>}
           {formStep === 2 && <label className="block text-sm font-semibold text-slate-700">ชนิดผักที่เสียหาย <span className="text-rose-600">*</span><select required value={itemId} onChange={e => { setItemId(e.target.value); setCount(''); }} className={inputClass}><option value="">เลือกชนิดผัก</option>{plotItems.map(item => <option key={item.id} value={item.id}>{item.crop_name} (คงเหลือในรอบ {number(item.remaining_plant_count)} ต้น)</option>)}</select><span className="mt-2 block text-xs font-normal text-slate-500">เลือกได้เฉพาะผักที่ปลูกในแปลงที่เลือก</span></label>}
           {formStep === 3 && <label className="block text-sm font-semibold text-slate-700">จำนวนต้นที่เสียหาย <span className="text-rose-600">*</span><input type="number" inputMode="numeric" required min={1} max={selected?.remaining_plant_count} step={1} value={count} onChange={e => setCount(e.target.value)} className={inputClass} placeholder="เช่น 50" /><span className="mt-2 block text-xs font-normal text-slate-500">กรอกจำนวนเต็ม ตั้งแต่ 1 ถึง {number(selected?.remaining_plant_count || 0)} ต้น (ยอดคงเหลือของผักชนิดนี้ทั้งรอบ)</span></label>}
           {formStep === 4 && <><label className="block text-sm font-semibold text-slate-700">สาเหตุที่ผักเสียหาย <span className="text-rose-600">*</span><input required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} className={inputClass} placeholder="เช่น รากเน่า แมลง โรค หรือไม่ทราบสาเหตุ" /></label><label className="block text-sm font-semibold text-slate-700">หมายเหตุ (ถ้ามี)<textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputClass} /></label></>}
