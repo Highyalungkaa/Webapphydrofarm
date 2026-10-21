@@ -11,55 +11,8 @@ import {
   Image as ImageIcon,
   ImagePlus,
   Layers,
-  Sparkles,
   ExternalLink,
 } from 'lucide-react';
-
-interface PresetCrop {
-  name: string;
-  price: number;
-  slots: number;
-  imageUrl: string;
-  description: string;
-}
-
-const PRESET_CROPS: PresetCrop[] = [
-  {
-    name: 'กรีนโอ๊ค (Green Oak)',
-    price: 130,
-    slots: 4.5,
-    imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=500&auto=format&fit=crop&q=80',
-    description: 'ผักสลัดใบหยัก สีเขียวอ่อน รสชาติหวานกรอบ ไม่มีรสขม ทานง่าย อุดมไปด้วยกากใยและวิตามินซี',
-  },
-  {
-    name: 'เรดโอ๊ค (Red Oak)',
-    price: 130,
-    slots: 4.5,
-    imageUrl: 'https://images.unsplash.com/photo-1508747703725-719777637510?w=500&auto=format&fit=crop&q=80',
-    description: 'ผักสลัดใบสีแดงอมม่วง รสชาติหวานนุ่ม ช่วยต้านอนุมูลอิสระด้วยสารแอนโทไซยานิน สีสันสวยงามบนจานสลัด',
-  },
-  {
-    name: 'คอส / โรเมน (Cos / Romaine)',
-    price: 140,
-    slots: 4.0,
-    imageUrl: 'https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=500&auto=format&fit=crop&q=80',
-    description: 'ผักสลัดใบยาว กรอบแน่น ทนความร้อนได้ดี นิยมทานคู่กับน้ำสลัดซีซาร์ มีวิตามินเคและโฟเลตสูง',
-  },
-  {
-    name: 'บัตเตอร์เฮด (Butterhead)',
-    price: 150,
-    slots: 4.0,
-    imageUrl: 'https://images.unsplash.com/photo-1556801712-76c8eb07bbc9?w=500&auto=format&fit=crop&q=80',
-    description: 'ใบอ่อนนุ่มซ้อนกันเป็นพุ่มคล้ายดอกกุหลาบ รสสัมผัสนุ่มละมุนคล้ายเนย หวานอร่อย เหมาะกับทุกน้ำสลัด',
-  },
-  {
-    name: 'ฟิลเล่ย์ ไอซ์เบิร์ก (Frillice)',
-    price: 150,
-    slots: 5.0,
-    imageUrl: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?w=500&auto=format&fit=crop&q=80',
-    description: 'ใบหยิกหยักเป็นฝอย กรอบมากเป็นพิเศษ เคี้ยวเพลิน รสชาติหวานสดชื่น เหมาะสำหรับเมนูยำและสลัด',
-  },
-];
 
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
@@ -150,15 +103,6 @@ export const AdminCropsPage: React.FC = () => {
     setIsActive(crop.is_active);
     setError(null);
     setIsModalOpen(true);
-  };
-
-  const handleApplyPreset = (preset: PresetCrop) => {
-    setName(preset.name);
-    setDefaultPrice(preset.price);
-    setSlotsPerKg(preset.slots);
-    setImageUrl(preset.imageUrl);
-    setImageFile(null);
-    setDescription(preset.description);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -421,28 +365,6 @@ export const AdminCropsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Quick Presets (Only when adding new or optional) */}
-            {!editingId && (
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>เลือกเทมเพลตผักยอดนิยม (กรอกข้อมูลอัตโนมัติ):</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESET_CROPS.map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      onClick={() => handleApplyPreset(preset)}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-slate-200 rounded-lg hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50/50 transition-colors"
-                    >
-                      {preset.name.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-4 text-xs sm:text-sm">
               {/* 1. Crop Name */}
               <div>
@@ -598,7 +520,7 @@ export const AdminCropsPage: React.FC = () => {
                   </div>
                 ) : (
                   <p className="text-[10px] text-slate-400 mt-1">
-                    สามารถเลือกรูปจากอุปกรณ์ ใส่ลิงก์ หรือเลือกเทมเพลตผักด้านบนได้
+                    สามารถเลือกรูปจากอุปกรณ์ หรือใส่ลิงก์รูปภาพได้
                   </p>
                 )}
               </div>
