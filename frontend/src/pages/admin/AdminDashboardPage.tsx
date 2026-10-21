@@ -70,9 +70,9 @@ export const AdminDashboardPage: React.FC = () => {
   const formatDate = formatDateDMY;
 
   const pendingConfirmationOrders = orders.filter((o) => o.status === 'pending_confirmation');
-  const unpaidOrders = orders.filter((o) => o.payment_status === 'unpaid' && o.status !== 'cancelled');
   const activeRounds = rounds.filter((round) => round.status !== 'completed' && round.status !== 'cancelled' && !round.completed_date);
   const activeOrders = orders.filter((order) => !['completed', 'cancelled', 'no_show'].includes(order.status));
+  const unpaidOrders = activeOrders.filter((order) => order.payment_status === 'unpaid');
   const openBookingRounds = rounds.filter((round) => round.status === 'booking_open');
 
   const roundReminders = rounds.flatMap((round) => {
