@@ -351,7 +351,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                           {round.name}
                         </h2>
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                          🏁 สิ้นสุดรอบแล้ว
+                          {round.closure_reason === 'unsold' ? 'สิ้นสุดรอบ — มีผักขายไม่ออก' : '🏁 สิ้นสุดรอบแล้ว'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-500">
@@ -414,9 +414,9 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs">
-                        <span className="text-[10px] text-slate-400 block font-medium">7. ขายหมด</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">{round.closure_reason === 'unsold' ? '7. มีผักขายไม่ออก' : '7. ขายหมด'}</span>
                         <span className="font-bold text-slate-800 block mt-0.5">
-                          {formatDateDMY(round.sold_out_date)}
+                          {formatDateDMY(round.closure_reason === 'unsold' ? round.completed_date : round.sold_out_date)}
                         </span>
                       </div>
                       <div className="p-2.5 bg-purple-50 rounded-xl border border-purple-100 shadow-2xs">

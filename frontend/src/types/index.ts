@@ -118,6 +118,7 @@ export interface PlantingRound {
   delivery_start_time: string;
   delivery_end_time: string;
   status: RoundStatus;
+  closure_reason?: 'unsold' | null;
   current_step?: number;
   seed_date?: string | null;
   fertilizing_date?: string | null;

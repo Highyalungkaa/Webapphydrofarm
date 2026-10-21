@@ -1,5 +1,6 @@
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
 import { PlantLossPanel } from '../../components/admin/PlantLossPanel.js';
+import { UnsoldRoundClose } from '../../components/admin/UnsoldRoundClose.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -186,7 +187,7 @@ export const AdminRoundDetailPage: React.FC = () => {
     } else if (stepNum === 6) {
       defaultVal = currentRound.harvest_sale_date || currentRound.expected_harvest_date || currentRound.fulfillment_date || today;
     } else if (stepNum === 7) {
-      defaultVal = currentRound.sold_out_date || today;
+      defaultVal = (currentRound.closure_reason === 'unsold' ? currentRound.completed_date : currentRound.sold_out_date) || today;
     } else if (stepNum === 8) {
       defaultVal = currentRound.completed_date || today;
     }
@@ -364,7 +365,8 @@ export const AdminRoundDetailPage: React.FC = () => {
             const isCompleted = step.number < currentStep || (isRoundCompleted && step.number === 8);
             const isCurrent = step.number === currentStep && !isRoundCompleted;
             const isSelected = step.number === activeStepTab;
-            const recordedDate = (round as any)[step.field];
+            const unsoldStep = round.closure_reason === 'unsold' && step.number === 7;
+            const recordedDate = unsoldStep ? round.completed_date : (round as any)[step.field];
 
             return (
               <button
@@ -400,7 +402,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                         : 'text-slate-400'
                     }`}
                   >
-                    {step.title}
+                    {unsoldStep ? '7. มีผักขายไม่ออก' : step.title}
                   </span>
                   <span className="block text-[10px] text-slate-400 font-medium">
                     {recordedDate ? formatDateDMY(String(recordedDate)) : step.subtitle}
@@ -436,7 +438,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 )}
               </div>
               <h2 className="text-xl font-black text-slate-900 mt-1">
-                {STEPS[activeStepTab - 1].title}: {STEPS[activeStepTab - 1].subtitle}
+                {round.closure_reason === 'unsold' && activeStepTab === 7 ? '7. มีผักขายไม่ออก: บันทึกผักคงเหลือและสิ้นสุดรอบ' : `${STEPS[activeStepTab - 1].title}: ${STEPS[activeStepTab - 1].subtitle}`}
               </h2>
             </div>
           </div>
@@ -759,6 +761,8 @@ export const AdminRoundDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {(round.closure_reason === 'unsold' || ((activeStepTab === 6 || activeStepTab === 7) && currentStep >= 7 && !!round.harvest_sale_date && round.harvest_sale_date <= (toBangkokDateString(new Date().toISOString()) || '') && !round.sold_out_date && !isRoundCompleted && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
 
       <PlantLossPanel roundId={round.id} onChanged={loadRound} />
 
