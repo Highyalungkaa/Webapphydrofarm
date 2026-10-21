@@ -89,7 +89,7 @@ router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<
 const cropSchema = z.object({
   name: z.string().min(1, 'กรุณาระบุชื่อชนิดผัก').max(100),
   default_price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ติดลบ'),
-  slots_per_kg: z.number().min(0.1, 'จำนวน slot ปลูก ต่อ 1 กก. ต้องมากกว่า 0').default(4.0),
+  slots_per_kg: z.number().min(0.1).optional(),
   growing_days: z.number().int().min(1, 'ระยะเวลาปลูกต้องอย่างน้อย 1 วัน').default(45),
   image_url: z.string().url('รูปแบบ URL รูปภาพไม่ถูกต้อง').optional().nullable().or(z.literal('')),
   description: z.string().optional().nullable(),
@@ -132,7 +132,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       .insert({
         name: name.trim(),
         default_price_per_kg,
-        slots_per_kg: slots_per_kg || 4.0,
+        ...(slots_per_kg !== undefined ? { slots_per_kg } : {}),
         image_url: image_url ? image_url.trim() : null,
         description: description ? description.trim() : null,
         is_active,
@@ -180,7 +180,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       .update({
         name: name.trim(),
         default_price_per_kg,
-        slots_per_kg: slots_per_kg || 4.0,
+        ...(slots_per_kg !== undefined ? { slots_per_kg } : {}),
         image_url: image_url ? image_url.trim() : null,
         description: description ? description.trim() : null,
         is_active,

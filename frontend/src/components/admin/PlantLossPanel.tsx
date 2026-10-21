@@ -2,7 +2,6 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
-import { plantCountToKg } from '../../lib/plantingQuantities.js';
 import { getLossPlotChoices, getLossItemsForPlot, isValidLossDate } from '../../lib/plantLossWizard.js';
 
 interface LossItem {
@@ -62,7 +61,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
   const quantity = Number(count);
   const validCount = !!selected && Number.isInteger(quantity) && quantity > 0 && quantity <= selected.remaining_plant_count;
   const afterCount = selected ? Math.max(0, selected.remaining_plant_count - (validCount ? quantity : 0)) : 0;
-  const afterKg = selected ? plantCountToKg(afterCount, selected.plants_per_kg) : 0;
   const canRecord = !!data && !['completed','cancelled'].includes(data.round.status) && !data.round.sold_out_date && !data.round.completed_date;
   const today = toBangkokDateString(new Date().toISOString()) || '';
   const minDate = data?.round.seed_date || toBangkokDateString(data?.round.created_at) || '';
@@ -84,7 +82,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
     try {
       await api.post(`/admin/rounds/${roundId}/losses`, { request_id: requestId, round_item_id: itemId,
         plot_id: plotId, loss_date: date, plant_count: quantity, reason: reason.trim(), note: note.trim() });
-      setOpen(false); setMessage('บันทึกผักเสียหายแล้ว และคำนวณจำนวนต้นกับน้ำหนักคงเหลือใหม่เรียบร้อย');
+      setOpen(false); setMessage('บันทึกผักเสียหายและปรับจำนวนต้นคงเหลือแล้ว');
       await load(); await onChanged();
     } catch (err: any) { setError(err.message || 'บันทึกผักเสียหายไม่สำเร็จ'); }
     finally { setSaving(false); }
@@ -106,7 +104,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
       {!!totals?.lost && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs">สูญเสีย {number(totals.lost)} ต้น</span>}
       <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
     </button>
-    {!expanded && shortage > 0 && <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" /><span>ผลผลิตคาดการณ์ไม่พอยอดจอง ขาด {number(shortage)} กก.</span><button type="button" onClick={() => setExpanded(true)} className="font-bold underline">ดูรายละเอียด</button></div>}
     <div id={panelId} hidden={!expanded} className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-lg font-extrabold text-slate-900">ผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
@@ -123,9 +120,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
       {data.items.map(item => <div key={item.id} className="space-y-2 rounded-2xl border border-slate-200 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-slate-900">{item.crop_name}</h3><span className="text-xs text-slate-500">อัตราสูญเสีย {item.original_plant_count ? number(item.lost_plant_count / item.original_plant_count * 100) : 0}%</span></div>
         <p className="text-sm text-slate-600">ปลูก {number(item.original_plant_count)} ต้น · เสียหาย <strong className="text-rose-700">{number(item.lost_plant_count)}</strong> ต้น · เหลือ <strong className="text-emerald-800">{number(item.remaining_plant_count)}</strong> ต้น</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm"><span>น้ำหนักคงเหลือคาดการณ์ <strong className="text-emerald-800">{number(item.remaining_estimated_kg)} กก.</strong></span><span className="text-rose-700">ลดลง {number(item.lost_estimated_kg)} กก.</span></div>
-        <p className="text-xs text-slate-500">คำนวณจาก {number(item.plants_per_kg)} ต้น/กก. และปัดลงเป็นกิโลกรัมเต็ม{item.is_approximate ? ' · รอบเดิมนี้ใช้จำนวนต้นโดยประมาณจากน้ำหนักเริ่มต้น' : ''}</p>
-        {item.shortage_kg > 0 && <p role="alert" className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900"><AlertTriangle className="h-5 w-5 shrink-0" />ผลผลิตคาดการณ์ไม่เพียงพอต่อยอดจอง ขาด {number(item.shortage_kg)} กก. กรุณาจัดเตรียมผักทดแทน โดยยอดจองลูกค้ายังคงเดิม</p>}
       </div>)}
       {!canRecord && <p className="text-xs text-slate-500">รอบนี้ขายหมด สิ้นสุด หรือยกเลิกแล้ว ดูประวัติได้ แต่ไม่สามารถเพิ่มหรือยกเลิกรายการเสียหายได้</p>}
       </>}
@@ -141,14 +135,14 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
           {formStep === 4 && <><label className="block text-sm font-semibold text-slate-700">สาเหตุที่ผักเสียหาย <span className="text-rose-600">*</span><input required maxLength={300} value={reason} onChange={e => setReason(e.target.value)} className={inputClass} placeholder="เช่น รากเน่า แมลง โรค หรือไม่ทราบสาเหตุ" /></label><label className="block text-sm font-semibold text-slate-700">หมายเหตุ (ถ้ามี)<textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} rows={2} className={inputClass} /></label></>}
           {formStep === 5 && <><label className="block text-sm font-semibold text-slate-700">วันที่พบผักเสียหาย <span className="text-rose-600">*</span><input type="date" required value={date} min={minDate || undefined} max={today} onChange={e => setDate(e.target.value)} className={inputClass} /></label><div className="space-y-2 rounded-xl bg-white p-4 text-sm text-slate-700"><h4 className="font-bold text-slate-900">ตรวจสอบก่อนบันทึก</h4><p>แปลง: <strong>{selectedPlot?.name}</strong></p><p>ชนิดผัก: <strong>{selected?.crop_name}</strong></p><p>จำนวนเสียหาย: <strong>{number(quantity)} ต้น</strong></p><p className="break-words">สาเหตุ: {reason}</p>{note && <p className="break-words">หมายเหตุ: {note}</p>}<p>วันที่พบ: <strong>{formatDateDMY(date)}</strong></p></div></>}
         </fieldset>
-        {formStep >= 3 && validCount && <p role="status" className="rounded-xl bg-white p-3 text-sm text-slate-700">หลังบันทึก: เหลือ <strong>{number(afterCount)} ต้น</strong> ≈ <strong>{number(afterKg)} กก.</strong> · น้ำหนักคาดการณ์ลดลง <strong className="text-rose-700">{number(selected!.remaining_estimated_kg - afterKg)} กก.</strong></p>}
+        {formStep >= 3 && validCount && <p role="status" className="rounded-xl bg-white p-3 text-sm text-slate-700">หลังบันทึก: เหลือ <strong>{number(afterCount)} ต้น</strong></p>}
         <div className="flex items-center justify-between gap-3">{formStep > 1 ? <button type="button" disabled={saving} onClick={() => { setError(''); setFormStep(step => step - 1); }} className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 disabled:opacity-50">ย้อนกลับ</button> : <span />}<button type="submit" disabled={saving || !stepValid} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : formStep < 5 ? 'ถัดไป' : 'ยืนยันบันทึกผักเสียหาย'}</button></div>
       </form>}
       {!open && <details className="rounded-2xl border border-slate-200 p-4" open={data.history.length > 0}>
         <summary className="cursor-pointer text-sm font-bold text-slate-800">ประวัติผักเสียหาย ({data.history.length} รายการ)</summary>
         {!data.history.length && <p className="mt-3 text-sm text-slate-500">ยังไม่มีการบันทึกผักเสียหายในรอบนี้</p>}
         <div className="mt-3 space-y-3">{data.history.map(entry => <article key={entry.id} className={`space-y-2 rounded-xl border p-3 text-sm ${entry.voided_at ? 'border-slate-200 bg-slate-50' : 'border-rose-100 bg-white'}`}>
-          <div className="flex flex-wrap justify-between gap-2"><strong>{data.items.find(i => i.id === entry.round_item_id)?.crop_name} · {number(entry.plant_count)} ต้น</strong><span className={entry.voided_at ? 'text-slate-500' : 'text-rose-700'}>{entry.voided_at ? 'ยกเลิกรายการแล้ว' : `น้ำหนักลดลง ณ เวลาบันทึก ${number(Number(entry.estimated_loss_kg))} กก.`}</span></div>
+          <div className="flex flex-wrap justify-between gap-2"><strong>{data.items.find(i => i.id === entry.round_item_id)?.crop_name} · {number(entry.plant_count)} ต้น</strong><span className={entry.voided_at ? 'text-slate-500' : 'text-rose-700'}>{entry.voided_at ? 'ยกเลิกรายการแล้ว' : 'บันทึกจำนวนต้นเสียหาย'}</span></div>
           <p className="text-slate-600">{formatDateDMY(entry.loss_date)} · {entry.plot_name || 'ไม่ระบุแปลง'} · สถานะ {stages[entry.stage-1]}</p>
           <p className="break-words">สาเหตุ: {entry.reason}{entry.note && <span className="block text-slate-500">หมายเหตุ: {entry.note}</span>}</p>
           <p className="break-all text-xs text-slate-500">บันทึกโดย {entry.recorded_by_email} · {formatDateTimeDMY(entry.created_at)}</p>
@@ -157,7 +151,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
           {voidEntry?.id === entry.id && <form onSubmit={voidLoss} className="space-y-2 rounded-xl bg-amber-50 p-3"><p className="text-xs text-amber-900">จำนวนต้นจะถูกคืนเข้าสู่ยอดคงเหลือ โดยยังเก็บประวัติเดิมไว้</p><label className="block text-xs font-semibold">เหตุผลที่ยกเลิก<input required disabled={saving} maxLength={500} value={voidReason} onChange={e => setVoidReason(e.target.value)} className={inputClass} placeholder="เช่น กรอกจำนวนผิด" /></label><div className="flex gap-3"><button disabled={saving} className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white">{saving ? 'กำลังบันทึก...' : 'ยืนยันยกเลิกรายการ'}</button><button type="button" disabled={saving} onClick={() => setVoidEntry(null)} className="text-xs font-bold text-slate-600">กลับ</button></div></form>}
         </article>)}</div>
       </details>}
-      <p className="text-xs leading-relaxed text-slate-500">น้ำหนักเป็นค่าคาดการณ์ตามจำนวนต้น ไม่ใช่น้ำหนักชั่งจริง การสูญเสียไม่คืนพื้นที่แปลงอัตโนมัติ และไม่เปลี่ยนจำนวนในออเดอร์ลูกค้า</p>
+      <p className="text-xs leading-relaxed text-slate-500">การบันทึกผักเสียหายปรับเฉพาะจำนวนต้น ไม่แปลงเป็นกิโลกรัม ไม่คืนพื้นที่แปลงอัตโนมัติ และไม่เปลี่ยนจำนวนในออเดอร์ลูกค้า</p>
     </>}
     </div>
   </section>;

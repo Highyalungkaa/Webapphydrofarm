@@ -247,9 +247,6 @@ export const AdminDashboardPage: React.FC = () => {
           <div className="grid gap-3 lg:grid-cols-2">
             {activeRounds.map((round) => {
               const bookedKg = Number(round.total_booked_kg || 0);
-              const bookableKg = Number(round.total_bookable_kg || 0);
-              const estimatedKg = Number(round.total_estimated_kg || 0);
-              const percent = bookableKg > 0 ? Math.min(100, Math.round((bookedKg / bookableKg) * 100)) : 0;
 
               return (
                 <div key={round.id} className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs transition hover:border-emerald-200 hover:shadow-sm">
@@ -286,29 +283,7 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Progress bar and metrics */}
-                  <div className="space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600 font-medium">
-                        ยอดจอง: <strong className="text-slate-900">{bookedKg.toFixed(1)}</strong> / {bookableKg.toFixed(1)} กก.
-                        (ประมาณการ: {estimatedKg.toFixed(1)} กก.)
-                      </span>
-                      <span className="font-extrabold text-emerald-700">{percent}%</span>
-                    </div>
-
-                    <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          percent >= 100
-                            ? 'bg-rose-500'
-                            : percent >= 75
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${percent}%` }}
-                      ></div>
-                    </div>
-                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">ยอดจอง <strong>{bookedKg.toFixed(2)} กก.</strong><span className="ml-3 text-xs text-slate-500">{round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}</span></div>
                 </div>
               );
             })}

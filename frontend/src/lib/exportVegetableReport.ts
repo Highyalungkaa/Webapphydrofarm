@@ -62,7 +62,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
   const selectedName = selectedRoundId ? roundById.get(selectedRoundId)?.name || 'รอบที่เลือก' : 'ทุกรอบปลูก';
   const allItems = activeOrders.flatMap((order) => itemsOf(order));
   const completedItems = completedOrders.flatMap((order) => itemsOf(order));
-  const openedKg = sum(scopedRounds.flatMap((round) => round.round_items || []), (item) => number(item.bookable_qty_kg));
+  const openedKg = sum(activeOrders.flatMap(itemsOf), (item) => number(item.qty_kg));
   const bookedKg = sum(allItems, (item) => number(item.qty_kg));
   const soldKg = sum(completedItems, (item) => number(item.qty_kg));
   const substitutionKg = sum(allItems, substituteQty);
@@ -126,10 +126,10 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     ['รอบปลูกในรายงาน', scopedRounds.length, 'รอบ', 'จำนวนรอบที่อยู่ในขอบเขตที่เลือก'],
     ['คำสั่งจอง', activeOrders.length, 'ออเดอร์', 'ทุกสถานะ ยกเว้นยกเลิก'],
     ['ลูกค้าที่สั่งจอง', new Set(activeOrders.map(orderCustomerKey)).size, 'คน', 'นับลูกค้าไม่ซ้ำกันจากคำสั่งจองที่ไม่ยกเลิก'],
-    ['เปิดให้จอง', openedKg, 'กก.', 'รวมปริมาณ bookable ของรายการผักในรอบ'],
+    ['จำนวนต้นที่ปลูก', sum(scopedRounds.flatMap(r=>r.round_items||[]),i=>number(i.plant_count)), 'ต้น', 'จำนวนต้นที่บันทึกตอนสร้างรอบปลูก'],
     ['ปริมาณที่จอง', bookedKg, 'กก.', 'รวมจำนวนผักในคำสั่งจองที่ไม่ยกเลิก'],
     ['ขายสำเร็จ', soldKg, 'กก.', 'รวมจำนวนผักในคำสั่งจองสถานะสำเร็จ'],
-    ['อัตราขายต่อเปิดจอง', openedKg > 0 ? soldKg / openedKg : 0, '%', 'ขายสำเร็จ ÷ ปริมาณที่เปิดให้จอง'],
+    ['อัตราสำเร็จต่อยอดจอง', openedKg > 0 ? soldKg / openedKg : 0, '%', 'ยอดตามออเดอร์สำเร็จ ÷ ยอดสั่งจอง'],
     ['มูลค่าจองสุทธิ', sum(activeOrders, (order) => number(order.total_amount)), 'บาท', 'ยอดสุทธิจากคำสั่งจองที่ไม่ยกเลิก รวมส่วนลดแล้ว'],
     ['ยอดขายสำเร็จสุทธิ', sum(completedOrders, (order) => number(order.total_amount)), 'บาท', 'ยอดสุทธิจากคำสั่งจองสถานะสำเร็จ'],
     ['ผักทดแทน', substitutionKg, 'กก.', 'ปริมาณผักที่ระบุว่าได้จากแหล่งอื่น'],
@@ -141,13 +141,13 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
   });
   summary.finish();
 
-  const roundSheet = addSheet('รายรอบ', 'หนึ่งแถวต่อรอบปลูก เปรียบเทียบปริมาณเปิดจอง จองจริง และขายสำเร็จ', [
+  const roundSheet = addSheet('รายรอบ', 'หนึ่งแถวต่อรอบปลูก จำนวนต้น ยอดสั่งจอง และออเดอร์สำเร็จ', [
     { header: 'รหัสรอบ', key: 'id', width: 38 }, { header: 'ชื่อรอบ', key: 'name', width: 32 },
     { header: 'สถานะรอบ', key: 'status', width: 18 }, { header: 'วันเก็บเกี่ยว/ส่งมอบ', key: 'date', width: 23, format: dayFormat },
-    { header: 'เปิดให้จอง (กก.)', key: 'opened', width: 19, format: kgFormat },
+    { header: 'จำนวนต้นที่ปลูก', key: 'opened', width: 19, format: countFormat },
     { header: 'จองแล้ว (กก.)', key: 'booked', width: 18, format: kgFormat },
     { header: 'ขายสำเร็จ (กก.)', key: 'sold', width: 20, format: kgFormat },
-    { header: 'อัตราขายต่อเปิดจอง', key: 'rate', width: 23, format: '0.0%' },
+    { header: 'อัตราสำเร็จต่อยอดจอง', key: 'rate', width: 23, format: '0.0%' },
     { header: 'ออเดอร์', key: 'orders', width: 14, format: countFormat },
     { header: 'ลูกค้า', key: 'customers', width: 14, format: countFormat },
     { header: 'มูลค่าจองสุทธิ (บาท)', key: 'bookedAmount', width: 24, format: moneyFormat },
@@ -158,12 +158,12 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
   scopedRounds.forEach((round) => {
     const related = activeOrders.filter((order) => order.round_id === round.id);
     const completed = related.filter((order) => order.status === 'completed');
-    const opened = sum(round.round_items || [], (item) => number(item.bookable_qty_kg));
+    const opened = sum(round.round_items || [], (item) => number(item.plant_count));
     const sold = sum(completed.flatMap(itemsOf), (item) => number(item.qty_kg));
     const items = related.flatMap(itemsOf);
     roundSheet.sheet.addRow({
       id: round.id, name: round.name, status: roundStatus[round.status] || round.status, date: dateOnly(round.fulfillment_date),
-      opened, booked: sum(items, (item) => number(item.qty_kg)), sold, rate: opened > 0 ? sold / opened : 0,
+      opened, booked: sum(items, (item) => number(item.qty_kg)), sold, rate: sum(items, i=>number(i.qty_kg)) > 0 ? sold / sum(items, i=>number(i.qty_kg)) : 0,
       orders: related.length, customers: new Set(related.map(orderCustomerKey)).size,
       bookedAmount: sum(related, (order) => number(order.total_amount)),
       soldAmount: sum(completed, (order) => number(order.total_amount)),
@@ -174,7 +174,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
 
   const cropSheet = addSheet('รายชนิดผัก', 'หนึ่งแถวต่อชนิดผักในแต่ละรอบ ปริมาณและมูลค่าจองไม่รวมออเดอร์ยกเลิก', [
     { header: 'รหัสรอบ', key: 'roundId', width: 38 }, { header: 'ชื่อรอบ', key: 'roundName', width: 30 },
-    { header: 'ชนิดผัก', key: 'crop', width: 25 }, { header: 'เปิดให้จอง (กก.)', key: 'opened', width: 21, format: kgFormat },
+    { header: 'ชนิดผัก', key: 'crop', width: 25 }, { header: 'จำนวนต้นที่ปลูก', key: 'opened', width: 21, format: countFormat },
     { header: 'จองแล้ว (กก.)', key: 'booked', width: 19, format: kgFormat },
     { header: 'ขายสำเร็จ (กก.)', key: 'sold', width: 21, format: kgFormat },
     { header: 'มูลค่าจองก่อนลด (บาท)', key: 'gross', width: 27, format: moneyFormat },
@@ -191,7 +191,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
       const discounts = sum(matching, discount);
       cropSheet.sheet.addRow({
         roundId: round.id, roundName: round.name, crop: roundItem.crops?.name || roundItem.crop_name || 'ไม่ระบุชนิดผัก',
-        opened: number(roundItem.bookable_qty_kg), booked: sum(matching, (item) => number(item.qty_kg)),
+        opened: number(roundItem.plant_count), booked: sum(matching, (item) => number(item.qty_kg)),
         sold: sum(completed, (item) => number(item.qty_kg)), gross: grossAmount, discount: discounts,
         net: grossAmount - discounts, substituteKg: sum(matching, substituteQty),
         substituteCost: sum(matching, substituteCost),
@@ -239,14 +239,16 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'มูลค่าก่อนลด (บาท)', key: 'gross', width: 23, format: moneyFormat },
     { header: 'ส่วนลด (บาท)', key: 'discount', width: 20, format: moneyFormat },
     { header: 'มูลค่าหลังลด (บาท)', key: 'net', width: 23, format: moneyFormat },
-    { header: 'ส่งมอบจริง (กก.)', key: 'fulfilled', width: 21, format: kgFormat },
+    { header: 'ชั่งจัดจริงผักฟาร์ม (กก.)', key: 'ownWeighed', width: 26, format: kgFormat },
+    { header: 'ผักทดแทน (กก.)', key: 'fulfilled', width: 21, format: kgFormat },
     { header: 'แหล่งสินค้า', key: 'source', width: 18 },
   ]);
   scopedOrders.forEach((order) => itemsOf(order).forEach((item) => itemSheet.sheet.addRow({
     orderId: order.id, roundId: order.round_id, crop: cropName(item), status: orderStatus[order.status] || order.status,
     qty: number(item.qty_kg), price: number(item.price_per_kg), gross: gross(item),
     discount: discount(item), net: gross(item) - discount(item),
-    fulfilled: item.fulfilled_qty_kg == null ? null : number(item.fulfilled_qty_kg),
+    ownWeighed: item.own_qty_kg == null ? null : number(item.own_qty_kg),
+    fulfilled: item.fulfillment_source === 'substitute' ? number(item.fulfilled_qty_kg) : 0,
     source: item.fulfillment_source === 'substitute' ? 'ผักทดแทน' : item.fulfillment_source === 'own' ? 'จากฟาร์ม' : '-',
   })));
   itemSheet.finish();

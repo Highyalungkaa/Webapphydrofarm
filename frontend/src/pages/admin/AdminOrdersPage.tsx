@@ -46,6 +46,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [modalPaymentMethod, setModalPaymentMethod] = useState<PaymentMethod>('cash');
   const [modalCancelReason, setModalCancelReason] = useState('');
   const [substituteInputs, setSubstituteInputs] = useState<Record<string, { qtyKg: string; totalCost: string }>>({});
+  const [ownWeightInputs, setOwnWeightInputs] = useState<Record<string, string>>({});
   const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({});
   const [showSubstituteInputs, setShowSubstituteInputs] = useState(false);
 
@@ -76,6 +77,7 @@ export const AdminOrdersPage: React.FC = () => {
   const handleOpenDetailModal = (order: Order) => {
     setShowSubstituteInputs(false);
     setSelectedOrder(order);
+    setOwnWeightInputs(Object.fromEntries((order.order_items || []).map(item => [item.id, item.own_qty_kg == null ? '' : String(item.own_qty_kg)])));
     setModalStatus(order.status);
     setModalPaymentStatus(order.payment_status);
     setModalPaymentMethod(order.payment_method || 'cash');
@@ -100,21 +102,18 @@ export const AdminOrdersPage: React.FC = () => {
     try {
       setIsUpdating(true);
       await api.patch(`/admin/orders/${selectedOrder.id}`, {
+        expected_updated_at: selectedOrder.updated_at,
+        allocation_items: (selectedOrder.order_items || []).map(item => ({
+          id: item.id,
+          own_qty_kg: ownWeightInputs[item.id] === '' ? null : Number(ownWeightInputs[item.id]),
+          substitute_qty_kg: Number(substituteInputs[item.id]?.qtyKg || 0),
+          substitute_total_cost: Number(substituteInputs[item.id]?.totalCost || 0),
+          discount_amount: Number(discountInputs[item.id] || 0),
+        })),
         ...(modalStatus !== selectedOrder.status ? { status: modalStatus } : {}),
         payment_status: modalPaymentStatus,
         payment_method: modalPaymentStatus === 'paid' ? modalPaymentMethod : null,
         cancel_reason: modalStatus === 'cancelled' ? modalCancelReason : null,
-        substitute_items: (selectedOrder.order_items || [])
-          .filter((item) => Number(substituteInputs[item.id]?.qtyKg || 0) > 0 || item.fulfillment_source === 'substitute')
-          .map((item) => ({
-            id: item.id,
-            qty_kg: Number(substituteInputs[item.id]?.qtyKg || 0),
-            total_cost: Number(substituteInputs[item.id]?.totalCost || 0),
-          })),
-        item_discounts: (selectedOrder.order_items || []).map((item) => ({
-          id: item.id,
-          discount_amount: Number(discountInputs[item.id] || 0),
-        })),
       });
 
       setSelectedOrder(null);
@@ -466,6 +465,19 @@ export const AdminOrdersPage: React.FC = () => {
               <div className="flex justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-extrabold"><span>ยอดสุทธิที่ลูกค้าต้องชำระ</span><span className="text-emerald-800">฿{modalNetTotal.toLocaleString()}</span></div>
             </section>
 
+            <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
+              <div><h3 className="text-sm font-extrabold text-slate-900">น้ำหนักผักฟาร์มที่ชั่งจัดจริง</h3><p className="mt-1 text-xs leading-relaxed text-slate-600">ชั่งผักที่จัดให้ลูกค้าจากเครื่องชั่ง แล้วกรอกน้ำหนักจริงที่นี่ บันทึกเป็นน้ำหนักชั่งจริงของออเดอร์ หากไม่พอให้กรอกผักทดแทนแยกด้านล่าง</p></div>
+              {(selectedOrder.order_items || []).map(item => {
+                const ownText=ownWeightInputs[item.id]??'',own=Number(ownText||0),sub=Number(substituteInputs[item.id]?.qtyKg||0),ordered=Number(item.qty_kg);
+                const missing=Math.max(0,Math.round((ordered-own-sub)*100)/100),over=sub>ordered+0.000001;
+                return <div key={item.id} className="space-y-2 rounded-xl border border-emerald-100 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><strong className="text-sm text-slate-800">{item.round_items?.crops?.name||'ผัก'}</strong><p className="mt-1 text-xs text-slate-500">ลูกค้าจอง {ordered.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p></div><label className="block w-40 text-xs font-bold text-slate-600">ชั่งผักฟาร์มได้ (กก.)<input type="number" min="0" max="99999999" step="0.01" placeholder="ยังไม่ได้ชั่ง" value={ownText} onChange={e=>setOwnWeightInputs(p=>({...p,[item.id]:e.target.value}))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"/></label></div>
+                  <p className="text-xs text-slate-600">ผักฟาร์ม {own.toLocaleString('th-TH',{maximumFractionDigits:2})} + ผักทดแทน {sub.toLocaleString('th-TH',{maximumFractionDigits:2})} = {(own+sub).toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p>
+                  {over?<p role="alert" className="text-xs font-bold text-rose-700">ผักทดแทนเกินยอดจอง กรุณาตรวจสอบ</p>:ownText===''?<p className="text-xs text-slate-500">ยังไม่บันทึกน้ำหนักชั่งจริง (กรอก 0 เมื่อใช้ผักทดแทนทั้งหมด)</p>:missing>0?<div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><span>ยังขาด {missing.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</span><button type="button" onClick={()=>{setShowSubstituteInputs(true);setSubstituteInputs(p=>({...p,[item.id]:{qtyKg:String(Math.round((ordered-own)*100)/100),totalCost:p[item.id]?.totalCost||''}}));}} className="font-bold underline">กรอกผักทดแทนส่วนที่ขาด</button></div>:<p className="text-xs font-bold text-emerald-800">จัดครบตามยอดจองแล้ว{own+sub>ordered+0.000001?` · ชั่งได้เกิน ${(own+sub-ordered).toFixed(2)} กก.`:''}</p>}
+                </div>;
+              })}
+              <p className="text-xs text-slate-600">ระบบบันทึกน้ำหนักตามเครื่องชั่ง ยอดเงินตามออเดอร์เดิม บันทึกการจัดผักบางส่วนไว้ก่อนได้ ก่อนเปลี่ยนเป็น “พร้อมรับ / ส่ง” หรือ “สำเร็จ” ต้องกรอกน้ำหนักจริงและจัดผักรวมให้ครบยอดจอง</p>
+            </section>
+
             <button type="button" onClick={() => setShowSubstituteInputs((open) => !open)} aria-expanded={showSubstituteInputs} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-left transition hover:bg-amber-100/70 sm:px-5">
               <span><span className="block text-sm font-extrabold text-slate-900">ผักทดแทนจากแหล่งอื่น</span><span className="mt-1 block text-xs text-slate-600">กรอกเมื่อมีการซื้อผักจากแหล่งอื่นมาแทนรายการที่ขาด</span></span>
               <span className="flex shrink-0 items-center gap-2">{(selectedOrder.order_items || []).some((item) => item.fulfillment_source === 'substitute') && <span className="rounded-full bg-amber-200 px-2.5 py-1 text-[10px] font-bold text-amber-900">มีข้อมูลแล้ว</span>}{showSubstituteInputs ? <ChevronUp className="h-5 w-5 text-amber-800" /> : <ChevronDown className="h-5 w-5 text-amber-800" />}</span>
@@ -488,7 +500,7 @@ export const AdminOrdersPage: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="block">
                         <span className="text-xs font-semibold text-slate-600">ปริมาณที่ซื้อมาแทน (กก.)</span>
-                        <input type="number" min="0" max={orderQty} step="0.1" value={input.qtyKg}
+                        <input type="number" min="0" max={orderQty} step="0.01" value={input.qtyKg}
                           onChange={(e) => setSubstituteInputs((prev) => ({ ...prev, [item.id]: { ...input, qtyKg: e.target.value } }))}
                           placeholder="0" className={`mt-1 w-full rounded-xl border px-3 py-2.5 text-sm ${qtyTooHigh ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white'}`} />
                         {qtyTooHigh && <span className="mt-1 block text-[11px] text-rose-600">จำนวนทดแทนต้องไม่เกิน {orderQty.toFixed(1)} กก.</span>}
@@ -646,7 +658,8 @@ export const AdminOrdersPage: React.FC = () => {
                   disabled={isUpdating || (modalStatus === 'completed' && modalPaymentStatus !== 'paid' && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) || (selectedOrder.order_items || []).some((item) => {
                     const input = substituteInputs[item.id];
                     const gross = Number(item.qty_kg) * Number(item.price_per_kg);
-                    return Number(input?.qtyKg || 0) > Number(item.qty_kg) || (Number(input?.qtyKg || 0) === 0 && Number(input?.totalCost || 0) > 0) || Number(discountInputs[item.id] || 0) > gross;
+                    const ownText=ownWeightInputs[item.id]??'',own=Number(ownText||0),sub=Number(input?.qtyKg||0),ordered=Number(item.qty_kg);
+                    return own<0 || (['ready','completed'].includes(modalStatus)&&(ownText===''||own+sub<ordered-0.000001)) || sub > ordered || (sub === 0 && Number(input?.totalCost || 0) > 0) || Number(discountInputs[item.id] || 0) > gross;
                   })}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 >

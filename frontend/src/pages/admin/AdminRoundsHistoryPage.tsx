@@ -71,7 +71,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
           <span className="font-extrabold text-slate-800">฿{Number(order.total_amount).toLocaleString()}</span>
         </div>
         <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
-          {(order.order_items || []).map((item) => <span key={item.id} className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">{item.round_items?.crops?.name || 'ผัก'} × {Number(item.qty_kg).toFixed(1)} กก.</span>)}
+          {(order.order_items || []).map((item) => <span key={item.id} className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">{item.round_items?.crops?.name || 'ผัก'} × {Number(item.qty_kg).toFixed(2)} กก.{item.own_qty_kg != null && ` · ชั่งผักฟาร์ม ${Number(item.own_qty_kg).toFixed(2)} กก.`}</span>)}
         </div>
         {isCancelled && order.cancel_reason && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800"><span className="font-bold">เหตุผล:</span> {order.cancel_reason}</p>}
       </div>
@@ -80,9 +80,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 const ClosedBookingCard: React.FC<{ round: PlantingRound }> = ({ round }) => {
-  const totalKg = Number(round.total_bookable_kg || 0);
   const bookedKg = Number(round.total_booked_kg || 0);
-  const percentage = totalKg > 0 ? Math.min(100, (bookedKg / totalKg) * 100) : 0;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -99,9 +97,7 @@ const ClosedBookingCard: React.FC<{ round: PlantingRound }> = ({ round }) => {
           <div className="rounded-xl bg-slate-50 p-3"><p className="text-slate-500">วันเก็บเกี่ยว</p><p className="mt-1 font-bold text-slate-800">{formatDateDMY(round.expected_harvest_date)}</p></div>
         </div>
         <div>
-          <div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold text-slate-700">ยอดจองเมื่อปิดรอบ</span><span className="font-extrabold text-slate-800">{bookedKg.toFixed(1)} / {totalKg.toFixed(1)} กก.</span></div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-500" style={{ width: `${percentage}%` }} /></div>
-          <p className="mt-1 text-right text-[10px] text-slate-500">{percentage.toFixed(0)}% ของปริมาณที่เปิดจอง</p>
+          <div className="mb-2 flex items-center justify-between text-xs"><span className="font-bold text-slate-700">ยอดจองเมื่อปิดรอบ</span><span className="font-extrabold text-slate-800">{bookedKg.toFixed(2)} กก.</span></div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {(round.round_items || []).map((item: any) => <span key={item.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">{item.crop_name || item.crops?.name || 'ผัก'} · {Number(item.booked_qty_kg || 0).toFixed(1)} กก.</span>)}
@@ -165,7 +161,6 @@ export const AdminRoundsHistoryPage: React.FC = () => {
     return round.name?.toLowerCase().includes(query) || (round.round_items || []).some((item: any) => (item.crop_name || item.crops?.name || '').toLowerCase().includes(query));
   });
   const totalKgSold = filteredRounds.reduce((sum, r) => sum + Number(r.total_booked_kg || 0), 0);
-  const totalKgHarvested = filteredRounds.reduce((sum, r) => sum + Number(r.total_bookable_kg || 0), 0);
   const filteredOrders = archivedOrders.filter((order) => {
     if (selectedDate && bangkokDateKey(order.status === 'cancelled' ? order.cancelled_at || order.updated_at : order.updated_at) !== selectedDate) return false;
     if (!searchQuery.trim()) return true;
@@ -246,22 +241,22 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             </div>
           </div>
           <p className="text-2xl font-black text-emerald-700">{totalKgSold.toFixed(1)} กก.</p>
-          <p className="text-[11px] text-slate-400">จากยอดเปิดจองรวม {totalKgHarvested.toFixed(1)} กก.</p>
+          <p className="text-[11px] text-slate-400">รวมยอดคำสั่งจองของรอบที่แสดง</p>
         </div>
 
         <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              อัตราความสำเร็จ
+              จำนวนต้นที่ปลูก
             </span>
             <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <p className="text-2xl font-black text-sky-700">
-            {totalKgHarvested > 0 ? ((totalKgSold / totalKgHarvested) * 100).toFixed(0) : 0}%
+            {filteredRounds.reduce((sum,r)=>sum+(r.round_items||[]).reduce((n,i)=>n+Number(i.plant_count||0),0),0).toLocaleString()} ต้น
           </p>
-          <p className="text-[11px] text-slate-400">สัดส่วนผลผลิตที่จำหน่ายได้ตามเป้า</p>
+          <p className="text-[11px] text-slate-400">รวมจำนวนต้นของรอบที่แสดง</p>
         </div>
       </div> : activeSection === 'orders' ? <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4"><p className="text-xs font-bold text-emerald-800">คำสั่งจองสำเร็จ</p><p className="mt-1 text-2xl font-black text-slate-900">{completedOrders.length}</p><p className="text-[11px] text-slate-500">ส่งมอบให้ลูกค้าเรียบร้อย</p></div>
@@ -269,7 +264,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
         <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-4"><p className="text-xs font-bold text-amber-800">ไม่มารับสินค้า</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredOrders.filter((order) => order.status === 'no_show').length}</p><p className="text-[11px] text-slate-500">บันทึกเป็นกรณีพิเศษ</p></div>
       </div> : <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 to-white p-4"><p className="text-xs font-bold text-slate-700">รอบที่ปิดรับจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.length}</p><p className="text-[11px] text-slate-500">เก็บประวัติไว้ตรวจสอบย้อนหลัง</p></div>
-        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4"><p className="text-xs font-bold text-blue-800">ปริมาณที่เปิดจอง</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.reduce((sum, round) => sum + Number(round.total_bookable_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">รวมจากรอบที่แสดง</p></div>
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4"><p className="text-xs font-bold text-blue-800">จำนวนต้นที่ปลูก</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.reduce((sum, round) => sum + (round.round_items||[]).reduce((n,i)=>n+Number(i.plant_count||0),0), 0).toLocaleString()} ต้น</p><p className="text-[11px] text-slate-500">รวมจากรอบที่แสดง</p></div>
         <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4"><p className="text-xs font-bold text-emerald-800">ยอดจองรวม</p><p className="mt-1 text-2xl font-black text-slate-900">{filteredClosedBookingRounds.reduce((sum, round) => sum + Number(round.total_booked_kg || 0), 0).toFixed(1)} กก.</p><p className="text-[11px] text-slate-500">ยอดก่อนปิดรับจองของแต่ละรอบ</p></div>
       </div>}
 
@@ -335,9 +330,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
         ) : (
           filteredRounds.map((round) => {
             const items = round.round_items || [];
-            const roundBookable = Number(round.total_bookable_kg || 0);
             const roundBooked = Number(round.total_booked_kg || 0);
-            const sellPercentage = roundBookable > 0 ? (roundBooked / roundBookable) * 100 : 0;
 
             return (
               <div
@@ -445,7 +438,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                             <span>{it.crop_name || it.crops?.name || 'ผัก'}</span>
                             <span className="text-slate-400">•</span>
                             <span className="font-bold text-slate-900">
-                              {Number(it.bookable_qty_kg || 0).toFixed(1)} กก.
+                              {Number(it.plant_count||0).toLocaleString()} ต้น
                             </span>
                             <span className="text-slate-500">(฿{it.price_per_kg}/กก.)</span>
                           </div>
@@ -458,14 +451,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-slate-700">สรุปยอดจำหน่ายในรอบนี้:</span>
                         <span className="font-black text-emerald-800">
-                          {roundBooked.toFixed(1)} / {roundBookable.toFixed(1)} กก. ({sellPercentage.toFixed(0)}%)
+                          {roundBooked.toFixed(2)} กก.
                         </span>
-                      </div>
-                      <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden p-0.5">
-                        <div
-                          className="h-full bg-emerald-600 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, sellPercentage)}%` }}
-                        />
                       </div>
                     </div>
                   </div>

@@ -1,4 +1,3 @@
-import { plantCountToKg } from '../../services/plantingQuantities.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
@@ -13,8 +12,8 @@ const roundItemInputSchema = z.object({
   id: z.string().uuid().optional(),
   crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง'),
   plant_count: z.number().int().min(1, 'จำนวนต้นต้องเป็นจำนวนเต็มมากกว่า 0').optional().nullable(),
-  estimated_qty_kg: z.number().min(0, 'ประมาณการผลผลิตต้องไม่ต่ำกว่า 0'),
-  bookable_qty_kg: z.number().min(0, 'จำนวนที่เปิดให้จองต้องไม่ต่ำกว่า 0'),
+  estimated_qty_kg: z.number().min(0).optional(),
+  bookable_qty_kg: z.number().min(0).optional(),
   price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ต่ำกว่า 0'),
   growing_days: z.number().int().min(1).optional().nullable(),
   max_qty_per_order_kg: z.number().min(0.5, 'เพดานต่อออเดอร์ต้องไม่ต่ำกว่า 0.5 กก.').optional().nullable(),
@@ -194,7 +193,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         if (itemIds.length > 0) {
           const { data: booked } = await db
             .from('order_items')
-            .select('round_item_id, qty_kg, orders!inner(status)')
+            .select('round_item_id, qty_kg, own_qty_kg, fulfillment_source, fulfilled_qty_kg, orders!inner(status)')
             .in('round_item_id', itemIds)
             .neq('orders.status', 'cancelled');
 
@@ -214,12 +213,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
             crop_name: item.crops?.name,
             growing_days: itemDays,
             booked_qty_kg: bookedKg,
-            available_qty_kg: Math.max(0, Math.min(Number(item.bookable_qty_kg), Number(item.remaining_estimated_qty_kg ?? item.bookable_qty_kg)) - bookedKg),
+            effective_bookable_qty_kg: null,
+            available_qty_kg: null,
           };
         });
 
-        const totalEstimated = itemsWithBooked.reduce((s: number, i: any) => s + Number(i.estimated_qty_kg), 0);
-        const totalBookable = itemsWithBooked.reduce((s: number, i: any) => s + Number(i.bookable_qty_kg), 0);
         const totalBooked = itemsWithBooked.reduce((s: number, i: any) => s + Number(i.booked_qty_kg), 0);
 
         return {
@@ -227,10 +225,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           current_step: computeCurrentStep(round),
           is_booking_created: isRoundBookingCreated(round),
           round_items: itemsWithBooked,
-          total_estimated_kg: totalEstimated,
-          total_bookable_kg: totalBookable,
+          total_estimated_kg: null,
+          total_bookable_kg: null,
           total_booked_kg: totalBooked,
-          total_available_kg: itemsWithBooked.reduce((s: number, i: any) => s + i.available_qty_kg, 0),
+          total_available_kg: null,
         };
       })
     );
@@ -285,6 +283,9 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           id,
           round_item_id,
           qty_kg,
+          own_qty_kg,
+          fulfilled_qty_kg,
+          fulfillment_source,
           price_per_kg,
           round_items (
             crops (name)
@@ -322,14 +323,13 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         crop_name: it.crops?.name,
         growing_days: itemDays,
         booked_qty_kg: bookedKg,
-        available_qty_kg: Math.max(0, Math.min(Number(it.bookable_qty_kg), Number(it.remaining_estimated_qty_kg ?? it.bookable_qty_kg)) - bookedKg),
+            effective_bookable_qty_kg: null,
+            available_qty_kg: null,
         plot_ids: assignedPlotIds,
         plots: assignedPlots,
       };
     });
 
-    const totalEstimated = items.reduce((s: number, i: any) => s + Number(i.estimated_qty_kg), 0);
-    const totalBookable = items.reduce((s: number, i: any) => s + Number(i.bookable_qty_kg), 0);
     const totalBooked = items.reduce((s: number, i: any) => s + Number(i.booked_qty_kg), 0);
 
     res.json({
@@ -337,10 +337,10 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       current_step: computeCurrentStep(round),
       is_booking_created: isRoundBookingCreated(round),
       round_items: items,
-      total_estimated_kg: totalEstimated,
-      total_bookable_kg: totalBookable,
+      total_estimated_kg: null,
+      total_bookable_kg: null,
       total_booked_kg: totalBooked,
-      total_available_kg: items.reduce((s: number, i: any) => s + i.available_qty_kg, 0),
+          total_available_kg: null,
       orders: orders || [],
     });
   } catch (err: any) {
@@ -381,15 +381,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
 
-      for (const item of items) {
-        if (item.plant_count != null) {
-          const crop = activeCropRows?.find((crop) => crop.id === item.crop_id);
-          const weightKg = plantCountToKg(item.plant_count, Number(crop?.slots_per_kg) || 4);
-          item.estimated_qty_kg = weightKg;
-          item.bookable_qty_kg = weightKg;
-        }
-      }
-
+      if (items.some(item => item.plant_count == null)) { res.status(400).json({error:'กรุณาระบุจำนวนต้นที่ปลูกให้ครบทุกชนิดผัก'}); return; }
       const selectedPlotIds = items.flatMap((item) => item.plot_ids || []);
       const uniquePlotIds = [...new Set(selectedPlotIds)];
       if (items.some((item) => !item.plot_ids?.length || new Set(item.plot_ids).size !== item.plot_ids.length)) {
@@ -417,7 +409,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
           return;
         }
         const crop = activeCropRows?.find((crop) => crop.id === item.crop_id);
-        let needed = item.plant_count ?? Math.round(Math.max(item.estimated_qty_kg, item.bookable_qty_kg) * (Number(crop?.slots_per_kg) || 4));
+        let needed = item.plant_count || 0;
         for (const plot of selectedPlots || []) {
           if (!item.plot_ids.includes(plot.id)) continue;
           const available = remainingSlots.get(plot.id) || 0;
@@ -498,8 +490,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         round_id: createdRound.id,
         crop_id: i.crop_id,
         plant_count: i.plant_count ?? null,
-        estimated_qty_kg: i.estimated_qty_kg || i.bookable_qty_kg,
-        bookable_qty_kg: i.bookable_qty_kg,
+        estimated_qty_kg: 0,
+        bookable_qty_kg: 0,
         price_per_kg: i.price_per_kg,
         max_qty_per_order_kg: i.max_qty_per_order_kg || null,
       }));
@@ -629,7 +621,8 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
         updatePayload.growing_days = days;
         updatePayload.expected_harvest_date = calculatedHarvest;
         updatePayload.fulfillment_date = calculatedHarvest;
-        updatePayload.current_step = 5;
+        updatePayload.current_step = currentRound.sold_out_date ? 7 : Math.max(5, Number(currentRound.current_step || 5));
+        if (currentRound.sold_out_date) updatePayload.sold_out_date = null;
         updatePayload.status = 'growing';
         break;
       }
@@ -773,8 +766,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
             .from('round_items')
             .update({
               ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
-              estimated_qty_kg: item.estimated_qty_kg,
-              bookable_qty_kg: item.bookable_qty_kg,
               price_per_kg: item.price_per_kg,
               max_qty_per_order_kg: item.max_qty_per_order_kg || null,
             })
@@ -787,8 +778,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
               round_id: id,
               crop_id: item.crop_id,
               ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
-              estimated_qty_kg: item.estimated_qty_kg,
-              bookable_qty_kg: item.bookable_qty_kg,
+              estimated_qty_kg: 0,
+              bookable_qty_kg: 0,
               price_per_kg: item.price_per_kg,
               max_qty_per_order_kg: item.max_qty_per_order_kg || null,
             });
@@ -1034,6 +1025,7 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    if (['completed','cancelled'].includes(currentRound.status)) {res.status(400).json({error:'รอบนี้สิ้นสุดแล้ว ไม่สามารถเปิดรับจองหรือแก้รอบจองได้'});return;}
     const baselineError = await checkLossBaselines(db, id, Array.isArray(items) ? items : undefined);
     if (baselineError) { res.status(400).json({ error: baselineError }); return; }
     const updatePayload: Record<string, any> = {
@@ -1089,9 +1081,7 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
       for (const item of items) {
         if (item.id) {
           const itemUpdate: Record<string, any> = {};
-          if (item.bookable_qty_kg !== undefined) itemUpdate.bookable_qty_kg = Number(item.bookable_qty_kg);
           if (item.price_per_kg !== undefined) itemUpdate.price_per_kg = Number(item.price_per_kg);
-          if (item.estimated_qty_kg !== undefined) itemUpdate.estimated_qty_kg = Number(item.estimated_qty_kg);
 
           if (Object.keys(itemUpdate).length > 0) {
             const { error: itemError } = await db.from('round_items').update(itemUpdate).eq('id', item.id).eq('round_id', id);

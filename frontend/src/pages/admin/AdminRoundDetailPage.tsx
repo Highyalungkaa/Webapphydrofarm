@@ -1,3 +1,5 @@
+import { RoundWeightSummary } from '../../components/admin/RoundWeightSummary.js';
+import { PurchaseLimitPanel } from '../../components/admin/PurchaseLimitPanel.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
@@ -143,6 +145,12 @@ export const AdminRoundDetailPage: React.FC = () => {
   useEffect(() => {
     if (id) loadRound();
   }, [id]);
+
+  useEffect(() => {
+    if (!loading && round && window.location.hash === '#purchase-limits') {
+      document.getElementById('purchase-limits')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [loading, round?.id]);
 
   const loadRound = async () => {
     try {
@@ -290,10 +298,7 @@ export const AdminRoundDetailPage: React.FC = () => {
   const growingDays = round.growing_days || 45;
   const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
-  const totalBookable = Number(round.total_bookable_kg || 0);
   const totalBooked = Number(round.total_booked_kg || 0);
-  const totalAvailable = Number(round.total_available_kg ?? Math.max(0, totalBookable - totalBooked));
-  const percentSold = totalBookable > 0 ? Math.min(100, (totalBooked / totalBookable) * 100) : 0;
   const orders = (round as any).orders || [];
   const totalRevenue = orders
     .filter((order: any) => order.status !== 'cancelled')
@@ -303,8 +308,7 @@ export const AdminRoundDetailPage: React.FC = () => {
   const activePlots = plots.filter((p) => p.is_active);
   const totalActivePlotSlots = activePlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
   const totalRoundSlotsNeeded = (round.round_items || []).reduce((sum: number, it: any) => {
-    const rate = it.crops?.slots_per_kg ? Number(it.crops.slots_per_kg) : 4.0;
-    return sum + (it.plant_count ?? Math.round((Number(it.bookable_qty_kg) || 0) * rate));
+    return sum + Number(it.plant_count || 0);
   }, 0);
   const remainingPlotSlots = totalActivePlotSlots - totalRoundSlotsNeeded;
   const avgSlotsPerPlot = activePlots.length > 0 ? totalActivePlotSlots / activePlots.length : 250;
@@ -327,23 +331,23 @@ export const AdminRoundDetailPage: React.FC = () => {
             <RoundStatusBadge round={round} />
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            วงจรการปลูกไฮโดรโปนิกส์ 7 ขั้นตอน • ควบคุมและอัปเดตสเต็ปตามขั้นตอนจริง
+            วงจรการปลูกไฮโดรโปนิกส์ 8 ขั้นตอน • ควบคุมและอัปเดตสเต็ปตามขั้นตอนจริง
           </p>
         </div>
 
         {/* Quick summary numbers */}
         <div className="grid grid-cols-2 sm:grid-cols-4 items-center gap-3 self-stretch xl:self-auto bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="px-2 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">เปิดจองรวม</span>
-            <span className="text-base font-black text-slate-800">{totalBookable.toFixed(1)} กก.</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">จำนวนปลูก</span>
+            <span className="text-base font-black text-slate-800">{totalRoundSlotsNeeded.toLocaleString()} ต้น</span>
           </div>
           <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-emerald-600 block">จองแล้ว</span>
             <span className="text-base font-black text-emerald-700">{totalBooked.toFixed(1)} กก.</span>
           </div>
           <div className="px-2 text-center">
-            <span className="text-[10px] uppercase font-bold text-sky-600 block">คงเหลือ</span>
-            <span className="text-base font-black text-sky-700">{totalAvailable.toFixed(1)} กก.</span>
+            <span className="text-[10px] uppercase font-bold text-sky-600 block">ชั่งจัดผักฟาร์มแล้ว</span>
+            <span className="text-base font-black text-sky-700">{orders.reduce((sum:number,o:any)=>o.status==='cancelled'||o.status==='no_show'?sum:sum+(o.order_items||[]).reduce((n:number,i:any)=>n+Number(i.own_qty_kg||0),0),0).toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</span>
           </div>
           <div className="rounded-xl bg-amber-50 px-3 py-2 text-center" title="ยอดรวมออเดอร์ที่ไม่ถูกยกเลิก รวมทั้งชำระแล้วและยังไม่ชำระ">
             <span className="block text-[10px] font-bold text-amber-700">รายได้รวมรอบนี้</span>
@@ -726,40 +730,14 @@ export const AdminRoundDetailPage: React.FC = () => {
           <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-2xs space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">
-                หลอดปริมาณผักภาพรวมในรอบนี้
+                สรุปคำสั่งจองในรอบนี้
               </span>
               <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                จองแล้ว {percentSold.toFixed(0)}%
+                {round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}
               </span>
             </div>
 
-            {/* Big Progress Bar */}
-            <div className="space-y-2">
-              <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    percentSold >= 100
-                      ? 'bg-rose-500'
-                      : percentSold >= 80
-                      ? 'bg-amber-500'
-                      : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${percentSold}%` }}
-                />
-              </div>
-
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">
-                  จองแล้ว: <strong className="text-slate-800">{totalBooked.toFixed(1)} กก.</strong>
-                </span>
-                <span className="text-slate-500">
-                  คงเหลือ: <strong className="text-emerald-700">{totalAvailable.toFixed(1)} กก.</strong>
-                </span>
-                <span className="text-slate-500">
-                  เป้าหมาย: <strong className="text-slate-800">{totalBookable.toFixed(1)} กก.</strong>
-                </span>
-              </div>
-            </div>
+            <p className="text-sm text-slate-700">ลูกค้าสั่งจองรวม <strong>{totalBooked.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</strong> · บันทึกน้ำหนักชั่งจริงแยกแต่ละออเดอร์</p>
 
           </div>
         </div>
@@ -767,216 +745,9 @@ export const AdminRoundDetailPage: React.FC = () => {
 
       <PlantLossPanel roundId={round.id} onChanged={loadRound} />
 
-      {/* Vegetables in this Round Table with Stock Progress Bars */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">
-              หลอดปริมาณผักแต่ละชนิดในรอบนี้
-            </h2>
-            <p className="text-xs text-slate-400">
-              ตรวจสอบยอดเปิดจอง ยอดที่ถูกจองแล้ว และปริมาณคงเหลือแบบเรียลไทม์
-            </p>
-          </div>
-        </div>
+      <PurchaseLimitPanel round={round} onChanged={loadRound} />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-400 uppercase text-[11px] font-semibold">
-                <th className="py-2.5 px-3">ชนิดผัก</th>
-                <th className="py-2.5 px-3">ราคา/กก.</th>
-                <th className="py-2.5 px-3 min-w-[200px]">หลอดปริมาณการจอง (จองแล้ว / ทั้งหมด)</th>
-                <th className="py-2.5 px-3 text-right">คงเหลือ</th>
-                <th className="py-2.5 px-3 text-center">สถานะสต็อก</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {round.round_items?.map((item: any) => {
-                const booked = Number(item.booked_qty_kg || 0);
-                const bookable = Number(item.bookable_qty_kg || 0);
-                const available = Number(item.available_qty_kg ?? Math.max(0, bookable - booked));
-                const itemPercent = bookable > 0 ? Math.min(100, (booked / bookable) * 100) : 0;
-
-                return (
-                  <tr key={item.id} className="hover:bg-slate-50/60">
-                    <td className="py-3.5 px-3 font-bold text-slate-900 flex items-center gap-2.5">
-                      {item.crops?.image_url ? (
-                        <img
-                          src={item.crops.image_url}
-                          alt={item.crop_name}
-                          className="w-9 h-9 rounded-xl object-cover border border-slate-200"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                          <Leaf className="w-4 h-4" />
-                        </div>
-                      )}
-                      <div>
-                        <span className="block">{item.crop_name || item.crops?.name || 'ผักสลัด'}</span>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          <span>ระยะปลูก: {item.growing_days || item.crops?.growing_days || 45} วัน</span>
-                          {item.plant_count != null && <span className="ml-2 font-semibold text-emerald-700">ปลูก {Number(item.plant_count).toLocaleString()} ต้น</span>}
-                          {(() => {
-                            const itemPlots: Plot[] = (item.plots && item.plots.length > 0)
-                              ? item.plots
-                              : (item.plot_ids && item.plot_ids.length > 0)
-                              ? activePlots.filter((p) => item.plot_ids?.includes(p.id))
-                              : activePlots.filter((p) => plotSupportsCrop(p, item.crop_id));
-
-                            const cropRate = item.crops?.slots_per_kg ? Number(item.crops.slots_per_kg) : 4.0;
-                            const targetSlots = item.plant_count ?? Math.round(bookable * cropRate);
-                            let remainingSlots = targetSlots;
-                            const totalAssignedSlots = itemPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-
-                            if (itemPlots.length === 0) {
-                              return (
-                                <div className="w-full mt-2 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-[11px] text-amber-800 space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold flex items-center gap-1 text-amber-900">
-                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>ยังไม่ได้ระบุแปลงปลูกสำหรับรายการนี้</span>
-                                    </span>
-                                    <Link to="/admin/plots" className="text-amber-950 font-bold underline hover:text-amber-800">
-                                      จัดการแปลง
-                                    </Link>
-                                  </div>
-                                  <p className="text-[10px] text-amber-700">
-                                    {item.plant_count != null ? 'จำนวนที่ปลูก' : 'จำนวนต้นโดยประมาณ'} {targetSlots.toLocaleString()} ต้น · เปิดจอง {bookable} กก.
-                                  </p>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div className="w-full mt-2 space-y-2 pt-2 border-t border-slate-100">
-                                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
-                                  <span className="font-bold text-slate-700 flex items-center gap-1">
-                                    <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>แปลงที่ปลูก ({itemPlots.length} แปลง · รองรับรวม {totalAssignedSlots.toLocaleString()} ต้น)</span>
-                                  </span>
-                                  {targetSlots > totalAssignedSlots ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                                      <AlertCircle className="w-3 h-3 text-rose-600" />
-                                      <span>ต้องเพิ่มแปลงให้รองรับอีก {(targetSlots - totalAssignedSlots).toLocaleString()} ต้น</span>
-                                    </span>
-                                  ) : totalAssignedSlots > targetSlots ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
-                                      <Info className="w-3 h-3 text-sky-600" />
-                                      <span>รองรับได้อีก {(totalAssignedSlots - targetSlots).toLocaleString()} ต้น</span>
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      <span>รองรับจำนวนต้นได้พอดี</span>
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {itemPlots.map((plot) => {
-                                    const cap = Number(plot.slot_capacity || 0);
-                                    const usedInPlot = Math.min(cap, Math.max(0, remainingSlots));
-                                    remainingSlots -= usedInPlot;
-                                    const pct = cap > 0 ? Math.min(100, Math.round((usedInPlot / cap) * 100)) : 0;
-
-                                    return (
-                                      <div
-                                        key={plot.id}
-                                        className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-[10px] space-y-1"
-                                      >
-                                        <div className="flex justify-between font-semibold">
-                                          <span className="text-slate-800">{plot.name} ({plot.zone_name})</span>
-                                          <span
-                                            className={
-                                              pct >= 100
-                                                ? 'text-emerald-700 font-bold'
-                                                : pct > 0
-                                                ? 'text-sky-700 font-bold'
-                                                : 'text-slate-400'
-                                            }
-                                          >
-                                            {pct >= 100 ? 'ปลูกเต็มจำนวน' : pct > 0 ? `ปลูกแล้ว ${pct}%` : 'ยังไม่ได้ปลูก'}
-                                          </span>
-                                        </div>
-                                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                          <div
-                                            className={`h-full rounded-full transition-all duration-300 ${
-                                              pct >= 100 ? 'bg-emerald-600' : 'bg-sky-500'
-                                            }`}
-                                            style={{ width: `${pct}%` }}
-                                          />
-                                        </div>
-                                        <div className="flex flex-wrap justify-between gap-x-2 gap-y-1 text-slate-400">
-                                          <span>ปลูก {usedInPlot} ต้น / รองรับ {cap} ต้น</span>
-                                          <span>
-                                            {cap - usedInPlot > 0 ? (
-                                              <strong className="text-sky-700">รองรับได้อีก {cap - usedInPlot} ต้น</strong>
-                                            ) : (
-                                              <strong className="text-emerald-700">ปลูกครบจำนวนที่รองรับ</strong>
-                                            )}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-3 text-slate-800 font-semibold">
-                      ฿{Number(item.price_per_kg).toFixed(0)}/กก.
-                    </td>
-
-                    {/* Crop Stock Progress Bar */}
-                    <td className="py-3.5 px-3">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[11px]">
-                          <span className="font-semibold text-slate-700">
-                            {booked.toFixed(1)} / {bookable.toFixed(1)} กก.
-                          </span>
-                          <span className="font-bold text-slate-600">{itemPercent.toFixed(0)}%</span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              itemPercent >= 100
-                                ? 'bg-rose-500'
-                                : itemPercent >= 75
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${itemPercent}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-3 text-right">
-                      <span className="font-bold text-slate-900">{available.toFixed(1)} กก.</span>
-                    </td>
-
-                    <td className="py-3.5 px-3 text-center">
-                      {available <= 0 ? (
-                        <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
-                          ขายหมดแล้ว
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                          เปิดให้จอง
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <RoundWeightSummary round={round} />
 
       {/* Customer Orders in this Round */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">

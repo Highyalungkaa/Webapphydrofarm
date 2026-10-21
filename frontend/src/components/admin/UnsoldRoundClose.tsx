@@ -4,12 +4,11 @@ import {AlertTriangle,ChevronDown,X} from 'lucide-react';
 import {api} from '../../lib/api.js';
 import {formatDateDMY,toBangkokDateString} from '../../lib/dateFormat.js';
 import {isValidLossDate} from '../../lib/plantLossWizard.js';
-import {plantCountToKg} from '../../lib/plantingQuantities.js';
 import {unsoldDispositions,validateUnsoldInput,type UnsoldInput,type UnsoldDisposition} from '../../lib/unsoldRound.js';
 import type {PlantingRound} from '../../types/index.js';
 
 interface Item { id:string;crop_name:string;remaining_plant_count:number;plants_per_kg:number;farm_yield_kg:number;yield_is_actual:boolean;delivered_own_kg:number;available_kg:number }
-interface HistoryItem {id:string;crop_name:string;unsold_plant_count:number;unsold_estimated_kg:number;other_sales_kg:number;disposition:UnsoldDisposition|null;note:string|null}
+interface HistoryItem {id:string;crop_name:string;unsold_plant_count:number;unsold_estimated_kg:number|null;unsold_actual_kg?:number|null;other_sales_kg:number;disposition:UnsoldDisposition|null;note:string|null}
 interface Preview {round:PlantingRound;items:Item[];blocking_orders:{id:string;status:string}[];closure:{closed_date:string;recorded_by_email:string;note:string|null}|null;history:HistoryItem[]}
 const num=(value:number)=>Number(value).toLocaleString('th-TH',{maximumFractionDigits:2});
 const field='mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100';
@@ -33,7 +32,7 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
     setLoading(true);setError('');
     try{
       const result=await api.get<Preview>(`/admin/rounds/${round.id}/unsold`);setData(result);
-      setEntries(Object.fromEntries(result.items.map(item=>[item.id,{count:'0',otherSales:'0',disposition:'',note:''}])));
+      setEntries(Object.fromEntries(result.items.map(item=>[item.id,{count:'0',unsoldKg:'',otherSales:'0',disposition:'',note:''}])));
       setRequestId(crypto.randomUUID());setConfirmed(false);
     }catch(err:any){setError(err.message||'โหลดข้อมูลไม่สำเร็จ');}finally{setLoading(false);}
   };
@@ -47,7 +46,7 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
     try{
       await api.post(`/admin/rounds/${round.id}/close-unsold`,{request_id:requestId,closed_date:date,note,
         items:data.items.map(item=>({round_item_id:item.id,unsold_plant_count:Number(entries[item.id].count),
-          other_sales_kg:Number(entries[item.id].otherSales||0),disposition:Number(entries[item.id].count)>0?entries[item.id].disposition:null,note:entries[item.id].note}))});
+          other_sales_kg:Number(entries[item.id].otherSales||0),unsold_qty_kg:Number(entries[item.id].unsoldKg||0),disposition:Number(entries[item.id].count)>0?entries[item.id].disposition:null,note:entries[item.id].note}))});
       await onChanged();
     }catch(err:any){setError(err.message||'สิ้นสุดรอบไม่สำเร็จ');}finally{setSaving(false);}
   };
@@ -58,19 +57,19 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
       {loading&&<p className="text-sm text-slate-500">กำลังตรวจสอบผลผลิตและออเดอร์...</p>}
       {!isHistory&&!isReady&&<p role="status" className="rounded-xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">{readinessMessage}</p>}
       {error&&<div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}<button type="button" disabled={saving} onClick={load} className="ml-3 font-bold underline">ตรวจสอบข้อมูลอีกครั้ง</button></div>}
-      {data?.closure?<><p className="text-sm text-slate-600">สิ้นสุดเมื่อ {formatDateDMY(data.closure.closed_date)} · บันทึกโดย {data.closure.recorded_by_email}</p>{data.history.map(item=><div key={item.id} className="space-y-1 rounded-xl bg-amber-50 p-4 text-sm"><strong>{item.crop_name}</strong><p>ขายไม่ออก {num(item.unsold_plant_count)} ต้น ≈ {num(item.unsold_estimated_kg)} กก.</p><p>ขายช่องทางอื่น {num(item.other_sales_kg)} กก.</p>{item.disposition&&<p>การจัดการ: {unsoldDispositions[item.disposition]}</p>}{item.note&&<p className="break-words">หมายเหตุ: {item.note}</p>}</div>)}{data.closure.note&&<p className="break-words text-sm">หมายเหตุรอบ: {data.closure.note}</p>}</>:data&&!loading&&isReady&&<form onSubmit={submit} className="space-y-4">
+      {data?.closure?<><p className="text-sm text-slate-600">สิ้นสุดเมื่อ {formatDateDMY(data.closure.closed_date)} · บันทึกโดย {data.closure.recorded_by_email}</p>{data.history.map(item=><div key={item.id} className="space-y-1 rounded-xl bg-amber-50 p-4 text-sm"><strong>{item.crop_name}</strong><p>ขายไม่ออก {num(item.unsold_plant_count)} ต้น{item.unsold_actual_kg!=null?` · ชั่งจริง ${num(item.unsold_actual_kg)} กก.`:''}</p><p>ขายช่องทางอื่น {num(item.other_sales_kg)} กก.</p>{item.disposition&&<p>การจัดการ: {unsoldDispositions[item.disposition]}</p>}{item.note&&<p className="break-words">หมายเหตุ: {item.note}</p>}</div>)}{data.closure.note&&<p className="break-words text-sm">หมายเหตุรอบ: {data.closure.note}</p>}</>:data&&!loading&&isReady&&<form onSubmit={submit} className="space-y-4">
         {!!data.blocking_orders.length&&<div role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">ยังมีออเดอร์ค้างส่งมอบหรือค้างชำระ {data.blocking_orders.length} รายการ ต้องจัดการก่อนสิ้นสุดรอบ <Link to="/admin/orders" className="font-bold underline">ไปจัดการออเดอร์</Link></div>}
         <p className="text-sm leading-relaxed text-slate-600">กรอกจำนวนที่ขายไม่ออกจริง โดยแยกจากผักเสียหายระหว่างปลูก หากขายหน้าฟาร์มหรือช่องทางอื่นที่ยังไม่มีออเดอร์ในระบบ ให้บันทึกปริมาณแยกไว้ ไม่รวมออเดอร์จากแชตที่แอดมินเพิ่มแล้ว</p>
         <fieldset disabled={saving} className="space-y-4">{data.items.map(item=>{
           const input=entries[item.id];if(!input)return null;const issue=validateUnsoldInput(input,item);
-          return <div key={item.id} className="space-y-3 rounded-2xl border border-slate-200 p-4"><h4 className="font-bold text-slate-900">{item.crop_name}</h4><p className="text-xs leading-relaxed text-slate-500">ต้นคงเหลือหลังหักเสียหาย {num(item.remaining_plant_count)} ต้น · ผลผลิต{item.yield_is_actual?'จริง':'คาดการณ์'} {num(item.farm_yield_kg)} กก. · ส่งมอบผักจากฟาร์มแล้ว {num(item.delivered_own_kg)} กก. · เหลือสำหรับตรวจนับ {num(item.available_kg)} กก.</p>
-            <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">ขายไม่ออก (ต้น)<input type="number" required min={0} max={item.remaining_plant_count} step={1} value={input.count} onChange={e=>update(item.id,'count',e.target.value)} className={field}/></label><label className="text-sm font-semibold">ขายช่องทางอื่นแล้ว (กก.)<input type="number" min={0} max={item.available_kg} step="0.01" value={input.otherSales} onChange={e=>update(item.id,'otherSales',e.target.value)} className={field}/></label></div>
-            <p className="text-sm font-bold text-amber-900">น้ำหนักผักขายไม่ออกประมาณ {num(plantCountToKg(Number(input.count),item.plants_per_kg))} กก.</p>
+          return <div key={item.id} className="space-y-3 rounded-2xl border border-slate-200 p-4"><h4 className="font-bold text-slate-900">{item.crop_name}</h4><p className="text-xs leading-relaxed text-slate-500">ต้นคงเหลือหลังหักเสียหาย {num(item.remaining_plant_count)} ต้น · ส่งมอบผักจากฟาร์มแล้ว {num(item.delivered_own_kg)} กก.</p>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">ขายไม่ออก (ต้น)<input type="number" required min={0} max={item.remaining_plant_count} step={1} value={input.count} onChange={e=>update(item.id,'count',e.target.value)} className={field}/></label><label className="text-sm font-semibold">ขายช่องทางอื่นแล้ว (กก.)<input type="number" min={0} step="0.01" value={input.otherSales} onChange={e=>update(item.id,'otherSales',e.target.value)} className={field}/></label></div>
+            <label className="block text-sm font-semibold">น้ำหนักผักขายไม่ออกที่ชั่งจริง (กก. ถ้ามี)<input type="number" min="0" step="0.01" value={input.unsoldKg||''} onChange={e=>update(item.id,'unsoldKg',e.target.value)} className={field}/></label>
             {Number(input.count)>0&&<><label className="block text-sm font-semibold">การจัดการผักที่ขายไม่ออก <span className="text-rose-600">*</span><select required value={input.disposition} onChange={e=>update(item.id,'disposition',e.target.value)} className={field}><option value="">เลือกวิธีจัดการ</option>{Object.entries(unsoldDispositions).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label className="block text-sm font-semibold">รายละเอียด / หมายเหตุ{input.disposition==='other'?' (จำเป็น)':' (ถ้ามี)'}<textarea required={input.disposition==='other'} maxLength={1000} value={input.note} onChange={e=>update(item.id,'note',e.target.value)} rows={2} className={field}/></label></>}
             {issue&&<p className="text-xs text-rose-700">{issue}</p>}
           </div>;
         })}<label className="block text-sm font-semibold">วันที่บันทึกและสิ้นสุดรอบ<input type="date" required min={round.harvest_sale_date||undefined} max={today} value={date} onChange={e=>{setDate(e.target.value);setConfirmed(false);}} className={field}/></label><label className="block text-sm font-semibold">หมายเหตุรอบ (ถ้ามี)<textarea maxLength={2000} value={note} onChange={e=>setNote(e.target.value)} rows={2} className={field}/></label>
-          <p className="text-xs leading-relaxed text-slate-500">น้ำหนักผักขายไม่ออกคำนวณจากอัตราต้น/กก. และปัดลง ปริมาณขายช่องทางอื่นเป็นบันทึกจำนวนเท่านั้น ไม่รวมเพิ่มในรายได้ระบบ หากผลผลิตคาดการณ์ไม่ตรง ควรตรวจสอบผลผลิตจริงก่อนยืนยัน</p>
+          <p className="text-xs leading-relaxed text-slate-500">บันทึกจำนวนต้นและน้ำหนักที่ตรวจนับหรือชั่งได้จริงเท่านั้น ปริมาณขายช่องทางอื่นเป็นบันทึกจำนวน ไม่รวมเพิ่มในรายได้ระบบ</p>
           <label className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-950"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1 accent-amber-700"/><span>ตรวจนับและจัดการผักคงเหลือออกจากแปลงแล้ว ยืนยันปิดรับจองและสิ้นสุดรอบ ระบบจะคืนพื้นที่แปลงสำหรับรอบถัดไป และเก็บประวัตินี้ไว้</span></label>
         </fieldset>
         {!total&&<p className="text-xs text-slate-500">หากไม่มีผักขายไม่ออก ให้ใช้การสิ้นสุดรอบตามปกติ</p>}

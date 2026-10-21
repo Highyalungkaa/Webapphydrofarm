@@ -74,14 +74,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // Available stock check
-    if (qty > itemData.available_qty_kg) {
-      return {
-        success: false,
-        message: `ผัก ${itemData.crop_name} คงเหลือให้จองเพียง ${itemData.available_qty_kg} กก.`,
-      };
-    }
-
     setItems((prev) => {
       const index = prev.findIndex((i) => i.round_item_id === itemData.round_item_id);
       if (index >= 0) {

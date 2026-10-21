@@ -14,14 +14,14 @@ function loadHelper(relative) {
   });
   return exports;
 }
-function setup({ publicRoute=false, missing=false, rpcError=null, legacy=false, conflict=false }={}) {
+function setup({ publicRoute=false, missing=false, rpcError=null, legacy=false, conflict=false,limited=false }={}) {
   const routes=new Map(), calls=[], middleware=[];
   const router={ use: (...handlers)=>middleware.push(...handlers) };
   for(const method of ['get','post','put','patch','delete']) router[method]=(url,...handlers)=>routes.set(`${method} ${url}`,handlers.at(-1));
   const auth=()=>{}, admin=()=>{};
-  const round={ id:ids.round, status:'booking_open', current_step:5, notes:JSON.stringify(legacy?{note:'legacy',cropGrowingDays:{[ids.crop]:30},bookingCreated:true}:{cropPlotIds:{[ids.crop]:[ids.plot]}}) };
+  const round={ id:ids.round,purchase_limit_enabled:limited, status:'booking_open', current_step:5, notes:JSON.stringify(legacy?{note:'legacy',cropGrowingDays:{[ids.crop]:30},bookingCreated:true}:{cropPlotIds:{[ids.crop]:[ids.plot]}}) };
   const items=[{id:ids.item,crop_id:ids.crop,plant_count:500,loss_baseline_plant_count:500,loss_plants_per_kg:5,
-    lost_plant_count:50,estimated_qty_kg:100,remaining_estimated_qty_kg:90,bookable_qty_kg:100,crops:{name:'Green Oak',slots_per_kg:99}}];
+    lost_plant_count:50,estimated_qty_kg:100,remaining_estimated_qty_kg:90,bookable_qty_kg:100,max_qty_per_order_kg:2.5,crops:{name:'Green Oak',slots_per_kg:99}}];
   round.round_items=items;
   const noteUpdates=[];
   const db={
@@ -64,10 +64,10 @@ test('loss API rejects zero, fractional counts and missing reasons before RPC',a
     const app=setup();assert.equal((await app.request('post /:id/losses',{...valid(),...override})).statusCode,400);assert.equal(app.calls.length,0);
   }
 });
-test('summary uses frozen rate and warns about shortage without changing customer orders',async()=>{
+test('plant loss summary keeps plant counts and does not calculate weight or shortage',async()=>{
   const app=setup();const res=await app.request('get /:id/losses');assert.equal(res.statusCode,200);
-  const item=res.body.items[0];assert.equal(item.remaining_plant_count,450);assert.equal(item.lost_estimated_kg,10);
-  assert.equal(item.remaining_estimated_kg,90);assert.equal(item.shortage_kg,5);assert.equal(item.plants_per_kg,5);
+  const item=res.body.items[0];assert.equal(item.remaining_plant_count,450);assert.equal(item.lost_estimated_kg,null);
+  assert.equal(item.remaining_estimated_kg,null);assert.equal(item.shortage_kg,0);assert.equal(item.plants_per_kg,null);
   assert.equal(item.plots[0].id,ids.plot);assert.equal(app.calls.length,0);
 });
 test('missing database migration gives an actionable error instead of empty history',async()=>{
@@ -78,11 +78,11 @@ test('RPC validation failures are shown as failures, and reversal requires a rea
   const res=await app.request('post /:id/losses',valid());assert.equal(res.statusCode,400);assert.match(res.body.error,/เกินคงเหลือ/);
   assert.equal((await app.request('post /:id/losses/:lossId/void',{round_item_id:ids.item,reason:''})).statusCode,400);
 });
-test('customer availability becomes zero after losses leave a shortage',async()=>{
+test('plant losses do not invent a kilogram stock limit or mark booking sold out',async()=>{
   const res=await setup({publicRoute:true}).request('get /open');
-  assert.equal(res.statusCode,200);assert.equal(res.body[0].items[0].available_qty_kg,0);
-  assert.equal(res.body[0].items[0].bookable_qty_kg,90);assert.equal(res.body[0].total_available_kg,0);
-  assert.equal(res.body[0].is_all_sold_out,true);
+  assert.equal(res.statusCode,200);assert.equal(res.body[0].items[0].available_qty_kg,null);
+  assert.equal(res.body[0].items[0].max_qty_per_order_kg,null);assert.equal(res.body[0].total_available_kg,null);
+  assert.equal(res.body[0].is_all_sold_out,false);
 });
 test('legacy rounds expose occupied plots and restore only the missing crop assignment before recording',async()=>{
   const app=setup({legacy:true});
@@ -100,4 +100,12 @@ test('unoccupied plots are rejected server-side and concurrent note edits are no
   const conflicting=setup({legacy:true,conflict:true});
   assert.equal((await conflicting.request('post /:id/losses',valid())).statusCode,409);
   assert.equal(conflicting.calls.length,0);
+});
+
+test('customer sees per-crop limits only when explicitly enabled on the round',async()=>{
+ const res=await setup({publicRoute:true,limited:true}).request('get /open');assert.equal(res.statusCode,200);assert.equal(res.body[0].purchase_limit_enabled,true);assert.equal(res.body[0].items[0].max_qty_per_order_kg,2.5);assert.equal(res.body[0].items[0].available_qty_kg,null);
+});
+
+test('direct customer round detail also allows ordering without a projected kilogram balance',async()=>{
+ for(const limited of [false,true]){const res=await setup({publicRoute:true,limited}).request('get /:id');assert.equal(res.statusCode,200);assert.equal(res.body.is_all_sold_out,false);assert.equal(res.body.total_available_kg,null);assert.equal(res.body.items[0].available_qty_kg,null);assert.equal(res.body.items[0].max_qty_per_order_kg,limited?2.5:null);}
 });

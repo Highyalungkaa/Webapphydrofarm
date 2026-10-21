@@ -118,7 +118,7 @@ export const AdminReportsPage: React.FC = () => {
     const customers = [...customerMap.values()].sort((a, b) => b.orderCount - a.orderCount || b.bookedKg - a.bookedKg);
     const reservedKg = countableOrders.reduce((sum, order) => sum + (order.order_items || []).reduce((itemSum, item) => itemSum + Number(item.qty_kg || 0), 0), 0);
     const soldKg = soldOrders.reduce((sum, order) => sum + (order.order_items || []).reduce((itemSum, item) => itemSum + Number(item.qty_kg || 0), 0), 0);
-    const openedKg = scopedRounds.reduce((sum, round) => sum + (round.round_items || []).reduce((itemSum, item) => itemSum + Number(item.bookable_qty_kg || 0), 0), 0);
+    const openedKg = reservedKg;
 
     return {
       countableOrders,
@@ -204,14 +204,14 @@ export const AdminReportsPage: React.FC = () => {
 
           <div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="font-extrabold text-slate-900">เปิดให้จองเทียบกับขายจริง</h2><p className="mt-1 text-xs text-slate-500">รวมปริมาณเปิดจองในทุกรอบ และปริมาณจากออเดอร์ที่สำเร็จ</p></div>
+              <div><h2 className="font-extrabold text-slate-900">ยอดสั่งจองเทียบกับออเดอร์สำเร็จ</h2><p className="mt-1 text-xs text-slate-500">รวมกิโลกรัมที่ลูกค้าสั่ง และจำนวนตามออเดอร์ที่ส่งมอบสำเร็จ</p></div>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-700 shadow-sm"><TrendingUp className="h-5 w-5" /></span>
             </div>
             <div className="mt-5 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <SalesDonut percentage={sellThrough} soldKg={report.soldKg} openedKg={report.openedKg} />
               <div className="w-full space-y-2 sm:max-w-[190px]">
-                <div className="rounded-2xl border border-slate-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-emerald-600" /> เปิดให้จอง</p><p className="mt-1 text-lg font-black text-slate-900">{kg(report.openedKg)}</p></div>
-                <div className="rounded-2xl border border-sky-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ขายได้จริง</p><p className="mt-1 text-lg font-black text-sky-800">{kg(report.soldKg)}</p></div>
+                <div className="rounded-2xl border border-slate-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-emerald-600" /> ยอดสั่งจอง</p><p className="mt-1 text-lg font-black text-slate-900">{kg(report.openedKg)}</p></div>
+                <div className="rounded-2xl border border-sky-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ออเดอร์สำเร็จ</p><p className="mt-1 text-lg font-black text-sky-800">{kg(report.soldKg)}</p></div>
               </div>
             </div>
             <p className="mt-4 text-center text-[11px] text-slate-500">ยอดขายนับเฉพาะคำสั่งจองที่ยืนยันสถานะสำเร็จแล้ว</p>
@@ -321,7 +321,7 @@ const SalesDonut: React.FC<{ percentage: number; soldKg: number; openedKg: numbe
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   const progress = circumference * (Math.min(100, Math.max(0, percentage)) / 100);
-  return <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`ขายสำเร็จ ${kg(soldKg)} จากยอดเปิดจอง ${kg(openedKg)} คิดเป็น ${percentage.toFixed(0)} เปอร์เซ็นต์`}>
+  return <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`ขายสำเร็จ ${kg(soldKg)} จากยอดสั่งจอง ${kg(openedKg)} คิดเป็น ${percentage.toFixed(0)} เปอร์เซ็นต์`}>
     <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
       <circle cx="70" cy="70" r={radius} fill="none" stroke="#d1fae5" strokeWidth="13" />
       <circle cx="70" cy="70" r={radius} fill="none" stroke="#059669" strokeWidth="13" strokeLinecap="round" strokeDasharray={`${progress} ${circumference}`} className="transition-all duration-700" />

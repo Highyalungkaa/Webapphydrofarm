@@ -95,11 +95,17 @@ export interface RoundItem {
   remaining_estimated_qty_kg?: number | null;
   bookable_qty_kg: number;
   actual_qty_kg?: number | null;
+  additional_qty_kg?: number;
+  effective_bookable_qty_kg?: number | null;
+  farm_reserved_qty_kg?: number;
+  allocated_own_qty_kg?: number;
+  physical_remaining_qty_kg?: number;
+  shortage_qty_kg?: number;
   price_per_kg: number;
   growing_days?: number;
   max_qty_per_order_kg?: number | null;
   booked_qty_kg?: number;
-  available_qty_kg?: number;
+  available_qty_kg?: number | null;
   is_sold_out?: boolean;
   plot_ids?: string[];
   plots?: Plot[];
@@ -107,6 +113,7 @@ export interface RoundItem {
 }
 
 export interface PlantingRound {
+  purchase_limit_enabled?: boolean;
   id: string;
   name: string;
   planted_at: string;
@@ -132,9 +139,9 @@ export interface PlantingRound {
   updated_at?: string;
   items?: RoundItem[];
   round_items?: RoundItem[];
-  total_bookable_kg?: number;
-  total_available_kg?: number;
-  total_estimated_kg?: number;
+  total_bookable_kg?: number | null;
+  total_available_kg?: number | null;
+  total_estimated_kg?: number | null;
   total_booked_kg?: number;
   is_all_sold_out?: boolean;
   is_booking_created?: boolean;
@@ -148,6 +155,7 @@ export interface OrderItem {
   price_per_kg: number;
   discount_amount?: number;
   fulfilled_qty_kg?: number | null;
+  own_qty_kg?: number | null;
   fulfillment_source?: 'own' | 'substitute' | null;
   substitute_supplier?: string | null;
   substitute_cost_per_kg?: number | null;
@@ -219,7 +227,7 @@ export interface CartItem {
   price_per_kg: number;
   qty_kg: number;
   max_qty_per_order_kg?: number | null;
-  available_qty_kg: number;
+  available_qty_kg: number | null;
 }
 
 export interface EquipmentProduct {

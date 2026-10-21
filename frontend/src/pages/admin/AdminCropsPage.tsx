@@ -117,11 +117,6 @@ export const AdminCropsPage: React.FC = () => {
       return;
     }
 
-    if (isNaN(slotsNum) || slotsNum <= 0) {
-      setError('จำนวนต้น ต่อ 1 กก. ต้องมากกว่า 0');
-      return;
-    }
-
     try {
       setSaving(true);
       let savedImageUrl = imageUrl.trim();
@@ -135,7 +130,6 @@ export const AdminCropsPage: React.FC = () => {
       const payload = {
         name: name.trim(),
         default_price_per_kg: priceNum,
-        slots_per_kg: slotsNum,
         image_url: savedImageUrl || null,
         description: description.trim() || null,
         is_active: isActive,
@@ -195,7 +189,7 @@ export const AdminCropsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">แคตตาล็อกชนิดผัก</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            จัดการรายการผักไฮโดรโปนิกส์ ราคาเริ่มต้น จำนวนต้นต่อกิโลกรัม (ต้น/กก.) รูปภาพ และรายละเอียดสินค้า
+            จัดการรายการผักไฮโดรโปนิกส์ ราคาเริ่มต้น รูปภาพ และรายละเอียดสินค้า
           </p>
         </div>
         <button
@@ -224,7 +218,6 @@ export const AdminCropsPage: React.FC = () => {
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
                   <th className="py-3.5 px-4">รูปภาพ / ชนิดผัก</th>
                   <th className="py-3.5 px-4">ราคาตั้งต้น / กก.</th>
-                  <th className="py-3.5 px-4">จำนวนต้น / กก.</th>
                   <th className="py-3.5 px-4 hidden md:table-cell">รายละเอียดสินค้า</th>
                   <th className="py-3.5 px-4 text-center">สถานะ</th>
                   <th className="py-3.5 px-4 text-right">การจัดการ</th>
@@ -266,14 +259,6 @@ export const AdminCropsPage: React.FC = () => {
                         ฿{Number(crop.default_price_per_kg).toFixed(2)}
                       </span>
                       <span className="text-[11px] text-slate-400 ml-1">/กก.</span>
-                    </td>
-
-                    {/* Slots per kg */}
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 font-semibold text-xs border border-sky-100">
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>{crop.slots_per_kg ? Number(crop.slots_per_kg) : 4} ต้น / กก.</span>
-                      </div>
                     </td>
 
                     {/* Description (desktop) */}
@@ -403,33 +388,12 @@ export const AdminCropsPage: React.FC = () => {
                   <p className="text-[10px] text-slate-400 mt-1">ราคาตั้งต้นที่จะใช้อ้างอิงตอนเปิดรอบ</p>
                 </div>
 
-                {/* Slots per Kg */}
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    3. จำนวนต้น ต่อ 1 กก. <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0.1"
-                      step="0.1"
-                      value={slotsPerKg}
-                      onChange={(e) => setSlotsPerKg(e.target.value)}
-                      required
-                      placeholder="เช่น 4.0 หรือ 5.0"
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    เช่น ผัก 4 ต้น = ผลผลิตประมาณ 1 กก.
-                  </p>
-                </div>
               </div>
 
               {/* 4. Crop image */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  4. รูปภาพชนิดผัก
+                  3. รูปภาพชนิดผัก
                 </label>
                 <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center">
                   <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 font-bold text-white hover:bg-emerald-900">
@@ -528,7 +492,7 @@ export const AdminCropsPage: React.FC = () => {
               {/* 5. Product Description */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  5. รายละเอียดสินค้า (Description)
+                  4. รายละเอียดสินค้า (Description)
                 </label>
                 <textarea
                   rows={3}

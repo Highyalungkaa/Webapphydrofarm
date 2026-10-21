@@ -51,24 +51,20 @@ router.get('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
       supabaseAdmin.from('round_items').select('*,crops(name,slots_per_kg)').eq('round_id', round.id),
       supabaseAdmin.from('plant_losses').select('*').eq('round_id', round.id).order('created_at', { ascending: false }),
       loadPlantingContext(),
-      supabaseAdmin.from('orders').select('status,order_items(round_item_id,qty_kg)').eq('round_id', round.id).neq('status', 'cancelled'),
+      supabaseAdmin.from('orders').select('status,order_items(round_item_id,qty_kg,own_qty_kg,fulfillment_source,fulfilled_qty_kg)').eq('round_id', round.id).neq('status', 'cancelled'),
     ]);
     const error = itemResult.error || lossResult.error || bookedResult.error;
     if (error) { fail(res, error); return; }
     const booked = new Map<string, number>();
     for (const order of bookedResult.data || []) for (const item of order.order_items || []) {
-      booked.set(item.round_item_id, (booked.get(item.round_item_id) || 0) + Number(item.qty_kg));
+      booked.set(item.round_item_id, (booked.get(item.round_item_id) || 0) + (order.status === 'no_show' ? 0 : Math.max(0, Number(item.own_qty_kg || 0), Number(item.qty_kg) - (item.fulfillment_source === 'substitute' ? Number(item.fulfilled_qty_kg || 0) : 0))));
     }
     const items = (itemResult.data || []).map((item: any) => {
-      const rate = Number(item.loss_plants_per_kg ?? item.planting_plants_per_kg ?? item.crops?.slots_per_kg ?? 0);
-      const original = Number(item.loss_baseline_plant_count ?? item.plant_count ?? Math.round(Number(item.estimated_qty_kg) * rate));
-      const lost = Number(item.lost_plant_count || 0);
-      const originalKg = rate > 0 ? Math.floor(original * 100 / Math.round(rate * 100)) : Number(item.estimated_qty_kg);
-      const remainingKg = Number(item.remaining_estimated_qty_kg ?? item.estimated_qty_kg);
-      return { id: item.id, crop_name: item.crops?.name || 'ผัก', original_plant_count: original, lost_plant_count: lost,
-        remaining_plant_count: original - lost, original_estimated_kg: originalKg, remaining_estimated_kg: remainingKg,
-        lost_estimated_kg: Math.max(0, originalKg - remainingKg), plants_per_kg: rate, is_approximate: item.plant_count == null,
-        shortage_kg: Math.max(0, (booked.get(item.id) || 0) - remainingKg),
+      const original=Number(item.loss_baseline_plant_count??item.plant_count??0);
+      const lost=Number(item.lost_plant_count||0);
+      return {id:item.id,crop_name:item.crops?.name||'ผัก',original_plant_count:original,lost_plant_count:lost,
+        remaining_plant_count:Math.max(0,original-lost),original_estimated_kg:null,remaining_estimated_kg:null,
+        lost_estimated_kg:null,plants_per_kg:null,is_approximate:false,shortage_kg:0,
         plots: planting.plots.filter(plot => planting.allocations.some(allocation => allocation.round_id === round.id
           && allocation.round_item_id === item.id && allocation.plot_id === plot.id && allocation.plant_count > 0)),
       };

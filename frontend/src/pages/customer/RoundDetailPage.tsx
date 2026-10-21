@@ -1,3 +1,4 @@
+import { PurchaseLimitBadge } from '../../components/common/PurchaseLimitBadge.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -65,7 +66,7 @@ export const RoundDetailPage: React.FC = () => {
     const currentQty = existing ? existing.qty_kg : 0;
     const requestedQty = currentQty + delta;
     const maxAllowed = Math.min(
-      Number(item.available_qty_kg || 0),
+      item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg),
       item.max_qty_per_order_kg ? Number(item.max_qty_per_order_kg) : Number.POSITIVE_INFINITY,
     );
     const newQty = Math.max(0, Math.round((currentQty === 0 && delta > 0 ? Math.min(delta, maxAllowed) : requestedQty) * 100) / 100);
@@ -76,7 +77,7 @@ export const RoundDetailPage: React.FC = () => {
         crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
         price_per_kg: Number(item.price_per_kg),
         max_qty_per_order_kg: item.max_qty_per_order_kg,
-        available_qty_kg: Number(item.available_qty_kg || 0),
+        available_qty_kg: item.available_qty_kg ?? null,
       },
       newQty
     );
@@ -102,7 +103,7 @@ export const RoundDetailPage: React.FC = () => {
       crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
       price_per_kg: Number(item.price_per_kg),
       max_qty_per_order_kg: item.max_qty_per_order_kg,
-      available_qty_kg: Number(item.available_qty_kg || 0),
+      available_qty_kg: item.available_qty_kg ?? null,
     }, parsed.qty);
     setQtyInputErrors((previous) => ({ ...previous, [item.id]: result.success ? undefined : result.message }));
     if (result.success) {
@@ -161,6 +162,7 @@ export const RoundDetailPage: React.FC = () => {
 
       <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
         <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{round.status === 'booking_open' ? 'เปิดรับจอง' : 'ปิดรับจอง'}</span>
+        {round.purchase_limit_enabled && <PurchaseLimitBadge/>}
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{round.items?.length || 0} ชนิดผัก</span>
       </CustomerPageHeader>
 
@@ -234,9 +236,9 @@ export const RoundDetailPage: React.FC = () => {
             const qtyStep = qtySteps[item.id] || 0.5;
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
-            const available = Number(item.available_qty_kg || 0);
+            const available = item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg);
             const isBookingClosed = round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
-            const isSoldOut = item.is_sold_out || available <= 0;
+            const isSoldOut = false;
 
             return (
               <div
@@ -263,7 +265,7 @@ export const RoundDetailPage: React.FC = () => {
                       </span>
                     ) : (
                       <span className="text-xs text-slate-600">
-                        เหลือ <strong className="text-farm-700">{formatKg(available)}</strong> กก.
+                        เปิดรับจอง
                       </span>
                     )}
                   </div>
@@ -309,7 +311,7 @@ export const RoundDetailPage: React.FC = () => {
                           inputMode="decimal"
                           min="0.5"
                           step="0.01"
-                          max={Math.min(available, Number(item.max_qty_per_order_kg) || Infinity)}
+                          max={item.max_qty_per_order_kg ?? undefined}
                           placeholder="เช่น 2.5"
                           value={qtyInputs[item.id] ?? (inCartQty > 0 ? String(inCartQty) : '')}
                           onChange={(event) => {

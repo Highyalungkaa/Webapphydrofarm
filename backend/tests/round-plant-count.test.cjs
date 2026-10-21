@@ -57,12 +57,12 @@ async function createRound(count, capacity = 100) {
   return { res, savedItems };
 }
 
-test('create saves the exact count and recalculates whole kilograms on the server', async () => {
+test('create saves the exact plant count without deriving kilograms, ignoring legacy projection inputs', async () => {
   const { res, savedItems } = await createRound(100);
   assert.equal(res.statusCode, 201);
   assert.equal(savedItems[0].plant_count, 100);
-  assert.equal(savedItems[0].estimated_qty_kg, 22);
-  assert.equal(savedItems[0].bookable_qty_kg, 22);
+  assert.equal(savedItems[0].estimated_qty_kg, 0);
+  assert.equal(savedItems[0].bookable_qty_kg, 0);
 });
 
 test('plant capacity cannot be bypassed by rounding weight down', async () => {
@@ -71,7 +71,7 @@ test('plant capacity cannot be bypassed by rounding weight down', async () => {
   assert.equal(savedItems, undefined);
 });
 
-test('fractional kilograms round down to zero without discarding planted counts', async () => {
+test('a small plant count needs no kilogram estimate to create a round', async () => {
   const { res, savedItems } = await createRound(2);
   assert.equal(res.statusCode, 201);
   assert.equal(savedItems[0].plant_count, 2);

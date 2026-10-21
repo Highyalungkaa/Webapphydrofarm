@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../config/supabase.js';
 const router = Router();
 
 // Helper to compute booked and remaining quantities for round items
-async function enrichRoundItems(roundId: string) {
+async function enrichRoundItems(roundId: string, limited = false) {
   const { data: items, error: itemsError } = await supabaseAdmin
     .from('round_items')
     .select(`
@@ -28,6 +28,9 @@ async function enrichRoundItems(roundId: string) {
     .select(`
       round_item_id,
       qty_kg,
+      fulfilled_qty_kg,
+      fulfillment_source,
+      own_qty_kg,
       orders!inner (
         status
       )
@@ -45,15 +48,11 @@ async function enrichRoundItems(roundId: string) {
 
   return items.map((item: any) => {
     const booked_qty_kg = bookedMap.get(item.id) || 0;
-    const effectiveBookable = Math.min(Number(item.bookable_qty_kg), Number(item.remaining_estimated_qty_kg ?? item.bookable_qty_kg));
-    const available_qty_kg = Math.max(0, effectiveBookable - booked_qty_kg);
     return {
-      ...item,
-      bookable_qty_kg: effectiveBookable,
-      crop_name: item.crops?.name || 'ผักสลัด',
-      booked_qty_kg,
-      available_qty_kg,
-      is_sold_out: available_qty_kg <= 0,
+      id:item.id,round_id:item.round_id,crop_id:item.crop_id,price_per_kg:item.price_per_kg,crops:item.crops,
+      crop_name:item.crops?.name || 'ผัก',booked_qty_kg,
+      max_qty_per_order_kg:limited ? item.max_qty_per_order_kg : null,
+      available_qty_kg:null,is_sold_out:false,
     };
   });
 }
@@ -75,15 +74,13 @@ router.get('/open', async (_req: Request, res: Response): Promise<void> => {
 
     const enrichedRounds = await Promise.all(
       (rounds || []).map(async (round) => {
-        const items = await enrichRoundItems(round.id);
-        const totalBookable = items.reduce((sum, item) => sum + Number(item.bookable_qty_kg), 0);
-        const totalAvailable = items.reduce((sum, item) => sum + Number(item.available_qty_kg), 0);
+        const items = await enrichRoundItems(round.id, round.purchase_limit_enabled);
         return {
           ...round,
           items,
-          total_bookable_kg: totalBookable,
-          total_available_kg: totalAvailable,
-          is_all_sold_out: totalAvailable <= 0 && items.length > 0,
+          total_bookable_kg: null,
+          total_available_kg: null,
+          is_all_sold_out: false,
         };
       })
     );
@@ -115,16 +112,14 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const items = await enrichRoundItems(id);
-    const totalBookable = items.reduce((sum, item) => sum + Number(item.bookable_qty_kg), 0);
-    const totalAvailable = items.reduce((sum, item) => sum + Number(item.available_qty_kg), 0);
+    const items = await enrichRoundItems(id, round.purchase_limit_enabled);
 
     res.json({
       ...round,
       items,
-      total_bookable_kg: totalBookable,
-      total_available_kg: totalAvailable,
-      is_all_sold_out: totalAvailable <= 0 && items.length > 0,
+      total_bookable_kg: null,
+      total_available_kg: null,
+      is_all_sold_out: false,
     });
   } catch (err: any) {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลรอบ' });

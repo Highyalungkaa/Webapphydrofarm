@@ -13,6 +13,7 @@ const inputSchema = z.object({
   items: z.array(z.object({
     round_item_id: uuid,
     unsold_plant_count: z.number().int().min(0).max(2147483647),
+    unsold_qty_kg: z.number().min(0).max(99999999).default(0),
     other_sales_kg: z.number().min(0).max(99999999).refine(n => Math.abs(n * 100 - Math.round(n * 100)) < 0.00001, 'ปริมาณต้องมีทศนิยมไม่เกิน 2 ตำแหน่ง'),
     disposition: z.enum(['discard','donate','consume','process','other']).nullable(),
     note: z.string().trim().max(1000).default(''),
@@ -30,7 +31,7 @@ router.get('/:id/unsold', async (req: AuthenticatedRequest, res: Response) => {
     const [roundResult,itemResult,orderResult,closureResult,historyResult] = await Promise.all([
       supabaseAdmin.from('planting_rounds').select('*').eq('id',req.params.id).maybeSingle(),
       supabaseAdmin.from('round_items').select('*,crops(name,slots_per_kg)').eq('round_id',req.params.id),
-      supabaseAdmin.from('orders').select('id,status,payment_status,order_items(round_item_id,qty_kg,fulfilled_qty_kg,fulfillment_source)').eq('round_id',req.params.id),
+      supabaseAdmin.from('orders').select('id,status,payment_status,order_items(round_item_id,qty_kg,own_qty_kg,fulfilled_qty_kg,fulfillment_source)').eq('round_id',req.params.id),
       supabaseAdmin.from('round_unsold_closures').select('*').eq('round_id',req.params.id).maybeSingle(),
       supabaseAdmin.from('round_unsold_items').select('*').eq('round_id',req.params.id),
     ]);
@@ -41,17 +42,13 @@ router.get('/:id/unsold', async (req: AuthenticatedRequest, res: Response) => {
     const blocking=(orderResult.data || []).filter(o => !['completed','cancelled','no_show'].includes(o.status) || (o.status==='completed' && o.payment_status!=='paid'));
     const consumed=new Map<string,number>();
     for (const order of orderResult.data || []) if(order.status==='completed') for (const item of order.order_items || []) {
-      const own=Math.max(0,Number(item.qty_kg)-(item.fulfillment_source==='substitute' ? Number(item.fulfilled_qty_kg || 0) : 0));
+      const own=Number(item.own_qty_kg ?? Math.max(0,Number(item.qty_kg)-(item.fulfillment_source==='substitute' ? Number(item.fulfilled_qty_kg || 0) : 0)));
       consumed.set(item.round_item_id,(consumed.get(item.round_item_id)||0)+own);
     }
     const items=(itemResult.data || []).map((item:any) => {
-      const rate=Number(item.loss_plants_per_kg ?? item.planting_plants_per_kg ?? item.crops?.slots_per_kg ?? 0);
-      const remaining=Math.max(0,Number(item.loss_baseline_plant_count ?? item.plant_count ?? Math.round(Number(item.estimated_qty_kg)*rate))-Number(item.lost_plant_count||0));
-      const yieldKg=Number(item.actual_qty_kg ?? item.remaining_estimated_qty_kg ?? item.estimated_qty_kg);
-      const delivered=consumed.get(item.id)||0;
-      return { id:item.id,crop_name:item.crops?.name || 'ผัก',remaining_plant_count:remaining,plants_per_kg:rate,
-        farm_yield_kg:yieldKg,yield_is_actual:item.actual_qty_kg!=null,delivered_own_kg:delivered,
-        available_kg:Math.max(0,Math.round((yieldKg-delivered)*100)/100) };
+      const remaining=Math.max(0,Number(item.loss_baseline_plant_count??item.plant_count??0)-Number(item.lost_plant_count||0));
+      return {id:item.id,crop_name:item.crops?.name||'ผัก',remaining_plant_count:remaining,plants_per_kg:null,
+        farm_yield_kg:null,yield_is_actual:false,delivered_own_kg:consumed.get(item.id)||0,available_kg:null};
     });
     res.json({ round,items,blocking_orders:blocking.map(o=>({id:o.id,status:o.status,payment_status:o.payment_status})),
       closure:closureResult.data,history:historyResult.data || [] });

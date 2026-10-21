@@ -8,6 +8,14 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 const updateOrderSchema = z.object({
+  expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  allocation_items: z.array(z.object({
+    id: z.string().uuid(),
+    own_qty_kg: z.number().min(0).max(99999999).nullable(),
+    substitute_qty_kg: z.number().min(0).max(99999999),
+    substitute_total_cost: z.number().min(0).max(99999999),
+    discount_amount: z.number().min(0).max(99999999),
+  })).min(1).max(100).optional(),
   status: z.enum(['pending_confirmation', 'confirmed', 'ready', 'completed', 'cancelled', 'no_show']).optional(),
   payment_status: z.enum(['unpaid', 'paid']).optional(),
   payment_method: z.enum(['cash', 'transfer']).optional().nullable(),
@@ -62,6 +70,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           price_per_kg,
           discount_amount,
           fulfilled_qty_kg,
+          own_qty_kg,
           fulfillment_source,
           substitute_supplier,
           substitute_cost_per_kg,
@@ -161,6 +170,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           price_per_kg,
           discount_amount,
           fulfilled_qty_kg,
+          own_qty_kg,
           fulfillment_source,
           substitute_supplier,
           substitute_cost_per_kg,
@@ -199,6 +209,17 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.errors[0]?.message || 'ข้อมูลไม่ถูกต้อง' });
       return;
+    }
+
+    if (parsed.data.allocation_items) {
+      const { data, error } = await supabaseAdmin.rpc('save_admin_order_allocation', {
+        p_actor_id: req.user!.id, p_order_id: id, p_payload: parsed.data,
+      });
+      if (error) {
+        const missing = ['42883','42P01','42703','PGRST202','PGRST204','PGRST205'].includes(error.code);
+        res.status(missing ? 503 : 400).json({error: missing ? 'กรุณารัน migration 035 ใน Supabase ก่อนบันทึกการจัดผักจริง' : error.message}); return;
+      }
+      res.json({message:'บันทึกน้ำหนักจัดจริงและออเดอร์แล้ว',order:data}); return;
     }
 
     const { data: currentOrder } = await supabaseAdmin

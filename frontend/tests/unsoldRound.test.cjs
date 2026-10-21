@@ -3,8 +3,8 @@ function load(relative){const exports={};const file=path.resolve(__dirname,relat
 const {validateUnsoldInput}=load('../src/lib/unsoldRound.ts');
 const item={remaining_plant_count:450,plants_per_kg:5,available_kg:90};
 const input={count:'400',otherSales:'10',disposition:'discard',note:''};
-test('unsold plus offline sales fit the remaining yield without changing original counts',()=>assert.equal(validateUnsoldInput(input,item),null));
-test('reject over-counts, fractions, over-allocation and missing disposition details',()=>{
-  for(const override of [{count:''},{count:'451'},{count:'1.5'},{otherSales:'11'},{otherSales:'0.001'},{disposition:''},{disposition:'other'}])assert.ok(validateUnsoldInput({...input,...override},item));
-  assert.equal(validateUnsoldInput({...input,disposition:'other',note:'บริจาคและแปรรูป'},item),null);
+test('manual unsold records accept counted plants without calculating any yield',()=>assert.equal(validateUnsoldInput(input,item),null));
+test('reject invalid counted plants, manual precision and missing disposition details',()=>{
+  for(const override of [{count:''},{count:'451'},{count:'1.5'},{unsoldKg:'1.001'},{otherSales:'0.001'},{disposition:''},{disposition:'other'}])assert.ok(validateUnsoldInput({...input,...override},item));
+  assert.equal(validateUnsoldInput({...input,disposition:'other',note:'บริจาคและแปรรูป',unsoldKg:'125.75',otherSales:'100'},item),null);
 });

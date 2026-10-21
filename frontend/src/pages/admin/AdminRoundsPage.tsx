@@ -1,6 +1,5 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
-import { plantCountToKg } from '../../lib/plantingQuantities.js';
 import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -118,8 +117,7 @@ export const AdminRoundsPage: React.FC = () => {
 
       (r.round_items || []).forEach((item: any) => {
         const crop = crops.find((c) => c.id === item.crop_id) || item.crops;
-        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-        let slotsNeeded = item.plant_count ?? Math.round((Number(item.bookable_qty_kg) || 0) * rate);
+        let slotsNeeded = Number(item.plant_count || 0);
 
         // Plots assigned to this item
         const itemPlotIds: string[] = rCropPlotIds[item.crop_id] || (Array.isArray(item.plot_ids) ? item.plot_ids : []);
@@ -174,7 +172,7 @@ export const AdminRoundsPage: React.FC = () => {
 
   const plotSlotAllocation = allocatePlotSlots(
     activePlots, items,
-    Object.fromEntries(crops.map((crop) => [crop.id, Number(crop.slots_per_kg) || 4])),
+    {},
     Object.fromEntries(Object.entries(plotOccupancyMap).map(([id, usage]) => [id, usage.occupiedSlots])),
   );
   const itemOccupiedSlots = (index: number, plotId: string) =>
@@ -197,7 +195,6 @@ export const AdminRoundsPage: React.FC = () => {
       const occ = plotSlotAllocation.used[p.id] || 0;
       return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
     }, 0);
-    const rate = availableCrop.slots_per_kg ? Number(availableCrop.slots_per_kg) : 4.0;
     const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems((prev) => [
@@ -238,7 +235,6 @@ export const AdminRoundsPage: React.FC = () => {
       const occ = itemOccupiedSlots(index, p.id);
       return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
     }, 0);
-    const rate = selected?.slots_per_kg ? Number(selected.slots_per_kg) : 4.0;
     const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems(
@@ -286,7 +282,6 @@ export const AdminRoundsPage: React.FC = () => {
 
         // Recalculate available slots from chosen plots
         const crop = crops.find((c) => c.id === it.crop_id);
-        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const chosenPlots = activePlots.filter((p) => newSelected.includes(p.id));
         const newAvailableSlots = chosenPlots.reduce((sum, p) => {
           const pOcc = itemOccupiedSlots(itemIndex, p.id);
@@ -315,7 +310,6 @@ export const AdminRoundsPage: React.FC = () => {
         });
         const plotIds = availablePlots.map((p) => p.id);
         const crop = crops.find((c) => c.id === it.crop_id);
-        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const newSlots = availablePlots.reduce((sum, p) => {
           const occ = itemOccupiedSlots(itemIndex, p.id);
           return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
@@ -342,7 +336,6 @@ export const AdminRoundsPage: React.FC = () => {
       prevItems.map((it, idx) => {
         if (idx !== itemIndex) return it;
         const crop = crops.find((c) => c.id === it.crop_id);
-        const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
         const chosenPlots = activePlots.filter((p) => (it.selected_plot_ids || []).includes(p.id));
         const availableSlotsInChosen = chosenPlots.reduce((sum, p) => {
           const occ = itemOccupiedSlots(itemIndex, p.id);
@@ -402,8 +395,6 @@ export const AdminRoundsPage: React.FC = () => {
         setFormError(crop ? getRoundCropAvailability([crop], plots).issues[0]?.message || `${cropName} ยังไม่พร้อมปลูก` : 'ไม่พบชนิดผักที่เลือก กรุณาตรวจสอบแคตตาล็อกผัก');
         return;
       }
-      const rate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-      const targetKg = plantCountToKg(it.plant_count, rate);
       const requiredSlots = it.plant_count;
       if (!Number.isSafeInteger(it.plant_count) || it.plant_count <= 0) {
         setFormError(`กรุณาระบุจำนวนต้นของ ${cropName} เป็นจำนวนเต็มมากกว่า 0`);
@@ -441,9 +432,8 @@ export const AdminRoundsPage: React.FC = () => {
       }
 
       if (requiredSlots > availableSlotsInChosen) {
-        const maxKg = plantCountToKg(availableSlotsInChosen, rate);
         setFormError(
-          `พื้นที่แปลงสำหรับ ${cropName} ไม่เพียงพอ! แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง ${availableSlotsInChosen.toLocaleString()} ต้น (~${maxKg} กก.) แต่เป้าหมายต้องการ ${requiredSlots.toLocaleString()} ต้น (มีรอบเดิมใช้อยู่ ${occupiedInChosen.toLocaleString()} ต้น) กรุณาปรับลดจำนวนต้นไม่ให้เกิน ${availableSlotsInChosen.toLocaleString()} ต้น`
+          `พื้นที่แปลงสำหรับ ${cropName} ไม่เพียงพอ! แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง ${availableSlotsInChosen.toLocaleString()} ต้น แต่เป้าหมายต้องการ ${requiredSlots.toLocaleString()} ต้น (มีรอบเดิมใช้อยู่ ${occupiedInChosen.toLocaleString()} ต้น) กรุณาปรับลดจำนวนต้นไม่ให้เกิน ${availableSlotsInChosen.toLocaleString()} ต้น`
         );
         return;
       }
@@ -461,8 +451,6 @@ export const AdminRoundsPage: React.FC = () => {
         items: items.map((it) => ({
           crop_id: it.crop_id,
           plant_count: it.plant_count,
-          estimated_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
-          bookable_qty_kg: plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4),
           price_per_kg: it.price_per_kg,
           growing_days: Number(it.growing_days),
           plot_ids: it.selected_plot_ids || [],
@@ -637,10 +625,7 @@ export const AdminRoundsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {activeRounds.map((round) => {
-                  const bookableTotal = Number(round.total_bookable_kg || 0);
                   const bookedTotal = Number(round.total_booked_kg || 0);
-                  const availableTotal = Number(round.total_available_kg ?? Math.max(0, bookableTotal - bookedTotal));
-                  const percentSold = bookableTotal > 0 ? Math.min(100, (bookedTotal / bookableTotal) * 100) : 0;
 
                   return (
                     <tr key={round.id} className="hover:bg-slate-50/70 transition-colors">
@@ -673,7 +658,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium"
                               >
                                 <Leaf className="w-3 h-3 text-emerald-500" />
-                                {item.crop_name || item.crops?.name || 'ผัก'} ({Number(item.bookable_qty_kg).toFixed(0)} กก.)
+                                {item.crop_name || item.crops?.name || 'ผัก'} ({Number(item.plant_count || 0).toLocaleString()} ต้น)
                               </span>
                             ))
                           ) : (
@@ -682,32 +667,7 @@ export const AdminRoundsPage: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Stock / Sold Progress Bar */}
-                      <td className="py-4 px-4 min-w-[180px]">
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[11px]">
-                            <span className="text-slate-600 font-medium">
-                              จองแล้ว: <strong className="text-emerald-700">{bookedTotal.toFixed(1)}</strong> / {bookableTotal.toFixed(1)} กก.
-                            </span>
-                            <span className="font-bold text-slate-800">{percentSold.toFixed(0)}%</span>
-                          </div>
-                          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                percentSold >= 100
-                                  ? 'bg-rose-500'
-                                  : percentSold >= 75
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
-                              }`}
-                              style={{ width: `${percentSold}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-400 block">
-                            คงเหลือเปิดจอง: {availableTotal.toFixed(1)} กก.
-                          </span>
-                        </div>
-                      </td>
+                      <td className="px-4 py-4 text-sm"><p>ลูกค้าจอง {bookedTotal.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p><p className="mt-1 text-xs text-slate-500">{round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}</p></td>
 
                       {/* Actions */}
                       <td className="py-4 px-4 text-right whitespace-nowrap">
@@ -878,7 +838,6 @@ export const AdminRoundsPage: React.FC = () => {
                       const occ = plotOccupancyMap[p.id]?.occupiedSlots || 0;
                       return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
                     }, 0);
-                  const totalTargetKg = items.reduce((sum, it) => sum + plantCountToKg(it.plant_count, Number(crops.find((crop) => crop.id === it.crop_id)?.slots_per_kg) || 4), 0);
                   const totalRequiredSlots = items.reduce((s, it) => {
                     const c = crops.find((cr) => cr.id === it.crop_id);
                     const r = c?.slots_per_kg ? Number(c.slots_per_kg) : 4.0;
@@ -929,7 +888,7 @@ export const AdminRoundsPage: React.FC = () => {
 
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span className="font-semibold text-slate-600">
-                            ปลูกรอบนี้: <strong className="text-emerald-800">{totalRequiredSlots.toLocaleString()} ต้น</strong> (น้ำหนักประมาณ {totalTargetKg.toLocaleString()} กก.)
+                            ปลูกรอบนี้: <strong className="text-emerald-800">{totalRequiredSlots.toLocaleString()} ต้น</strong>
                           </span>
                           <span className="text-slate-300">•</span>
                           <span className="font-semibold text-slate-600">
@@ -1029,8 +988,6 @@ export const AdminRoundsPage: React.FC = () => {
                   <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
                     {items.map((it, idx) => {
                       const selectedCrop = crops.find((c) => c.id === it.crop_id);
-                      const cropRate = selectedCrop?.slots_per_kg ? Number(selectedCrop.slots_per_kg) : 4.0;
-                      const targetKg = plantCountToKg(it.plant_count, cropRate);
                       const requiredSlots = it.plant_count;
 
                       // Only plots designated for this crop can be selected.
@@ -1061,8 +1018,6 @@ export const AdminRoundsPage: React.FC = () => {
 
                       const missingSlots = Math.max(0, requiredSlots - totalSelectedAvailableSlots);
                       const extraSlots = Math.max(0, totalSelectedAvailableSlots - requiredSlots);
-                      const missingKg = plantCountToKg(missingSlots, cropRate);
-                      const extraKg = plantCountToKg(extraSlots, cropRate);
                       const matchCapacityPlants = Math.floor(totalSelectedAvailableSlots);
 
                       // Gauge bar calculation
@@ -1147,16 +1102,6 @@ export const AdminRoundsPage: React.FC = () => {
                             </button>
                           </div>
 
-                          <div className="my-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-emerald-200 bg-white/90 px-3.5 py-3">
-                            <div className="flex items-baseline gap-3">
-                              <span className="text-xs font-semibold text-slate-600">น้ำหนักประมาณ</span>
-                              <output htmlFor={`plant-count-${idx}`} className="text-xl font-black tabular-nums text-emerald-800">
-                                {targetKg.toLocaleString()} <span className="text-sm font-semibold">กก.</span>
-                              </output>
-                            </div>
-                            <p className="text-[11px] text-slate-500">{cropRate} ต้น/กก. · ปัดเศษลง</p>
-                          </div>
-
                           {/* PROMINENT REAL-TIME WARNING & NOTIFICATION ALERT BOX */}
                           <div className="space-y-2">
                             {/* 1. Shared plot information */}
@@ -1180,7 +1125,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">⚠️ ยังไม่ได้เลือกแปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}!</p>
                                     <p className="text-[11px] text-amber-800 mt-0.5">
-                                      จำนวนที่ปลูก <strong>{requiredSlots.toLocaleString()} ต้น</strong> (ประมาณ {targetKg} กก.) ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ต้น</strong> (อัตรา ~{cropRate} ต้น/กก.) กรุณาเลือกแปลงปลูกด้านล่าง
+                                      จำนวนที่ปลูก <strong>{requiredSlots.toLocaleString()} ต้น</strong> ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ต้น</strong> กรุณาเลือกแปลงปลูกด้านล่าง
                                     </p>
                                   </div>
                                 </div>
@@ -1223,7 +1168,7 @@ export const AdminRoundsPage: React.FC = () => {
                                     <p className="text-[11px] text-rose-800 mt-0.5">
                                       ต้องการ <strong>{requiredSlots.toLocaleString()} ต้น</strong> แต่แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong>
                                       {totalSelectedOccupied > 0 && ` (รอบเดิมใช้ไป ${totalSelectedOccupied.toLocaleString()} ต้น)`}
-                                      {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ต้น</strong> หรือ ~{missingKg} กก.)
+                                      {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ต้น</strong>)
                                     </p>
                                   </div>
                                 </div>
@@ -1247,7 +1192,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">ℹ️ แปลงที่เลือกมีพื้นที่ว่างเหลือ!</p>
                                     <p className="text-[11px] text-sky-800 mt-0.5">
-                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ต้น</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ต้น</strong> หรือ ~{extraKg} กก.)
+                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ต้น</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ต้น</strong>)
                                     </p>
                                   </div>
                                 </div>
@@ -1353,14 +1298,14 @@ export const AdminRoundsPage: React.FC = () => {
                                   />
                                 </div>
                                 <div className="flex justify-between text-[10px] text-slate-500">
-                                  <span>จำนวนที่ปลูก: {it.plant_count.toLocaleString()} ต้น · ประมาณ {targetKg} กก.</span>
+                                  <span>จำนวนที่ปลูก: {it.plant_count.toLocaleString()} ต้น</span>
                                   <span>
                                     {isSelectedPlotsZeroFree ? (
                                       <strong className="text-rose-600">รอบอื่นใช้งานเต็มแล้ว</strong>
                                     ) : isOverCapacity ? (
                                       <strong className="text-rose-600">เกินพื้นที่ว่าง {missingSlots.toLocaleString()} ต้น</strong>
                                     ) : extraSlots > 0 ? (
-                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ต้น (~{extraKg} กก.)</strong>
+                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ต้น</strong>
                                     ) : (
                                       <strong className="text-emerald-700">เต็มพื้นที่ว่างพอดี 100%</strong>
                                     )}
@@ -1585,8 +1530,6 @@ export const AdminRoundsPage: React.FC = () => {
                       <tbody className="divide-y divide-slate-100">
                         {items.map((it, idx) => {
                           const crop = crops.find((c) => c.id === it.crop_id);
-                          const cropRate = crop?.slots_per_kg ? Number(crop.slots_per_kg) : 4.0;
-                          const targetKg = plantCountToKg(it.plant_count, cropRate);
                           const requiredSlots = it.plant_count;
 
                           const selectedPlotIds = it.selected_plot_ids || [];
@@ -1610,7 +1553,7 @@ export const AdminRoundsPage: React.FC = () => {
                               </td>
                               <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
                                 <strong className="text-emerald-800">{requiredSlots.toLocaleString()} ต้น</strong>
-                                <span className="text-[10px] text-slate-400 block">ประมาณ {targetKg} กก.</span>
+
                               </td>
                               <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
                                 {selectedPlots.length > 0 ? (

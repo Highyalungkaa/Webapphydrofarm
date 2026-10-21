@@ -462,7 +462,7 @@ export const AdminPlotsPage: React.FC = () => {
                       />
                       <span>
                         <span className="block text-sm font-bold text-slate-800">{crop.name}{crop.is_active === false ? ' (ปิดใช้งานแล้ว · รายการเดิม)' : ''}</span>
-                        <span className="text-xs text-slate-500">฿{Number(crop.default_price_per_kg).toFixed(0)}/กก. · {crop.slots_per_kg || 4} ต้น/กก.</span>
+                        <span className="text-xs text-slate-500">฿{Number(crop.default_price_per_kg).toFixed(0)}/กก.</span>
                       </span>
                     </label>
                   ))}
