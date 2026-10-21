@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Plus, X } from 'lucide-react';
+import React, { useEffect, useId, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
 import { plantCountToKg } from '../../lib/plantingQuantities.js';
@@ -25,6 +25,8 @@ const number = (value: number) => value.toLocaleString('th-TH', { maximumFractio
 const inputClass = 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100';
 
 export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promise<void> }> = ({ roundId, onChanged }) => {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
   const [data, setData] = useState<LossData | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -64,6 +66,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
   const canRecord = !!data && !['completed','cancelled'].includes(data.round.status) && !data.round.sold_out_date && !data.round.completed_date;
   const today = toBangkokDateString(new Date().toISOString()) || '';
   const totals = data?.items.reduce((sum, item) => ({ original: sum.original + item.original_plant_count, lost: sum.lost + item.lost_plant_count, remaining: sum.remaining + item.remaining_plant_count }), { original: 0, lost: 0, remaining: 0 });
+  const shortage = data?.items.reduce((sum, item) => sum + item.shortage_kg, 0) || 0;
   const start = () => {
     const first = data?.items.find(item => item.remaining_plant_count > 0);
     setItemId(first?.id || ''); setPlotId(first?.plots.length === 1 ? first.plots[0].id : '');
@@ -101,7 +104,14 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
     finally { setSaving(false); }
   };
 
-  return <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+  return <section className="space-y-3">
+    <button type="button" aria-expanded={expanded} aria-controls={panelId} disabled={saving} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50">
+      <AlertTriangle aria-hidden="true" className="h-4 w-4" />ผักเสียหายระหว่างปลูก
+      {!!totals?.lost && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs">สูญเสีย {number(totals.lost)} ต้น</span>}
+      <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+    </button>
+    {!expanded && shortage > 0 && <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" /><span>ผลผลิตคาดการณ์ไม่พอยอดจอง ขาด {number(shortage)} กก.</span><button type="button" onClick={() => setExpanded(true)} className="font-bold underline">ดูรายละเอียด</button></div>}
+    <div id={panelId} hidden={!expanded} className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-lg font-extrabold text-slate-900">ผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
       {canRecord && <button type="button" onClick={start} disabled={saving || loading || !data?.items.some(i => i.remaining_plant_count > 0)} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"><Plus className="h-4 w-4" />บันทึกผักเสียหาย</button>}
@@ -155,5 +165,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
       </details>
       <p className="text-xs leading-relaxed text-slate-500">น้ำหนักเป็นค่าคาดการณ์ตามจำนวนต้น ไม่ใช่น้ำหนักชั่งจริง การสูญเสียไม่คืนพื้นที่แปลงอัตโนมัติ และไม่เปลี่ยนจำนวนในออเดอร์ลูกค้า</p>
     </>}
+    </div>
   </section>;
 };
