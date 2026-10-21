@@ -113,6 +113,7 @@ export interface RoundItem {
 }
 
 export interface PlantingRound {
+  order_limit_remaining?: number | null;
   purchase_limit_enabled?: boolean;
   id: string;
   name: string;

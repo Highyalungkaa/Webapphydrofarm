@@ -1,3 +1,4 @@
+import {OrderLimitNotice} from '../../components/common/OrderLimitNotice.js';
 import { PurchaseLimitBadge } from '../../components/common/PurchaseLimitBadge.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -160,9 +161,10 @@ export const RoundDetailPage: React.FC = () => {
         </Link>
       </div>
 
+      <OrderLimitNotice remaining={round.order_limit_remaining}/>
       <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
         <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{round.status === 'booking_open' ? 'เปิดรับจอง' : 'ปิดรับจอง'}</span>
-        {round.purchase_limit_enabled && <PurchaseLimitBadge/>}
+        {(round.purchase_limit_enabled||round.order_limit_remaining!=null) && <PurchaseLimitBadge/>}
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{round.items?.length || 0} ชนิดผัก</span>
       </CustomerPageHeader>
 
@@ -237,7 +239,7 @@ export const RoundDetailPage: React.FC = () => {
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
             const available = item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg);
-            const isBookingClosed = round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
+            const isBookingClosed = round.order_limit_remaining===0 || round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
             const isSoldOut = false;
 
             return (
@@ -376,7 +378,7 @@ export const RoundDetailPage: React.FC = () => {
       </section>
 
       {/* Floating Bottom Cart Bar */}
-      {items.length > 0 && round.status === 'booking_open' && (
+      {items.length > 0 && round.status === 'booking_open' && round.order_limit_remaining!==0 && (
         <div className="fixed bottom-14 md:bottom-6 left-0 right-0 z-30 px-4 max-w-lg mx-auto">
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-emerald-800 bg-emerald-950 p-4 text-white shadow-2xl backdrop-blur-md">
             <div>

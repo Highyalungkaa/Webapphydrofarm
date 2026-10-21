@@ -14,4 +14,13 @@ router.patch('/:id/purchase-limits',async(req:AuthenticatedRequest,res:Response)
   res.json(data);
   } catch {res.status(500).json({error:'บันทึกการจำกัดจำนวนไม่สำเร็จ กรุณาลองอีกครั้ง'});}
 });
+router.patch('/:id/order-limit',async(req:AuthenticatedRequest,res:Response)=>{
+  const parsed=z.object({remaining:z.number().int().min(0).max(1000000).nullable()}).safeParse(req.body);
+  if(!parsed.success||!z.string().uuid().safeParse(req.params.id).success){res.status(400).json({error:'กรุณากรอกจำนวนออเดอร์เป็นจำนวนเต็มตั้งแต่ 0 ถึง 1000000'});return;}
+  try {
+    const {data,error}=await supabaseAdmin.rpc('set_round_order_limit',{p_actor_id:req.user!.id,p_round_id:req.params.id,p_remaining:parsed.data.remaining});
+    if(error){const missing=['42883','PGRST202','42703'].includes(error.code);res.status(missing?503:400).json({error:missing?'กรุณารัน migration 036 ก่อนตั้งค่าจำกัดออเดอร์':error.message});return;}
+    res.json(data);
+  } catch {res.status(500).json({error:'บันทึกจำนวนออเดอร์ไม่สำเร็จ กรุณาลองอีกครั้ง'});}
+});
 export default router;

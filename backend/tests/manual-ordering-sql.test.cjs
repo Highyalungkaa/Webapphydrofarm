@@ -31,7 +31,7 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
       substitute_total_cost NUMERIC,substitute_cost_per_kg NUMERIC,discount_amount NUMERIC DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now());
     CREATE TABLE public.audit_logs(actor_id UUID,actor_email TEXT,entity_type TEXT,entity_id TEXT,action TEXT,old_data JSONB,new_data JSONB);`);
   for(const name of ['011_manual_booking_close_time.sql','012_fix_order_fulfillment_source_enum.sql','022_require_admin_order_confirmation.sql',
-    '031_plant_loss_history.sql','032_close_round_with_unsold.sql','033_admin_chat_orders.sql',...(previousWeights?['034_weighed_orders_and_extra_stock.sql']:[]),'035_manual_orders_and_purchase_limits.sql','035_manual_orders_and_purchase_limits.sql']){try{await db.exec(migration(name));}catch(e){throw new Error(name+': '+e.message+' '+(e.internalQuery||'').slice(3000,5400));}}
+    '031_plant_loss_history.sql','032_close_round_with_unsold.sql','033_admin_chat_orders.sql',...(previousWeights?['034_weighed_orders_and_extra_stock.sql']:[]),'035_manual_orders_and_purchase_limits.sql','035_manual_orders_and_purchase_limits.sql','036_round_order_limits.sql','036_round_order_limits.sql']){try{await db.exec(migration(name));}catch(e){throw new Error(name+': '+e.message+' '+(e.internalQuery||'').slice(3000,5400));}}
   // The payment completion trigger is also installed in production (migration 030).
   const payment=migration('030_protect_orders_and_payment_completion.sql');
   await db.exec(payment.slice(payment.indexOf('CREATE OR REPLACE FUNCTION public.require_payment_before_completion()'),payment.indexOf('DROP TRIGGER IF EXISTS require_payment_before_completion ON public.equipment_orders;')));
@@ -57,6 +57,35 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
     FROM public.round_items ri WHERE ri.id=$1`,[ids.item])).rows[0];}
 
   async function limits(ids,enabled,cap=2){return(await db.query('SELECT public.set_round_purchase_limits($1,$2,$3,$4) AS result',[actor,ids.round,enabled,JSON.stringify([{id:ids.item,max_qty_per_order_kg:cap}])])).rows[0].result;}
+
+  async function orderLimit(ids,n){return db.query('SELECT public.set_round_order_limit($1,$2,$3)',[actor,ids.round,n]);}
+  async function remaining(ids){return(await db.query('SELECT order_limit_remaining FROM public.planting_rounds WHERE id=$1',[ids.round])).rows[0].order_limit_remaining;}
+  await t.test('remaining order quota covers customer and chat orders and rejects a third without partial inserts',async()=>{
+    const ids=await setup();await book(ids);await orderLimit(ids,2);
+    await book(ids);assert.equal(await remaining(ids),1);await book(ids,5,true);assert.equal(await remaining(ids),0);
+    await assert.rejects(book(ids),/รับออเดอร์ครบ/);await assert.rejects(book(ids,5,true),/รับออเดอร์ครบ/);
+    assert.equal((await db.query('SELECT count(*) AS n FROM public.orders WHERE round_id=$1',[ids.round])).rows[0].n,3);
+  });
+  await t.test('failed order rolls quota back and cancellation restores once; reopening consumes it',async()=>{
+    const ids=await setup();await limits(ids,true,1);await orderLimit(ids,2);
+    await assert.rejects(book(ids,3),/สูงสุด|จำกัด/);assert.equal(await remaining(ids),2);
+    const order=await book(ids,1);assert.equal(await remaining(ids),1);
+    await db.query("UPDATE public.orders SET status='confirmed' WHERE id=$1",[order]);assert.equal(await remaining(ids),1);
+    await db.query("UPDATE public.orders SET status='cancelled' WHERE id=$1",[order]);assert.equal(await remaining(ids),2);
+    await db.query("UPDATE public.orders SET status='cancelled' WHERE id=$1",[order]);assert.equal(await remaining(ids),2);
+    await db.query("UPDATE public.orders SET status='confirmed' WHERE id=$1",[order]);assert.equal(await remaining(ids),1);
+  });
+  await t.test('saving a new remaining count ignores old cancellations and zero stops only new orders',async()=>{
+    const ids=await setup(),unlimited=await book(ids);await orderLimit(ids,2);const old=await book(ids);
+    await orderLimit(ids,0);await db.query("UPDATE public.orders SET status='cancelled' WHERE id=$1",[old]);assert.equal(await remaining(ids),0);
+    await db.query("UPDATE public.orders SET status='cancelled' WHERE id=$1",[unlimited]);assert.equal(await remaining(ids),0);
+    await assert.rejects(book(ids),/รับออเดอร์ครบ/);
+    await orderLimit(ids,null);await book(ids);await book(ids,10,true);assert.equal(await remaining(ids),null);
+    await assert.rejects(orderLimit(ids,-1),/จำนวนเต็ม/);
+    await assert.rejects(db.query('SELECT public.set_round_order_limit($1,$2,2)',[customer,ids.round]),/ไม่มีสิทธิ์/);
+    await db.query("UPDATE public.planting_rounds SET status='completed' WHERE id=$1",[ids.round]);
+    await assert.rejects(orderLimit(ids,2),/สิ้นสุด/);
+  });
   await t.test('orders are accepted without kilogram inventory and regardless of old estimates',async()=>{
     const ids=await setup();await db.query('UPDATE public.round_items SET estimated_qty_kg=0,bookable_qty_kg=0 WHERE id=$1',[ids.item]);
     const a=await book(ids,500),b=await book(ids,700,true);await allocation(a,500,0,{status:'ready'});await allocation(b,700,0,{status:'ready'});

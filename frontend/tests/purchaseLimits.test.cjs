@@ -6,3 +6,5 @@ const round={id:'round',status:'booking_open',round_items:[{id:'oak',crop_name:'
 const render=(value)=>renderToStaticMarkup(React.createElement(PurchaseLimitPanel,{round:value,onChanged:async()=>{}}));
 test('limited rounds clearly identify the per-crop per-order cap without showing derived stock',()=>{const html=render({...round,purchase_limit_enabled:true});assert.match(html,/จำกัดจำนวน/);assert.match(html,/Green Oak สูงสุด 2.5 กก.\/ออเดอร์/);assert.doesNotMatch(html,/กิโลคงเหลือ|น้ำหนักประมาณ/);});
 test('a round with limits off offers the explicit action and hides previously stored caps',()=>{const html=render({...round,purchase_limit_enabled:false});assert.match(html,/ยังไม่จำกัดจำนวน/);assert.match(html,/จำกัดจำนวนการซื้อ/);assert.doesNotMatch(html,/สูงสุด 2.5/);});
+
+test('order quota clearly displays remaining orders and zero availability',()=>{assert.match(render({...round,order_limit_remaining:2}),/สั่งได้อีก 2 ออเดอร์/);assert.match(render({...round,order_limit_remaining:0}),/รับออเดอร์ครบแล้วในรอบนี้/);assert.match(render({...round,order_limit_remaining:null}),/ยังไม่จำกัดจำนวนออเดอร์/);});
