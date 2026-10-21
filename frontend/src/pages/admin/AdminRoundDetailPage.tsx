@@ -1,3 +1,4 @@
+import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
 import { PlantLossPanel } from '../../components/admin/PlantLossPanel.js';
@@ -321,9 +322,9 @@ export const AdminRoundDetailPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4" />
             <span>กลับหน้ารายการรอบการปลูก</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">{round.name}</h1>
-            <Badge status={round.status} type="round" />
+            <RoundStatusBadge round={round} />
           </div>
           <p className="text-xs text-slate-500 mt-1">
             วงจรการปลูกไฮโดรโปนิกส์ 7 ขั้นตอน • ควบคุมและอัปเดตสเต็ปตามขั้นตอนจริง

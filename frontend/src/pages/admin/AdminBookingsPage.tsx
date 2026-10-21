@@ -1,9 +1,9 @@
+import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
 import { PlantingRound } from '../../types/index.js';
-import { Badge } from '../../components/common/Badge.js';
 import {
   BookmarkCheck,
   Plus,
@@ -361,7 +361,7 @@ export const AdminBookingsPage: React.FC = () => {
                       <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
                         รอบการสั่งจอง
                       </span>
-                      <Badge status={round.status} type="round" />
+                      <RoundStatusBadge round={round} />
                     </div>
                     <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                       {round.name}

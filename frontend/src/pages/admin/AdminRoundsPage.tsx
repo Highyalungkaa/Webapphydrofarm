@@ -1,3 +1,4 @@
+import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
 import { plantCountToKg } from '../../lib/plantingQuantities.js';
 import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
@@ -494,6 +495,7 @@ export const AdminRoundsPage: React.FC = () => {
   };
 
   const getStepBadge = (round: PlantingRound) => {
+    if (round.closure_reason === 'unsold') return <RoundStatusBadge round={round} />;
     const step = round.current_step || 1;
     switch (step) {
       case 1:

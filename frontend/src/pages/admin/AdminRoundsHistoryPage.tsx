@@ -1,3 +1,4 @@
+import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -90,7 +91,7 @@ const ClosedBookingCard: React.FC<{ round: PlantingRound }> = ({ round }) => {
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-200 text-slate-700"><LockKeyhole className="h-5 w-5" /></span>
           <div><h3 className="font-extrabold text-slate-900">{round.name}</h3><p className="mt-0.5 text-[11px] text-slate-500">ปิดรับจองเมื่อ {formatDateTimeDMY(round.booking_closes_at)}</p></div>
         </div>
-        <Badge status={round.status} type="round" />
+        <RoundStatusBadge round={round} />
       </div>
       <div className="space-y-4 p-4">
         <div className="grid grid-cols-2 gap-3 text-xs">
@@ -347,13 +348,11 @@ export const AdminRoundsHistoryPage: React.FC = () => {
                   {/* Top Bar: Title & Badge */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2.5">
                         <h2 className="text-lg font-black text-slate-900 tracking-tight">
                           {round.name}
                         </h2>
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                          {round.closure_reason === 'unsold' ? 'สิ้นสุดรอบ — มีผักขายไม่ออก' : '🏁 สิ้นสุดรอบแล้ว'}
-                        </span>
+                        {round.closure_reason === 'unsold' ? <RoundStatusBadge round={round} /> : <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">🏁 สิ้นสุดรอบแล้ว</span>}
                       </div>
                       <p className="text-xs text-slate-500">
                         สิ้นสุดรอบเมื่อ:{' '}
