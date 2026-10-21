@@ -1,3 +1,4 @@
+import { orderCustomerKey } from '../../lib/orderCustomer.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
@@ -73,10 +74,10 @@ export const AdminReportsPage: React.FC = () => {
     let substituteCost = 0;
 
     for (const order of countableOrders) {
-      const customerId = order.customer_id;
+      const customerId = orderCustomerKey(order);
       const customer = customerMap.get(customerId) || {
         id: customerId,
-        name: order.profiles?.full_name || 'ไม่ระบุชื่อ',
+        name: (order.customer_name || order.profiles?.full_name) || 'ไม่ระบุชื่อ',
         phone: order.contact_phone || order.profiles?.phone || '-',
         orderCount: 0,
         bookedKg: 0,
@@ -121,7 +122,7 @@ export const AdminReportsPage: React.FC = () => {
 
     return {
       countableOrders,
-      uniqueCustomers: new Set(countableOrders.map((order) => order.customer_id)).size,
+      uniqueCustomers: new Set(countableOrders.map(orderCustomerKey)).size,
       reservedKg,
       soldKg,
       openedKg,

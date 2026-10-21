@@ -113,6 +113,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       const q = search.toLowerCase();
       filtered = filtered.filter((o: any) =>
         (o.contact_phone && o.contact_phone.toLowerCase().includes(q)) ||
+        (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
         (o.profiles?.full_name && o.profiles.full_name.toLowerCase().includes(q)) ||
         (o.profiles?.email && o.profiles.email.toLowerCase().includes(q)) ||
         (o.id && o.id.toLowerCase().includes(q))
@@ -264,7 +265,7 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
         }
       }
       // Rule 4.5: If marked no_show, increment no_show_count on customer profile
-      if (parsed.data.status === 'no_show' && currentOrder.status !== 'no_show') {
+      if (parsed.data.status === 'no_show' && currentOrder.status !== 'no_show' && currentOrder.customer_id) {
         const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('no_show_count')

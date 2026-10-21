@@ -166,7 +166,11 @@ export interface OrderItem {
 export interface Order {
   id: string;
   round_id: string;
-  customer_id: string;
+  customer_id: string | null;
+  customer_name?: string | null;
+  order_source?: 'website' | 'facebook_chat';
+  source_reference?: string | null;
+  created_by?: string | null;
   fulfillment_method: FulfillmentMethod;
   delivery_address?: string | null;
   district_id?: string | null;

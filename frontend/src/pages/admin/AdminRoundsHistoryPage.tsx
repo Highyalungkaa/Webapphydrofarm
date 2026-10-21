@@ -53,6 +53,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/80"><StatusIcon className="h-5 w-5" /></span>
           <div>
             <p className="text-sm font-extrabold">ออเดอร์ #{order.id.slice(0, 8)}</p>
+            {order.order_source === 'facebook_chat' && <p className="mt-1 text-xs font-bold text-blue-700">จากแชตแฟนเพจ</p>}
             <p className="mt-0.5 text-[11px] opacity-80">{isCompleted ? 'ปิดรายการเมื่อ' : isCancelled ? 'ยกเลิกเมื่อ' : 'บันทึกเมื่อ'} {formatDateTimeDMY(isCancelled ? order.cancelled_at || order.updated_at : order.updated_at)}</p>
           </div>
         </div>
@@ -60,7 +61,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
       </div>
       <div className="space-y-3 p-4">
         <div className="grid grid-cols-2 gap-3 text-xs">
-          <div><p className="text-slate-400">ลูกค้า</p><p className="mt-0.5 font-bold text-slate-800">{order.profiles?.full_name || 'ไม่ระบุชื่อ'}</p><p className="text-slate-500">{order.contact_phone}</p></div>
+          <div><p className="text-slate-400">ลูกค้า</p><p className="mt-0.5 font-bold text-slate-800">{(order.customer_name || order.profiles?.full_name) || 'ไม่ระบุชื่อ'}</p><p className="text-slate-500">{order.contact_phone}</p></div>
           <div><p className="text-slate-400">รอบปลูก</p><p className="mt-0.5 font-bold text-slate-800">{order.planting_rounds?.name || 'ไม่ระบุรอบ'}</p><p className="text-slate-500">{formatDateDMY(order.created_at)}</p></div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-600">
@@ -169,7 +170,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return order.id.toLowerCase().includes(query)
-      || order.profiles?.full_name?.toLowerCase().includes(query)
+      || (order.customer_name || order.profiles?.full_name)?.toLowerCase().includes(query)
       || order.planting_rounds?.name?.toLowerCase().includes(query)
       || (order.order_items || []).some((item) => item.round_items?.crops?.name?.toLowerCase().includes(query));
   });

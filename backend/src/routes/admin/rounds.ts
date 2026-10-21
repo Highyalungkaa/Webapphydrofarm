@@ -275,14 +275,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     const { data: orders } = await db
       .from('orders')
       .select(`
-        id,
-        customer_id,
-        status,
-        fulfillment_method,
-        contact_phone,
-        total_amount,
-        payment_status,
-        created_at,
+        *,
         profiles (
           id,
           full_name,

@@ -1,3 +1,4 @@
+import { orderCustomerKey } from './orderCustomer.js';
 import type { Order, OrderItem, PlantingRound, RoundItem } from '../types/index.js';
 
 type ExportOptions = {
@@ -124,7 +125,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
   const summaryRows: Array<[string, number, string, string]> = [
     ['รอบปลูกในรายงาน', scopedRounds.length, 'รอบ', 'จำนวนรอบที่อยู่ในขอบเขตที่เลือก'],
     ['คำสั่งจอง', activeOrders.length, 'ออเดอร์', 'ทุกสถานะ ยกเว้นยกเลิก'],
-    ['ลูกค้าที่สั่งจอง', new Set(activeOrders.map((order) => order.customer_id)).size, 'คน', 'นับลูกค้าไม่ซ้ำกันจากคำสั่งจองที่ไม่ยกเลิก'],
+    ['ลูกค้าที่สั่งจอง', new Set(activeOrders.map(orderCustomerKey)).size, 'คน', 'นับลูกค้าไม่ซ้ำกันจากคำสั่งจองที่ไม่ยกเลิก'],
     ['เปิดให้จอง', openedKg, 'กก.', 'รวมปริมาณ bookable ของรายการผักในรอบ'],
     ['ปริมาณที่จอง', bookedKg, 'กก.', 'รวมจำนวนผักในคำสั่งจองที่ไม่ยกเลิก'],
     ['ขายสำเร็จ', soldKg, 'กก.', 'รวมจำนวนผักในคำสั่งจองสถานะสำเร็จ'],
@@ -163,7 +164,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     roundSheet.sheet.addRow({
       id: round.id, name: round.name, status: roundStatus[round.status] || round.status, date: dateOnly(round.fulfillment_date),
       opened, booked: sum(items, (item) => number(item.qty_kg)), sold, rate: opened > 0 ? sold / opened : 0,
-      orders: related.length, customers: new Set(related.map((order) => order.customer_id)).size,
+      orders: related.length, customers: new Set(related.map(orderCustomerKey)).size,
       bookedAmount: sum(related, (order) => number(order.total_amount)),
       soldAmount: sum(completed, (order) => number(order.total_amount)),
       substituteKg: sum(items, substituteQty), substituteCost: sum(items, substituteCost),
@@ -204,6 +205,8 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'รหัสรอบ', key: 'roundId', width: 38 }, { header: 'ชื่อรอบ', key: 'roundName', width: 30 },
     { header: 'รหัสลูกค้า', key: 'customerId', width: 38 }, { header: 'ชื่อลูกค้า', key: 'customerName', width: 26 },
     { header: 'สถานะออเดอร์', key: 'status', width: 21 }, { header: 'สถานะชำระเงิน', key: 'payment', width: 21 },
+    { header: 'ช่องทางสั่งจอง', key: 'orderSource', width: 24 },
+    { header: 'อ้างอิงแชต', key: 'sourceReference', width: 35 },
     { header: 'วิธีรับสินค้า', key: 'fulfillment', width: 20 },
     { header: 'จำนวนรายการ', key: 'itemCount', width: 17, format: countFormat },
     { header: 'ปริมาณจอง (กก.)', key: 'qty', width: 20, format: kgFormat },
@@ -216,9 +219,11 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     orderSheet.sheet.addRow({
       id: order.id, date: bangkokDate(order.created_at), roundId: order.round_id,
       roundName: roundById.get(order.round_id)?.name || order.planting_rounds?.name || '-',
-      customerId: order.customer_id, customerName: order.profiles?.full_name || '-',
+      customerId: order.customer_id, customerName: order.customer_name || order.profiles?.full_name || '-',
       status: orderStatus[order.status] || order.status,
       payment: order.payment_status === 'paid' ? 'ชำระแล้ว' : 'รอชำระ',
+      orderSource: order.order_source === 'facebook_chat' ? 'จากแชตแฟนเพจ' : 'หน้าเว็บ',
+      sourceReference: order.source_reference || '-',
       fulfillment: order.fulfillment_method === 'pickup' ? 'รับเองที่ฟาร์ม' : 'จัดส่งปกติ',
       itemCount: items.length, qty: sum(items, (item) => number(item.qty_kg)),
       gross: sum(items, gross), discount: sum(items, discount), total: number(order.total_amount),
@@ -255,15 +260,15 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
   ]);
   const customers = new Map<string, { id: string; name: string; phone: string; orders: number; qty: number; amount: number; completed: number }>();
   activeOrders.forEach((order) => {
-    const row = customers.get(order.customer_id) || {
-      id: order.customer_id, name: order.profiles?.full_name || '-',
+    const row = customers.get(orderCustomerKey(order)) || {
+      id: orderCustomerKey(order), name: order.customer_name || order.profiles?.full_name || '-',
       phone: order.contact_phone || order.profiles?.phone || '-', orders: 0, qty: 0, amount: 0, completed: 0,
     };
     row.orders += 1;
     row.qty += sum(itemsOf(order), (item) => number(item.qty_kg));
     row.amount += number(order.total_amount);
     if (order.status === 'completed') row.completed += 1;
-    customers.set(order.customer_id, row);
+    customers.set(orderCustomerKey(order), row);
   });
   [...customers.values()].sort((a, b) => b.orders - a.orders || b.qty - a.qty).forEach((customer) => customerSheet.sheet.addRow(customer));
   customerSheet.finish();

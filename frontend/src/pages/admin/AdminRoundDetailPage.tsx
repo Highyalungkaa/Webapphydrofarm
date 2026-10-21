@@ -1,3 +1,4 @@
+import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
 import { PlantLossPanel } from '../../components/admin/PlantLossPanel.js';
 import { UnsoldRoundClose } from '../../components/admin/UnsoldRoundClose.js';
@@ -985,12 +986,12 @@ export const AdminRoundDetailPage: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-400">ออเดอร์ที่ลูกค้าสั่งจองในรอบนี้ทั้งหมด</p>
           </div>
-          <Link
+          <div className="flex flex-wrap items-center gap-3">{round.status === 'booking_open' && <ChatOrderButton roundId={round.id} onCreated={loadRound}/>}<Link
             to={`/admin/orders?round_id=${round.id}`}
             className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
           >
             ไปที่หน้าจัดการออเดอร์ →
-          </Link>
+          </Link></div>
         </div>
 
         {orders.length === 0 ? (
@@ -1018,7 +1019,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                       #{ord.id.slice(0, 8)}
                     </td>
                     <td className="py-3 px-3">
-                      <div className="font-medium text-slate-800">{ord.profiles?.full_name || 'ลูกค้า'}</div>
+                      <div className="font-medium text-slate-800">{(ord.customer_name || ord.profiles?.full_name) || 'ลูกค้า'}{ord.order_source === 'facebook_chat' && <span className="ml-2 text-xs text-blue-700">จากแชตแฟนเพจ</span>}</div>
                       <span className="text-[11px] text-slate-400">{ord.contact_phone}</span>
                     </td>
                     <td className="py-3 px-3">
