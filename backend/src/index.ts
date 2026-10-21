@@ -8,6 +8,7 @@ import districtsRouter from './routes/districts.js';
 import profileRouter from './routes/profile.js';
 import roundsRouter from './routes/rounds.js';
 import ordersRouter from './routes/orders.js';
+import settingsRouter from './routes/settings.js';
 
 // Admin Routes
 import adminCropsRouter from './routes/admin/crops.js';
@@ -59,6 +60,7 @@ app.use('/api/districts', districtsRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/rounds', roundsRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/equipment', equipmentRouter);
 
 // Admin API Routes

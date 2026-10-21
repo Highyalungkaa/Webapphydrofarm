@@ -6,6 +6,7 @@ export const AdminSettingsPage: React.FC = () => {
   const [deliveryMinTotalKg, setDeliveryMinTotalKg] = useState<number>(0);
   const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(24);
   const [noShowLimit, setNoShowLimit] = useState<number>(0);
+  const [farmContactPhone, setFarmContactPhone] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,6 +25,7 @@ export const AdminSettingsPage: React.FC = () => {
       if (map.delivery_min_total_kg !== undefined) setDeliveryMinTotalKg(Number(map.delivery_min_total_kg));
       if (map.cancellation_deadline_hours_before_harvest !== undefined) setCancellationDeadlineHours(Number(map.cancellation_deadline_hours_before_harvest));
       if (map.no_show_limit !== undefined) setNoShowLimit(Number(map.no_show_limit));
+      if (typeof map.farm_contact_phone === 'string') setFarmContactPhone(map.farm_contact_phone);
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -35,6 +37,11 @@ export const AdminSettingsPage: React.FC = () => {
     e.preventDefault();
     setSuccess(null);
     setError(null);
+    const digits = farmContactPhone.replace(/\D/g, '');
+    if (farmContactPhone.trim() && (!/^\+?[\d\s()-]+$/.test(farmContactPhone) || digits.length < 9 || digits.length > 15)) {
+      setError('กรุณากรอกเบอร์โทรฟาร์มเป็นตัวเลข 9–15 หลัก');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -42,6 +49,7 @@ export const AdminSettingsPage: React.FC = () => {
         delivery_min_total_kg: Number(deliveryMinTotalKg),
         cancellation_deadline_hours_before_harvest: Number(cancellationDeadlineHours),
         no_show_limit: Number(noShowLimit),
+        farm_contact_phone: farmContactPhone.trim(),
       });
 
       setSuccess('บันทึกการตั้งค่าระบบเรียบร้อยแล้ว');
@@ -81,6 +89,14 @@ export const AdminSettingsPage: React.FC = () => {
       )}
 
       <form onSubmit={handleSave} className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xs space-y-6">
+        <div className="space-y-1.5 border-b border-slate-100 pb-5">
+          <label htmlFor="farm-contact-phone" className="font-bold text-sm text-slate-900 block">เบอร์โทรติดต่อฟาร์มสำหรับลูกค้า</label>
+          <p className="text-xs text-slate-500">แสดงในหน้ารายละเอียดคำสั่งจอง โดยเฉพาะเมื่อเลยเวลายกเลิกเอง ลูกค้ากดโทรหาแอดมินได้</p>
+          <input id="farm-contact-phone" type="tel" inputMode="tel" autoComplete="tel" maxLength={24}
+            value={farmContactPhone} onChange={(e) => setFarmContactPhone(e.target.value)} placeholder="เช่น 0812345678"
+            className="w-full max-w-xs p-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900" />
+          <p className="text-xs text-slate-500">เว้นว่างไว้ได้ หากยังไม่ต้องการแสดงเบอร์</p>
+        </div>
         {/* Delivery Min Total Kg */}
         <div className="space-y-1.5 border-b border-slate-100 pb-5">
           <label className="font-bold text-sm text-slate-900 block">

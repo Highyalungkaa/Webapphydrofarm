@@ -44,16 +44,27 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
+    if (settings.farm_contact_phone !== undefined) {
+      const phone = settings.farm_contact_phone;
+      const digits = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
+      if (typeof phone !== 'string' || (phone.trim() && (!/^\+?[\d\s()-]+$/.test(phone) || digits.length < 9 || digits.length > 15))) {
+        res.status(400).json({ error: 'เบอร์โทรฟาร์มต้องเป็นตัวเลข 9–15 หลัก' });
+        return;
+      }
+      settings.farm_contact_phone = phone.trim();
+    }
+
     const { data: oldSettings } = await supabaseAdmin.from('app_settings').select('*');
 
     for (const [key, value] of Object.entries(settings)) {
-      await supabaseAdmin
+      const { error: saveError } = await supabaseAdmin
         .from('app_settings')
         .upsert({
           key,
           value,
           updated_at: new Date().toISOString(),
         });
+      if (saveError) throw saveError;
     }
 
     await recordAuditLog({

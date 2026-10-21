@@ -31,10 +31,21 @@ export const OrderDetailPage: React.FC = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [farmContactPhone, setFarmContactPhone] = useState<string | null>(null);
+  const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState(24);
 
   useEffect(() => {
     if (id) fetchOrderDetail(id);
   }, [id]);
+
+  useEffect(() => {
+    void api.get<{ phone: string | null; cancellation_deadline_hours: number }>('/settings/contact')
+      .then((contact) => {
+        setFarmContactPhone(contact.phone);
+        setCancellationDeadlineHours(contact.cancellation_deadline_hours);
+      })
+      .catch(() => setFarmContactPhone(null));
+  }, []);
 
   const fetchOrderDetail = async (orderId: string) => {
     try {
@@ -96,6 +107,7 @@ export const OrderDetailPage: React.FC = () => {
   }
 
   const canCancel = order.status !== 'cancelled' && order.status !== 'completed';
+  const farmPhoneHref = farmContactPhone ? `tel:${farmContactPhone.replace(/[^+\d]/g, '')}` : null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-8">
@@ -215,6 +227,15 @@ export const OrderDetailPage: React.FC = () => {
               <span>เบอร์ติดต่อที่บันทึกไว้: <strong>{order.contact_phone}</strong></span>
             </div>
 
+            {farmContactPhone && farmPhoneHref && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white p-3 text-slate-700">
+                <span>ติดต่อฟาร์ม: <strong>{farmContactPhone}</strong></span>
+                <a href={farmPhoneHref} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">
+                  <Phone className="h-3.5 w-3.5" />โทรหาฟาร์ม
+                </a>
+              </div>
+            )}
+
             {order.note && (
               <p className="text-xs text-slate-600 italic bg-white p-2.5 rounded-lg border border-slate-200">
                 หมายเหตุถึงฟาร์ม: {order.note}
@@ -281,7 +302,7 @@ export const OrderDetailPage: React.FC = () => {
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
               {order.needs_customer_notice
                 ? 'เนื่องจากรอบนี้มีการปรับเปลี่ยนวัน/เวลา ท่านสามารถยกเลิกได้โดยไม่มีค่าธรรมเนียมและไม่นับเป็นประวัติไม่มารับของ'
-                : 'คุณสามารถยกเลิกได้ก่อนถึงกำหนดเวลาส่งมอบอย่างน้อย 24 ชั่วโมง กรุณาระบุเหตุผลการยกเลิก:'}
+                : `คุณสามารถยกเลิกได้ก่อนถึงกำหนดเวลาส่งมอบอย่างน้อย ${cancellationDeadlineHours} ชั่วโมง กรุณาระบุเหตุผลการยกเลิก:`}
             </p>
 
             <textarea
@@ -293,9 +314,14 @@ export const OrderDetailPage: React.FC = () => {
             />
 
             {cancelError && (
-              <p className="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                {cancelError}
-              </p>
+              <div role="alert" className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                <p>{cancelError}</p>
+                {cancelError.includes('เลยกำหนดเวลายกเลิก') && farmContactPhone && farmPhoneHref && (
+                  <a href={farmPhoneHref} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 px-3 py-2 font-bold text-white hover:bg-rose-800">
+                    <Phone className="h-3.5 w-3.5" />โทรหาแอดมินฟาร์ม: {farmContactPhone}
+                  </a>
+                )}
+              </div>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-2">
