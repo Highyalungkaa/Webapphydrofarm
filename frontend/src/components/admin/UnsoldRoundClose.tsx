@@ -22,6 +22,13 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
   const [note,setNote]=useState(''),[confirmed,setConfirmed]=useState(false),[requestId,setRequestId]=useState(()=>crypto.randomUUID());
   const isHistory=round.closure_reason==='unsold';
   const today=toBangkokDateString(new Date().toISOString())||'';
+  const currentRound=data?.round||round;
+  const isReady=!!currentRound.harvest_sale_date && currentRound.harvest_sale_date<=today && Number(currentRound.current_step)>=7
+    && !currentRound.sold_out_date && !currentRound.completed_date && ['booking_open','booking_closed','harvested'].includes(currentRound.status);
+  const readinessMessage=!currentRound.harvest_sale_date || Number(currentRound.current_step)<7
+    ? 'กรุณายืนยันวันที่พร้อมเก็บและขายในสถานะ 6 ด้านบนก่อน จึงจะบันทึกผักขายไม่ออกและสิ้นสุดรอบได้'
+    : currentRound.harvest_sale_date>today ? `ยังไม่ถึงวันที่พร้อมเก็บและขาย (${formatDateDMY(currentRound.harvest_sale_date)}) หากวันเก็บจริงเปลี่ยน กรุณาแก้ไขวันที่ในสถานะ 6 ให้ตรงก่อน`
+    : 'รอบนี้ยังไม่สามารถปิดพร้อมบันทึกผักขายไม่ออกได้ กรุณาตรวจสอบสถานะรอบ';
   const load=async()=>{
     setLoading(true);setError('');
     try{
@@ -30,10 +37,10 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
       setRequestId(crypto.randomUUID());setConfirmed(false);
     }catch(err:any){setError(err.message||'โหลดข้อมูลไม่สำเร็จ');}finally{setLoading(false);}
   };
-  const toggle=()=>{if(!open){setOpen(true);void load();}else setOpen(false);};
+  const toggle=()=>{if(!open){setOpen(true);if(isHistory||isReady)void load();}else setOpen(false);};
   const update=(id:string,key:keyof UnsoldInput,value:string)=>{setEntries(prev=>({...prev,[id]:{...prev[id],[key]:value}}));setConfirmed(false);};
   const total=data?.items.reduce((sum,item)=>sum+Number(entries[item.id]?.count||0),0)||0;
-  const valid=!!data && !data.blocking_orders.length && total>0 && data.items.every(item=>entries[item.id]&&!validateUnsoldInput(entries[item.id],item))
+  const valid=isReady && !!data && !data.blocking_orders.length && total>0 && data.items.every(item=>entries[item.id]&&!validateUnsoldInput(entries[item.id],item))
     && isValidLossDate(date,round.harvest_sale_date||'',today) && confirmed;
   const submit=async(event:React.FormEvent)=>{
     event.preventDefault();if(!valid||!data||saving)return;setSaving(true);setError('');
@@ -49,8 +56,9 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
     {open&&<div className="space-y-4 rounded-2xl border border-amber-200 bg-white p-4 sm:p-6">
       <div className="flex items-center justify-between gap-2"><h3 className="font-extrabold text-slate-900">{isHistory?'ประวัติผักขายไม่ออก':'ตรวจสอบผักคงเหลือก่อนสิ้นสุดรอบ'}</h3><button type="button" disabled={saving} onClick={()=>setOpen(false)} aria-label="ปิดแบบฟอร์ม" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4"/></button></div>
       {loading&&<p className="text-sm text-slate-500">กำลังตรวจสอบผลผลิตและออเดอร์...</p>}
+      {!isHistory&&!isReady&&<p role="status" className="rounded-xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">{readinessMessage}</p>}
       {error&&<div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}<button type="button" disabled={saving} onClick={load} className="ml-3 font-bold underline">ตรวจสอบข้อมูลอีกครั้ง</button></div>}
-      {data?.closure?<><p className="text-sm text-slate-600">สิ้นสุดเมื่อ {formatDateDMY(data.closure.closed_date)} · บันทึกโดย {data.closure.recorded_by_email}</p>{data.history.map(item=><div key={item.id} className="space-y-1 rounded-xl bg-amber-50 p-4 text-sm"><strong>{item.crop_name}</strong><p>ขายไม่ออก {num(item.unsold_plant_count)} ต้น ≈ {num(item.unsold_estimated_kg)} กก.</p><p>ขายช่องทางอื่น {num(item.other_sales_kg)} กก.</p>{item.disposition&&<p>การจัดการ: {unsoldDispositions[item.disposition]}</p>}{item.note&&<p className="break-words">หมายเหตุ: {item.note}</p>}</div>)}{data.closure.note&&<p className="break-words text-sm">หมายเหตุรอบ: {data.closure.note}</p>}</>:data&&!loading&&<form onSubmit={submit} className="space-y-4">
+      {data?.closure?<><p className="text-sm text-slate-600">สิ้นสุดเมื่อ {formatDateDMY(data.closure.closed_date)} · บันทึกโดย {data.closure.recorded_by_email}</p>{data.history.map(item=><div key={item.id} className="space-y-1 rounded-xl bg-amber-50 p-4 text-sm"><strong>{item.crop_name}</strong><p>ขายไม่ออก {num(item.unsold_plant_count)} ต้น ≈ {num(item.unsold_estimated_kg)} กก.</p><p>ขายช่องทางอื่น {num(item.other_sales_kg)} กก.</p>{item.disposition&&<p>การจัดการ: {unsoldDispositions[item.disposition]}</p>}{item.note&&<p className="break-words">หมายเหตุ: {item.note}</p>}</div>)}{data.closure.note&&<p className="break-words text-sm">หมายเหตุรอบ: {data.closure.note}</p>}</>:data&&!loading&&isReady&&<form onSubmit={submit} className="space-y-4">
         {!!data.blocking_orders.length&&<div role="alert" className="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">ยังมีออเดอร์ค้างส่งมอบหรือค้างชำระ {data.blocking_orders.length} รายการ ต้องจัดการก่อนสิ้นสุดรอบ <Link to="/admin/orders" className="font-bold underline">ไปจัดการออเดอร์</Link></div>}
         <p className="text-sm leading-relaxed text-slate-600">กรอกจำนวนที่ขายไม่ออกจริง โดยแยกจากผักเสียหายระหว่างปลูก หากขายหน้าฟาร์มหรือช่องทางอื่น ให้บันทึกปริมาณแยกไว้</p>
         <fieldset disabled={saving} className="space-y-4">{data.items.map(item=>{

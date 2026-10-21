@@ -717,6 +717,7 @@ export const AdminRoundDetailPage: React.FC = () => {
               )}
               </>}
             </div>
+            {(round.closure_reason === 'unsold' || ((activeStepTab === 6 || activeStepTab === 7) && currentStep >= 6 && !round.sold_out_date && !isRoundCompleted && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
 
           {/* Right Column: Visual Status & Step 5 Stock Progress Gauge */}
@@ -761,8 +762,6 @@ export const AdminRoundDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {(round.closure_reason === 'unsold' || ((activeStepTab === 6 || activeStepTab === 7) && currentStep >= 7 && !!round.harvest_sale_date && round.harvest_sale_date <= (toBangkokDateString(new Date().toISOString()) || '') && !round.sold_out_date && !isRoundCompleted && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
 
       <PlantLossPanel roundId={round.id} onChanged={loadRound} />
 
