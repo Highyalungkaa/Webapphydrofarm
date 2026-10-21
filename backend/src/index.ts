@@ -13,6 +13,7 @@ import settingsRouter from './routes/settings.js';
 // Admin Routes
 import adminCropsRouter from './routes/admin/crops.js';
 import adminRoundsRouter from './routes/admin/rounds.js';
+import plantLossesRouter from './routes/admin/plantLosses.js';
 import adminOrdersRouter from './routes/admin/orders.js';
 import adminDistrictsRouter from './routes/admin/districts.js';
 import adminSettingsRouter from './routes/admin/settings.js';
@@ -66,6 +67,7 @@ app.use('/api/equipment', equipmentRouter);
 // Admin API Routes
 app.use('/api/admin/crops', adminCropsRouter);
 app.use('/api/admin/rounds', adminRoundsRouter);
+app.use('/api/admin/rounds', plantLossesRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/districts', adminDistrictsRouter);
 app.use('/api/admin/settings', adminSettingsRouter);

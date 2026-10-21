@@ -103,6 +103,14 @@ test('date-based fallback recognizes the inserted milestone', () => {
   assert.equal(computeCurrentStep({ current_step: 7, sold_out_date: '2026-10-19' }), 8);
 });
 
+test('confirming planting preserves plot assignments needed by loss recording', async () => {
+  const app = setup({ current_step: 4, notes: JSON.stringify({ note: 'test', cropPlotIds: { lettuce: ['plot-a'] }, bookingCreated: true }) });
+  assert.equal((await app.confirm(4, { crop_growing_days: { lettuce: 30 } })).statusCode, 200);
+  const notes = JSON.parse(app.round().notes);
+  assert.deepEqual(notes.cropPlotIds, { lettuce: ['plot-a'] });
+  assert.equal(notes.bookingCreated, true);
+});
+
 test('completion succeeds when booking was closed before its scheduled opening', async () => {
   const app = setup({
     current_step: 7,

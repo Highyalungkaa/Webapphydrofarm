@@ -637,7 +637,7 @@ export const AdminRoundsPage: React.FC = () => {
                 {activeRounds.map((round) => {
                   const bookableTotal = Number(round.total_bookable_kg || 0);
                   const bookedTotal = Number(round.total_booked_kg || 0);
-                  const availableTotal = Number(round.total_available_kg || Math.max(0, bookableTotal - bookedTotal));
+                  const availableTotal = Number(round.total_available_kg ?? Math.max(0, bookableTotal - bookedTotal));
                   const percentSold = bookableTotal > 0 ? Math.min(100, (bookedTotal / bookableTotal) * 100) : 0;
 
                   return (

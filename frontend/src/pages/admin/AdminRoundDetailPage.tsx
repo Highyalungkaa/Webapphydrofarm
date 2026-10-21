@@ -1,4 +1,5 @@
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
+import { PlantLossPanel } from '../../components/admin/PlantLossPanel.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -288,7 +289,7 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const totalBookable = Number(round.total_bookable_kg || 0);
   const totalBooked = Number(round.total_booked_kg || 0);
-  const totalAvailable = Number(round.total_available_kg || Math.max(0, totalBookable - totalBooked));
+  const totalAvailable = Number(round.total_available_kg ?? Math.max(0, totalBookable - totalBooked));
   const percentSold = totalBookable > 0 ? Math.min(100, (totalBooked / totalBookable) * 100) : 0;
   const orders = (round as any).orders || [];
   const totalRevenue = orders
@@ -759,6 +760,8 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
       </div>
 
+      <PlantLossPanel roundId={round.id} onChanged={loadRound} />
+
       {/* Vegetables in this Round Table with Stock Progress Bars */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -787,7 +790,7 @@ export const AdminRoundDetailPage: React.FC = () => {
               {round.round_items?.map((item: any) => {
                 const booked = Number(item.booked_qty_kg || 0);
                 const bookable = Number(item.bookable_qty_kg || 0);
-                const available = Number(item.available_qty_kg || Math.max(0, bookable - booked));
+                const available = Number(item.available_qty_kg ?? Math.max(0, bookable - booked));
                 const itemPercent = bookable > 0 ? Math.min(100, (booked / bookable) * 100) : 0;
 
                 return (

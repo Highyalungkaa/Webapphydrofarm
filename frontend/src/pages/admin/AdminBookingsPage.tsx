@@ -346,7 +346,7 @@ export const AdminBookingsPage: React.FC = () => {
             const isBookingClosed = round.status === 'booking_closed' || round.status === 'harvested' || round.status === 'completed';
             const totalBookable = Number(round.total_bookable_kg || 0);
             const totalBooked = Number(round.total_booked_kg || 0);
-            const totalAvailable = Number(round.total_available_kg || Math.max(0, totalBookable - totalBooked));
+            const totalAvailable = Number(round.total_available_kg ?? Math.max(0, totalBookable - totalBooked));
             const percentBooked = totalBookable > 0 ? Math.min(100, (totalBooked / totalBookable) * 100) : 0;
 
             return (
@@ -519,7 +519,7 @@ export const AdminBookingsPage: React.FC = () => {
                       {round.round_items?.map((item: any) => {
                         const itBooked = Number(item.booked_qty_kg || 0);
                         const itBookable = Number(item.bookable_qty_kg || 0);
-                        const itAvailable = Number(item.available_qty_kg || Math.max(0, itBookable - itBooked));
+                        const itAvailable = Number(item.available_qty_kg ?? Math.max(0, itBookable - itBooked));
                         const itPct = itBookable > 0 ? Math.min(100, (itBooked / itBookable) * 100) : 0;
 
                         return (

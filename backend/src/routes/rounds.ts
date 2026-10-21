@@ -8,13 +8,7 @@ async function enrichRoundItems(roundId: string) {
   const { data: items, error: itemsError } = await supabaseAdmin
     .from('round_items')
     .select(`
-      id,
-      round_id,
-      crop_id,
-      estimated_qty_kg,
-      bookable_qty_kg,
-      price_per_kg,
-      max_qty_per_order_kg,
+      *,
       crops (
         id,
         name,
@@ -51,9 +45,11 @@ async function enrichRoundItems(roundId: string) {
 
   return items.map((item: any) => {
     const booked_qty_kg = bookedMap.get(item.id) || 0;
-    const available_qty_kg = Math.max(0, Number(item.bookable_qty_kg) - booked_qty_kg);
+    const effectiveBookable = Math.min(Number(item.bookable_qty_kg), Number(item.remaining_estimated_qty_kg ?? item.bookable_qty_kg));
+    const available_qty_kg = Math.max(0, effectiveBookable - booked_qty_kg);
     return {
       ...item,
+      bookable_qty_kg: effectiveBookable,
       crop_name: item.crops?.name || 'ผักสลัด',
       booked_qty_kg,
       available_qty_kg,

@@ -50,6 +50,23 @@ const stepUpdateSchema = z.object({
   crop_growing_days: z.record(z.string(), z.number()).optional(),
 });
 
+async function checkLossBaselines(db: any, roundId: string, items: any[] | undefined): Promise<string | null> {
+  const updates = (items || []).filter(item => item.id);
+  if (!updates.length) return null;
+  const { data, error } = await db.from('round_items').select('*').eq('round_id', roundId).in('id', updates.map(item => item.id));
+  if (error) return 'ไม่สามารถตรวจสอบประวัติรายการผักได้: ' + error.message;
+  for (const input of updates) {
+    const original = (data || []).find((item: any) => item.id === input.id);
+    if (!original) return 'ไม่พบรายการผักที่ต้องการแก้ไขในรอบนี้';
+    if (original.loss_baseline_plant_count != null && (
+      (input.plant_count != null && Number(input.plant_count) !== Number(original.plant_count))
+      || (input.estimated_qty_kg !== undefined && Number(input.estimated_qty_kg) !== Number(original.estimated_qty_kg))
+      || (input.crop_id !== undefined && input.crop_id !== original.crop_id)
+    )) return 'รายการที่มีประวัติสูญเสียแล้วไม่สามารถเปลี่ยนจำนวนปลูกเริ่มต้นหรือประมาณการเดิมได้';
+  }
+  return null;
+}
+
 function addDaysToDateStr(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
@@ -141,14 +158,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       .select(`
         *,
         round_items (
-          id,
-          crop_id,
-          plant_count,
-          estimated_qty_kg,
-          bookable_qty_kg,
-          actual_qty_kg,
-          price_per_kg,
-          max_qty_per_order_kg,
+          *,
           crops (
             id,
             name,
@@ -204,7 +214,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
             crop_name: item.crops?.name,
             growing_days: itemDays,
             booked_qty_kg: bookedKg,
-            available_qty_kg: Math.max(0, Number(item.bookable_qty_kg) - bookedKg),
+            available_qty_kg: Math.max(0, Math.min(Number(item.bookable_qty_kg), Number(item.remaining_estimated_qty_kg ?? item.bookable_qty_kg)) - bookedKg),
           };
         });
 
@@ -220,7 +230,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           total_estimated_kg: totalEstimated,
           total_bookable_kg: totalBookable,
           total_booked_kg: totalBooked,
-          total_available_kg: Math.max(0, totalBookable - totalBooked),
+          total_available_kg: itemsWithBooked.reduce((s: number, i: any) => s + i.available_qty_kg, 0),
         };
       })
     );
@@ -242,14 +252,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       .select(`
         *,
         round_items (
-          id,
-          crop_id,
-          plant_count,
-          estimated_qty_kg,
-          bookable_qty_kg,
-          actual_qty_kg,
-          price_per_kg,
-          max_qty_per_order_kg,
+          *,
           crops (
             id,
             name,
@@ -326,7 +329,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         crop_name: it.crops?.name,
         growing_days: itemDays,
         booked_qty_kg: bookedKg,
-        available_qty_kg: Math.max(0, Number(it.bookable_qty_kg) - bookedKg),
+        available_qty_kg: Math.max(0, Math.min(Number(it.bookable_qty_kg), Number(it.remaining_estimated_qty_kg ?? it.bookable_qty_kg)) - bookedKg),
         plot_ids: assignedPlotIds,
         plots: assignedPlots,
       };
@@ -344,7 +347,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       total_estimated_kg: totalEstimated,
       total_bookable_kg: totalBookable,
       total_booked_kg: totalBooked,
-      total_available_kg: Math.max(0, totalBookable - totalBooked),
+      total_available_kg: items.reduce((s: number, i: any) => s + i.available_qty_kg, 0),
       orders: orders || [],
     });
   } catch (err: any) {
@@ -583,13 +586,16 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
       const existingMap = extractCropGrowingDays(currentRound.notes);
       const mergedMap = { ...existingMap, ...crop_growing_days };
       let userNote = '';
+      let preservedNotes: Record<string, any> = {};
       try {
         const parsedNotes = JSON.parse(currentRound.notes);
+        if (parsedNotes && typeof parsedNotes === 'object' && !Array.isArray(parsedNotes)) preservedNotes = parsedNotes;
         userNote = parsedNotes.note || '';
       } catch {
         userNote = currentRound.notes || '';
       }
       updatePayload.notes = JSON.stringify({
+        ...preservedNotes,
         note: userNote,
         cropGrowingDays: mergedMap,
       });
@@ -726,6 +732,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
+    const baselineError = await checkLossBaselines(db, id, items);
+    if (baselineError) { res.status(400).json({ error: baselineError }); return; }
+
     // Update notes with cropPlotIds if items are provided
     let finalNotes = roundData.notes;
     if (items && items.length > 0) {
@@ -767,7 +776,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     if (items) {
       for (const item of items) {
         if (item.id) {
-          await db
+          const { error: itemError } = await db
             .from('round_items')
             .update({
               ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
@@ -776,7 +785,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
               price_per_kg: item.price_per_kg,
               max_qty_per_order_kg: item.max_qty_per_order_kg || null,
             })
-            .eq('id', item.id);
+            .eq('id', item.id).eq('round_id', id);
+          if (itemError) { res.status(400).json({ error: itemError.message }); return; }
         } else {
           await db
             .from('round_items')
@@ -1031,6 +1041,8 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
       return;
     }
 
+    const baselineError = await checkLossBaselines(db, id, Array.isArray(items) ? items : undefined);
+    if (baselineError) { res.status(400).json({ error: baselineError }); return; }
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
@@ -1089,7 +1101,8 @@ router.put('/:id/booking', async (req: AuthenticatedRequest, res: Response): Pro
           if (item.estimated_qty_kg !== undefined) itemUpdate.estimated_qty_kg = Number(item.estimated_qty_kg);
 
           if (Object.keys(itemUpdate).length > 0) {
-            await db.from('round_items').update(itemUpdate).eq('id', item.id);
+            const { error: itemError } = await db.from('round_items').update(itemUpdate).eq('id', item.id).eq('round_id', id);
+            if (itemError) { res.status(400).json({ error: itemError.message }); return; }
           }
         }
       }

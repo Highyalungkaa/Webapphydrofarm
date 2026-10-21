@@ -88,6 +88,11 @@ export interface RoundItem {
   crop_name?: string;
   estimated_qty_kg: number;
   plant_count?: number | null;
+  planting_plants_per_kg?: number | null;
+  lost_plant_count?: number;
+  loss_baseline_plant_count?: number | null;
+  loss_plants_per_kg?: number | null;
+  remaining_estimated_qty_kg?: number | null;
   bookable_qty_kg: number;
   actual_qty_kg?: number | null;
   price_per_kg: number;

@@ -51,7 +51,7 @@ async function createRound(count, capacity = 100) {
   });
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
   await handlers.get('post /')({
-    body: { name: 'Count-based round', items: [{ crop_id: cropId, plant_count: count, estimated_qty_kg: 999, bookable_qty_kg: 999, price_per_kg: 100, plot_ids: [plotId] }] },
+    body: { name: 'Count-based round', items: [{ crop_id: cropId, plant_count: count, growing_days: 45, estimated_qty_kg: 999, bookable_qty_kg: 999, price_per_kg: 100, plot_ids: [plotId] }] },
     user: { id: 'admin', email: 'admin@example.com' },
   }, res);
   return { res, savedItems };
