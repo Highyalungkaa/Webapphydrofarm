@@ -346,7 +346,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             <span className="text-base font-black text-emerald-700">{totalBooked.toFixed(1)} กก.</span>
           </div>
           <div className="px-2 text-center">
-            <span className="text-[10px] font-bold text-sky-600 block">ผักที่ปลูกเองและชั่งแล้ว</span>
+            <span className="text-[10px] font-bold text-sky-600 block">น้ำหนักจริงที่ขาย</span>
             <span className="text-base font-black text-sky-700">{orders.reduce((sum:number,o:any)=>o.status==='cancelled'||o.status==='no_show'?sum:sum+(o.order_items||[]).reduce((n:number,i:any)=>n+Number(i.own_qty_kg||0),0),0).toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</span>
             <span className="block text-[9px] text-sky-600">น้ำหนักจริงจากการจัดคำสั่งจอง</span>
           </div>
