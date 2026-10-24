@@ -11,7 +11,7 @@ import { Badge } from '../../components/common/Badge.js';
 import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 import { CropPhoto } from '../../components/common/CropPhoto.js';
 import { parseBookingQuantity, formatKg } from '../../lib/bookingQuantity.js';
-import { Calendar, Clock, Truck, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
+import { Calendar, Clock, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
 
 const getCustomerFarmNote = (notes?: string | null): string => {
   if (!notes) return '';
@@ -193,15 +193,6 @@ export const RoundDetailPage: React.FC = () => {
             <p className="text-slate-700 font-medium">{formatDateTimeDMY(round.booking_opens_at)}</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1">
-            <div className="flex items-center gap-2 font-medium text-slate-800">
-              <Truck className="w-4 h-4 text-slate-500" />
-              <span>ช่วงเวลาจัดส่งในตัวเมือง</span>
-            </div>
-            <p className="text-slate-600">
-              {round.delivery_start_time.slice(0, 5)} - {round.delivery_end_time.slice(0, 5)} น.
-            </p>
-          </div>
         </div>
 
         {farmNote && (

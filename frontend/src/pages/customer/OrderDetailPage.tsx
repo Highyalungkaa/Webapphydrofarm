@@ -8,7 +8,6 @@ import { Badge } from '../../components/common/Badge.js';
 import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 import {
   Calendar,
-  Clock,
   Store,
   Truck,
   ArrowLeft,
@@ -200,15 +199,6 @@ export const OrderDetailPage: React.FC = () => {
                 วันส่งมอบ: <strong>{formatDateDMY(order.planting_rounds?.fulfillment_date)}</strong>
               </span>
             </div>
-
-            {order.fulfillment_method === 'delivery' && (
-              <div className="flex items-center gap-2 text-slate-700">
-                <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>
-                  ช่วงเวลาจัดส่ง: {order.planting_rounds?.delivery_start_time?.slice(0, 5)} - {order.planting_rounds?.delivery_end_time?.slice(0, 5)} น.
-                </span>
-              </div>
-            )}
 
             {order.fulfillment_method === 'delivery' && (
               <div className="flex items-start gap-2 text-slate-700 pt-1 border-t border-slate-200">
