@@ -45,7 +45,6 @@ export const AdminRoundsPage: React.FC = () => {
   // Simple Create Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState('');
-  const [seedDate, setSeedDate] = useState('');
   const [items, setItems] = useState<RoundItemForm[]>([]);
   const [notes, setNotes] = useState('');
 
@@ -155,12 +154,10 @@ export const AdminRoundsPage: React.FC = () => {
   const isFarmFullyOccupied = farmTotalSlots > 0 && farmAvailableSlots === 0;
 
   const openCreateModal = () => {
-    const today = new Date().toISOString().split('T')[0];
     const yearTh = new Date().getFullYear() + 543;
     const roundNumber = rounds.length + 1;
 
     setName(`รอบการปลูกที่ ${roundNumber}/${yearTh}`);
-    setSeedDate(today);
     setNotes('');
 
     // Let the administrator choose which crops to include in this round.
@@ -445,7 +442,6 @@ export const AdminRoundsPage: React.FC = () => {
 
       const payload = {
         name: name.trim(),
-        seed_date: seedDate || new Date().toISOString().split('T')[0],
         growing_days: maxGrowingDays,
         notes: notes.trim() || null,
         items: items.map((it) => ({
@@ -761,23 +757,6 @@ export const AdminRoundsPage: React.FC = () => {
                   required
                   className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
                 />
-              </div>
-
-              {/* Seed Date (Step 1 Start Date) */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  🌱 วันที่ปักเม็ดเริ่มต้น (Step 1) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={seedDate}
-                  onChange={(e) => setSeedDate(e.target.value)}
-                  required
-                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-xs"
-                />
-                <span className="text-[10px] text-slate-400 mt-0.5 block">
-                  วันที่เริ่มเพาะเมล็ดลงฟองน้ำ สามารถปรับแก้อีกครั้งในหน้าจัดการรอบได้
-                </span>
               </div>
 
               {/* Vegetables to plant in this round */}

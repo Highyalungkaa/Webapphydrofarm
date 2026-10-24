@@ -424,7 +424,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       }
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const initialSeedDate = inputRoundData.seed_date || todayStr;
     const initialGrowingDays = inputRoundData.growing_days || 45;
     const initialHarvestDate = inputRoundData.expected_harvest_date || addDaysToDateStr(initialSeedDate, initialGrowingDays);
