@@ -710,29 +710,19 @@ export const AdminRoundDetailPage: React.FC = () => {
               </span>
             </div>
             {round.round_items?.length ? (
-              <ul className="max-h-80 space-y-2 overflow-y-auto">
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
                 {round.round_items.map((item) => {
-                  const { initial, lost, remaining } = getItemPlantCounts(item);
+                  const { lost, remaining } = getItemPlantCounts(item);
                   return (
-                    <li key={item.id} className="rounded-xl bg-slate-50 p-3">
-                      <p className="truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</p>
+                    <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                      <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
                       {item.loss_baseline_plant_count == null && item.plant_count == null ? (
-                        <p className="mt-1 text-xs text-slate-500">ยังไม่ระบุจำนวนต้น</p>
+                        <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
                       ) : (
-                        <div className="mt-2 grid grid-cols-3 gap-1.5 text-center text-[11px]">
-                          <div className="rounded-lg bg-white p-1.5 text-slate-600">
-                            <span className="block">เริ่มต้น</span>
-                            <strong className="text-slate-800">{initial.toLocaleString('th-TH')} ต้น</strong>
-                          </div>
-                          <div className="rounded-lg bg-rose-50 p-1.5 text-rose-700">
-                            <span className="block">เสียหาย</span>
-                            <strong>{lost.toLocaleString('th-TH')} ต้น</strong>
-                          </div>
-                          <div className="rounded-lg bg-emerald-50 p-1.5 text-emerald-700">
-                            <span className="block">คงเหลือ</span>
-                            <strong>{remaining.toLocaleString('th-TH')} ต้น</strong>
-                          </div>
-                        </div>
+                        <span className="shrink-0 text-right">
+                          <strong className="block text-xs text-emerald-700">เหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
+                          <span className="block text-[11px] text-rose-600">เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
+                        </span>
                       )}
                     </li>
                   );
