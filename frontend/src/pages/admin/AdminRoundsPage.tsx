@@ -635,7 +635,7 @@ export const AdminRoundsPage: React.FC = () => {
                   <th className="py-3.5 px-4">ชื่อรอบการปลูก</th>
                   <th className="py-3.5 px-4">สถานะสเต็ปปัจจุบัน</th>
                   <th className="py-3.5 px-4">รายการผักในรอบนี้</th>
-                  <th className="py-3.5 px-4">หลอดปริมาณผัก / ยอดจอง</th>
+                  <th className="py-3.5 px-4">ยอดจอง</th>
                   <th className="py-3.5 px-4 text-right">การจัดการ</th>
                 </tr>
               </thead>
