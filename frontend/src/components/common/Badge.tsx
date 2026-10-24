@@ -42,7 +42,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, type = 'custom', label, cl
   } else if (type === 'round' || ['draft', 'growing', 'booking_open', 'booking_closed', 'harvested', 'completed', 'cancelled'].includes(status as string)) {
     switch (status) {
       case 'draft':
-        text = 'ร่าง';
+        text = 'เตรียมปลูก';
         colorClasses = 'bg-slate-100 text-slate-700 border-slate-200';
         break;
       case 'growing':
