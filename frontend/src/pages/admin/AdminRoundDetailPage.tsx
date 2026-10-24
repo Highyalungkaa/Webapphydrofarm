@@ -367,7 +367,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             <p className="mt-1 text-xs text-slate-500">กดขั้นตอนที่ทำแล้วเพื่อดูวันที่บันทึกไว้</p>
           </div>
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
-            {isRoundCompleted ? 'ครบทั้ง 8 ขั้นตอนแล้ว' : `กำลังทำขั้นตอนที่ ${currentStep} จาก 8`}
+            {isRoundCompleted ? 'ครบทั้ง 8 ขั้นตอนแล้ว' : `รอดำเนินการขั้นตอนที่ ${currentStep} จาก 8`}
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={8} aria-valuenow={isRoundCompleted ? 8 : currentStep}>
@@ -396,8 +396,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                   <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${isCompleted || isCurrent ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
                     {isCompleted ? <Check className="h-4 w-4" /> : step.icon}
                   </span>
-                  <span className={`text-[10px] font-bold ${isCurrent ? 'text-emerald-700' : isCompleted ? 'text-slate-500' : 'text-slate-400'}`}>
-                    {isCurrent ? 'กำลังทำ' : isCompleted ? 'เสร็จแล้ว' : 'ยังไม่ถึง'}
+                  <span className={`min-w-0 text-right text-[10px] font-bold leading-tight ${isCurrent ? 'text-emerald-700' : isCompleted ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {isCurrent ? 'รอดำเนินการ' : isCompleted ? 'เสร็จแล้ว' : 'ยังไม่ถึง'}
                   </span>
                 </div>
                 <span className={`block text-xs font-bold leading-snug ${isSelected || isCompleted ? 'text-slate-900' : 'text-slate-500'}`}>
@@ -425,7 +425,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 {!isViewingPastStep && (
                   <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    ทำขั้นตอนนี้ต่อ
+                    รอดำเนินการ
                   </span>
                 )}
                 {isViewingPastStep && (
@@ -445,7 +445,7 @@ export const AdminRoundDetailPage: React.FC = () => {
 
         {isViewingPastStep && (
           <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            {isRoundCompleted ? 'รอบนี้สิ้นสุดแล้ว ข้อมูลขั้นตอนต่าง ๆ ใช้สำหรับดูย้อนหลัง' : 'ขั้นตอนนี้บันทึกแล้ว เลือกขั้นตอนที่กำลังทำด้านบนเพื่อดำเนินการต่อ'}
+            {isRoundCompleted ? 'รอบนี้สิ้นสุดแล้ว ข้อมูลขั้นตอนต่าง ๆ ใช้สำหรับดูย้อนหลัง' : 'ขั้นตอนนี้บันทึกแล้ว เลือกขั้นตอนที่รอดำเนินการด้านบนเพื่อทำต่อ'}
           </p>
         )}
 
@@ -680,7 +680,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 </div>
               ) : isViewingPastStep ? (
                 <button type="button" onClick={() => handleSelectStepTab(currentStep)} className="rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50">
-                  กลับไปขั้นตอนที่กำลังทำ
+                  กลับไปขั้นตอนที่รอดำเนินการ
                 </button>
               ) : <>
                 {(activeStepTab !== 5 || isBookingConfirmed) && (
