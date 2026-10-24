@@ -541,7 +541,7 @@ export const AdminRoundsPage: React.FC = () => {
       case 7:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
-            🏷️ สเต็ป 7: {round.sold_out_date ? `บันทึกวันจองหรือขายหมดแล้ว (${formatDateDMY(round.sold_out_date)})` : 'รอบันทึกวันที่ผลผลิตถูกจองหรือขายหมด'}
+            🏷️ สเต็ป 7: {round.sold_out_date ? `บันทึกวันที่ขายหมดแล้ว (${formatDateDMY(round.sold_out_date)})` : 'รอบันทึกวันที่ขายหมด'}
           </span>
         );
       case 8:
@@ -574,7 +574,7 @@ export const AdminRoundsPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            สร้างรอบปลูกและจัดการวงจรชีวิต 8 สเต็ป: ปักเม็ด ➔ ใส่ปุ๋ย ➔ เริ่มปลูก ➔ ปลูกจริง ➔ เปิดจอง ➔ เก็บและขาย ➔ ขายหมด ➔ สิ้นสุดรอบ
+            สร้างรอบปลูกและจัดการวงจรชีวิต 8 สเต็ป: ปักเม็ด ➔ ใส่ปุ๋ย ➔ เริ่มปลูก ➔ ปลูกจริง ➔ เปิดจอง ➔ เก็บและขาย ➔ บันทึกวันที่ขายหมด ➔ สิ้นสุดรอบ
           </p>
         </div>
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
