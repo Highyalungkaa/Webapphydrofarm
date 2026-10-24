@@ -10,7 +10,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
-import { PlantingRound, Plot } from '../../types/index.js';
+import { PlantingRound } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
   ArrowLeft,
@@ -131,7 +131,6 @@ export const AdminRoundDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [round, setRound] = useState<PlantingRound | null>(null);
-  const [plots, setPlots] = useState<Plot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,12 +154,8 @@ export const AdminRoundDetailPage: React.FC = () => {
   const loadRound = async () => {
     try {
       setLoading(true);
-      const [data, plotsRes] = await Promise.all([
-        api.get<PlantingRound>(`/admin/rounds/${id}`),
-        api.get<{ plots: Plot[] }>('/admin/plots'),
-      ]);
+      const data = await api.get<PlantingRound>(`/admin/rounds/${id}`);
       setRound(data);
-      setPlots(plotsRes?.plots || []);
 
       const daysMap: Record<string, number> = {};
       if (data.round_items) {
@@ -307,21 +302,17 @@ export const AdminRoundDetailPage: React.FC = () => {
     .filter((order: any) => order.status !== 'cancelled')
     .reduce((sum: number, order: any) => sum + Math.round(Number(order.total_amount || 0) * 100), 0) / 100;
 
-  // Plot capacity metrics
-  const activePlots = plots.filter((p) => p.is_active);
-  const totalActivePlotSlots = activePlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-  const totalRoundSlotsNeeded = (round.round_items || []).reduce((sum: number, it: any) => {
-    return sum + Number(it.plant_count || 0);
-  }, 0);
-  const remainingPlotSlots = totalActivePlotSlots - totalRoundSlotsNeeded;
-  const avgSlotsPerPlot = activePlots.length > 0 ? totalActivePlotSlots / activePlots.length : 250;
-  const remainingPlotsEst = Math.max(0, Math.floor(remainingPlotSlots / avgSlotsPerPlot));
+  const plantCounts = (round.round_items || []).reduce((sum, item) => {
+    const initial = Math.max(0, Number(item.loss_baseline_plant_count ?? item.plant_count ?? 0));
+    const lost = Math.max(0, Number(item.lost_plant_count || 0));
+    return { initial: sum.initial + initial, remaining: sum.remaining + Math.max(0, initial - lost) };
+  }, { initial: 0, remaining: 0 });
 
   return (
     <div className="space-y-6">
       {/* Top back link & Header */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <Link
             to="/admin/rounds"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors mb-2"
@@ -337,10 +328,14 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
 
         {/* Quick summary numbers */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 items-center gap-3 self-stretch xl:self-auto bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 items-center gap-3 self-stretch xl:min-w-[700px] bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="px-2 text-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">จำนวนปลูก</span>
-            <span className="text-base font-black text-slate-800">{totalRoundSlotsNeeded.toLocaleString()} ต้น</span>
+            <span className="text-[10px] font-bold text-slate-500 block">จำนวนปลูกเริ่มต้น</span>
+            <span className="text-base font-black text-slate-800">{plantCounts.initial.toLocaleString('th-TH')} ต้น</span>
+          </div>
+          <div className="px-2 text-center">
+            <span className="text-[10px] font-bold text-teal-700 block">จำนวนต้นคงเหลือ</span>
+            <span className="text-base font-black text-teal-800">{plantCounts.remaining.toLocaleString('th-TH')} ต้น</span>
           </div>
           <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-emerald-600 block">จองแล้ว</span>
