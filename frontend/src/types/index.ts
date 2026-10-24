@@ -52,7 +52,6 @@ export interface Plot {
 }
 
 export interface FarmMetrics {
-  farm_name: string;
   farm_total_slots: number;
   total_allocated_slots: number;
   available_slots: number;

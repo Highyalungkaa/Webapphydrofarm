@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
-import { supabaseAdmin, getSupabaseClient } from '../../config/supabase.js';
+import { getSupabaseClient } from '../../config/supabase.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewares/auth.js';
 import { recordAuditLog } from '../../services/audit.js';
 
@@ -8,7 +8,6 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 const farmSettingsSchema = z.object({
-  farm_name: z.string().min(1, 'กรุณาระบุชื่อฟาร์ม').max(150),
   farm_total_slots: z.number().int().min(1, 'จำนวนช่องปลูกทั้งหมดต้องมากกว่า 0'),
 });
 
@@ -21,14 +20,13 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const { data: settingsData } = await db
       .from('app_settings')
       .select('key, value')
-      .in('key', ['farm_name', 'farm_total_slots']);
+      .in('key', ['farm_total_slots']);
 
     const settingsMap: Record<string, any> = {};
     for (const item of settingsData || []) {
       settingsMap[item.key] = item.value;
     }
 
-    const farmName = settingsMap['farm_name'] || 'HydroFarm ฟาร์มไฮโดรโปนิกส์';
     const farmTotalSlots = Number(settingsMap['farm_total_slots']) || 5000;
 
     // 2. Fetch all plots to calculate allocated slots and metrics
@@ -57,7 +55,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const zones = Array.from(new Set(plotList.map(p => p.zone_name).filter(Boolean)));
 
     res.json({
-      farm_name: farmName,
       farm_total_slots: farmTotalSlots,
       total_allocated_slots: totalAllocatedSlots,
       available_slots: availableSlots,
@@ -72,7 +69,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
   }
 });
 
-// PUT /api/admin/farm - Update farm name and total slots
+// PUT /api/admin/farm - Update farm capacity
 router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const parsed = farmSettingsSchema.safeParse(req.body);
@@ -81,7 +78,7 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    const { farm_name, farm_total_slots } = parsed.data;
+    const { farm_total_slots } = parsed.data;
     const db = getSupabaseClient(req);
 
     // Check if new total slots is less than already allocated slots
@@ -96,10 +93,10 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     }
 
     // Upsert settings
-    await db.from('app_settings').upsert([
-      { key: 'farm_name', value: farm_name, updated_at: new Date().toISOString() },
-      { key: 'farm_total_slots', value: farm_total_slots, updated_at: new Date().toISOString() },
-    ]);
+    const { error: saveError } = await db.from('app_settings').upsert(
+      { key: 'farm_total_slots', value: farm_total_slots, updated_at: new Date().toISOString() }
+    );
+    if (saveError) throw saveError;
 
     await recordAuditLog({
       actorId: req.user!.id,
@@ -107,12 +104,11 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       entityType: 'app_settings',
       entityId: 'farm_settings',
       action: 'update',
-      newData: { farm_name, farm_total_slots },
+      newData: { farm_total_slots },
     });
 
     res.json({
       message: 'บันทึกการตั้งค่าฟาร์มเรียบร้อยแล้ว',
-      farm_name,
       farm_total_slots,
       total_allocated_slots: currentAllocated,
       available_slots: farm_total_slots - currentAllocated,

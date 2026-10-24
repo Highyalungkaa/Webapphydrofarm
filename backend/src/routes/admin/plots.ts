@@ -61,7 +61,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const { data: settingsData } = await db
       .from('app_settings')
       .select('key, value')
-      .in('key', ['farm_total_slots', 'farm_name']);
+      .in('key', ['farm_total_slots']);
 
     const settingsMap: Record<string, any> = {};
     for (const item of settingsData || []) {

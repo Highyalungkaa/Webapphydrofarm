@@ -17,7 +17,6 @@ import {
 
 export const AdminFarmPage: React.FC = () => {
   const [metrics, setMetrics] = useState<FarmMetrics | null>(null);
-  const [farmName, setFarmName] = useState('');
   const [farmTotalSlots, setFarmTotalSlots] = useState(5000);
 
   const [loading, setLoading] = useState(true);
@@ -34,7 +33,6 @@ export const AdminFarmPage: React.FC = () => {
       setLoading(true);
       const data = await api.get<FarmMetrics>('/admin/farm');
       setMetrics(data);
-      setFarmName(data.farm_name || 'HydroFarm ฟาร์มไฮโดรโปนิกส์');
       setFarmTotalSlots(data.farm_total_slots || 5000);
     } catch (err: any) {
       setError(err.message || 'ไม่สามารถโหลดข้อมูลฟาร์มได้');
@@ -50,8 +48,7 @@ export const AdminFarmPage: React.FC = () => {
 
     try {
       setSaving(true);
-      const res = await api.put('/admin/farm', {
-        farm_name: farmName.trim(),
+      await api.put('/admin/farm', {
         farm_total_slots: Number(farmTotalSlots),
       });
 
@@ -174,20 +171,6 @@ export const AdminFarmPage: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label className="font-bold text-xs sm:text-sm text-slate-800 block mb-1">
-              ชื่อฟาร์ม *
-            </label>
-            <input
-              type="text"
-              value={farmName}
-              onChange={(e) => setFarmName(e.target.value)}
-              placeholder="เช่น HydroFarm ฟาร์มไฮโดรโปนิกส์ อุดรธานี"
-              required
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-
           <div>
             <label className="font-bold text-xs sm:text-sm text-slate-800 block mb-1">
               จำนวน Slot ช่องปลูกผักทั้งหมดในฟาร์ม (Total Slots Capacity) *
