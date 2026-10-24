@@ -100,13 +100,13 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
 
   return <section className="space-y-3">
     <button type="button" aria-expanded={expanded} aria-controls={panelId} disabled={saving} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50">
-      <AlertTriangle aria-hidden="true" className="h-4 w-4" />ผักเสียหายระหว่างปลูก
+      <AlertTriangle aria-hidden="true" className="h-4 w-4" />บันทึกผักเสียหายระหว่างปลูก
       {!!totals?.lost && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs">สูญเสีย {number(totals.lost)} ต้น</span>}
       <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
     </button>
     <div id={panelId} hidden={!expanded} className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 className="text-lg font-extrabold text-slate-900">ผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
+      <div><h2 className="text-lg font-extrabold text-slate-900">บันทึกผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
       {canRecord && !open && <button type="button" onClick={start} disabled={saving || loading || !data?.items.some(i => i.remaining_plant_count > 0)} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"><Plus className="h-4 w-4" />บันทึกผักเสียหาย</button>}
     </div>
     {loading && <p className="text-sm text-slate-500">กำลังโหลดข้อมูลผักเสียหาย...</p>}
