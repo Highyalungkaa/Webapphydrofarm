@@ -540,8 +540,8 @@ export const AdminRoundsPage: React.FC = () => {
         );
       case 7:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
-            🏷️ สเต็ป 7: ขายหมดแล้ว ({formatDateDMY(round.sold_out_date)})
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+            🏷️ สเต็ป 7: {round.sold_out_date ? `บันทึกวันจองหรือขายหมดแล้ว (${formatDateDMY(round.sold_out_date)})` : 'รอบันทึกวันที่ผลผลิตถูกจองหรือขายหมด'}
           </span>
         );
       case 8:

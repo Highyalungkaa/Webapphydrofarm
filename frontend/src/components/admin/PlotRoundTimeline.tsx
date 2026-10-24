@@ -7,7 +7,7 @@ import { Badge } from '../common/Badge.js';
 
 const STEP_NAMES: Record<number, string> = {
   1: 'วันที่ปักเม็ด', 2: 'วันใส่ปุ๋ย', 3: 'วันเริ่มปลูก', 4: 'วันปลูกจริง',
-  5: 'เปิดสั่งจองล่วงหน้า', 6: 'พร้อมเก็บและขาย', 7: 'ขายหมด', 8: 'สิ้นสุดรอบ',
+  5: 'เปิดสั่งจองล่วงหน้า', 6: 'พร้อมเก็บและขาย', 7: 'รอบันทึกวันจองหรือขายหมด', 8: 'สิ้นสุดรอบ',
 };
 
 export const PlotRoundTimeline: React.FC<{ rounds: PlotOccupyingRound[] }> = ({ rounds }) => {

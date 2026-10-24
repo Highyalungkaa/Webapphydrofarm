@@ -100,8 +100,8 @@ const STEPS: StepDef[] = [
   {
     number: 7,
     key: 'sold_out',
-    title: '7. วันที่ขายหมด',
-    subtitle: 'ผลผลิตถูกจอง/ขายหมด',
+    title: '7. บันทึกวันจองหรือขายหมด',
+    subtitle: 'ระบุวันที่ผลผลิตถูกจองหรือขายหมด',
     icon: '🏷️',
     field: 'sold_out_date',
     color: 'rose',
