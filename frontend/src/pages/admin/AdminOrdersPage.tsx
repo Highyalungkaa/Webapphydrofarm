@@ -275,7 +275,7 @@ export const AdminOrdersPage: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-[10px] font-semibold text-slate-400">ชำระเงิน</p>
-                      <Badge status={order.payment_status} type="payment" />
+                      {(order.status !== 'cancelled' || order.payment_status !== 'unpaid') && <Badge status={order.payment_status} type="payment" />}
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-slate-100 pt-3">
@@ -369,7 +369,7 @@ export const AdminOrdersPage: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4">
-                        <Badge status={order.payment_status} type="payment" />
+                        {(order.status !== 'cancelled' || order.payment_status !== 'unpaid') && <Badge status={order.payment_status} type="payment" />}
                         {order.payment_status === 'paid' && order.payment_method && (
                           <span className="block text-[10px] text-slate-400">
                             ({order.payment_method === 'cash' ? 'เงินสด' : 'โอนเงิน'})

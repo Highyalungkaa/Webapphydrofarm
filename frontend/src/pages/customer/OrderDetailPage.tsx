@@ -124,7 +124,7 @@ export const OrderDetailPage: React.FC = () => {
         description="ติดตามสถานะ รายการผัก และกำหนดรับสินค้าของคำสั่งจองนี้"
         icon={<ShoppingBag className="h-7 w-7" />}
       >
-        <div className="flex flex-wrap gap-2"><Badge status={order.status} type="order" /><Badge status={order.payment_status} type="payment" /></div>
+        <div className="flex flex-wrap gap-2"><Badge status={order.status} type="order" />{(order.status !== 'cancelled' || order.payment_status !== 'unpaid') && <Badge status={order.payment_status} type="payment" />}</div>
       </CustomerPageHeader>
 
       {/* Success banner if just cancelled */}
@@ -164,7 +164,7 @@ export const OrderDetailPage: React.FC = () => {
 
           <div className="flex items-center gap-2 flex-wrap">
             <Badge status={order.status} type="order" />
-            <Badge status={order.payment_status} type="payment" />
+            {(order.status !== 'cancelled' || order.payment_status !== 'unpaid') && <Badge status={order.payment_status} type="payment" />}
           </div>
         </div>
 

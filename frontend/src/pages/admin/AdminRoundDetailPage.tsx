@@ -810,7 +810,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                       <Badge status={ord.status} type="order" />
                     </td>
                     <td className="py-3 px-3">
-                      <Badge status={ord.payment_status} type="payment" />
+                      {(ord.status !== 'cancelled' || ord.payment_status !== 'unpaid') && <Badge status={ord.payment_status} type="payment" />}
                     </td>
                     <td className="py-3 px-3 text-right">
                       <Link
