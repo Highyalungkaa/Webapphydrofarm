@@ -133,6 +133,37 @@ function getItemPlantCounts(item: RoundItem) {
   return { initial, lost, remaining: Math.max(0, initial - lost) };
 }
 
+const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
+  <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs" aria-labelledby="round-crops-heading">
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
+      <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{items.length} รายการ</span>
+    </div>
+    {items.length ? (
+      <ul className="max-h-72 space-y-2 overflow-y-auto">
+        {items.map((item) => {
+          const { lost, remaining } = getItemPlantCounts(item);
+          return (
+            <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
+              {item.loss_baseline_plant_count == null && item.plant_count == null ? (
+                <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
+              ) : (
+                <span className="shrink-0 text-right">
+                  <strong className="block text-xs text-emerald-700">เหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
+                  <span className="block text-[11px] text-rose-600">เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p className="text-xs text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
+    )}
+  </aside>
+);
+
 export const AdminRoundDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -464,7 +495,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         )}
 
         {/* Step-specific content and confirmation */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start">
+        <div className={activeStepTab === 4 ? 'space-y-5' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start'}>
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
             {activeStepTab === 5 ? (
@@ -501,7 +532,8 @@ export const AdminRoundDetailPage: React.FC = () => {
 
             {/* Special Feature for Step 4: Auto Harvest Calculation per Vegetable */}
             {activeStepTab === 4 && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/90 border border-sky-200 space-y-3.5">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start">
+                <div className="p-4 sm:p-5 rounded-2xl bg-sky-50/90 border border-sky-200 space-y-3.5">
                 <div className="flex items-center gap-2 font-bold text-sky-950 text-xs sm:text-sm">
                   <Sparkles className="w-4 h-4 text-sky-600 flex-shrink-0" />
                   <span>ระบบคำนวณวันเก็บเกี่ยวอัตโนมัติตามระยะเวลาปลูก (แยกตามชนิดผักในรอบนี้):</span>
@@ -579,6 +611,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                     วันที่พร้อมเก็บและขายคำนวณแยกของแต่ละผัก โดยอิงจาก <strong>จำนวนวันปลูกที่กรอกตอนเพิ่มผักในรอบนี้</strong> + <strong>วันปลูกจริง (Step 4)</strong>
                   </span>
                 </p>
+                </div>
+                <RoundCropsSummary items={round.round_items || []} />
               </div>
             )}
 
@@ -702,36 +736,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             {(round.closure_reason === 'unsold' || (!isViewingPastStep && (activeStepTab === 6 || activeStepTab === 7) && currentStep >= 6 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
 
-          <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs" aria-labelledby="round-crops-heading">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
-              <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                {(round.round_items || []).length} รายการ
-              </span>
-            </div>
-            {round.round_items?.length ? (
-              <ul className="max-h-72 space-y-2 overflow-y-auto">
-                {round.round_items.map((item) => {
-                  const { lost, remaining } = getItemPlantCounts(item);
-                  return (
-                    <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                      <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
-                      {item.loss_baseline_plant_count == null && item.plant_count == null ? (
-                        <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
-                      ) : (
-                        <span className="shrink-0 text-right">
-                          <strong className="block text-xs text-emerald-700">เหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
-                          <span className="block text-[11px] text-rose-600">เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-xs text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
-            )}
-          </aside>
+          {activeStepTab !== 4 && <RoundCropsSummary items={round.round_items || []} />}
         </div>
       </section>
 
