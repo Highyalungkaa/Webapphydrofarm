@@ -134,24 +134,33 @@ function getItemPlantCounts(item: RoundItem) {
 }
 
 const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
-  <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs" aria-labelledby="round-crops-heading">
+  <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-xs" aria-labelledby="round-crops-heading">
     <div className="mb-3 flex items-center justify-between gap-2">
-      <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Leaf className="h-4 w-4" /></span>
+        <div className="min-w-0">
+          <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
+          <p className="text-[10px] text-slate-500">จำนวนต้นหลังหักผักเสียหาย</p>
+        </div>
+      </div>
       <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{items.length} รายการ</span>
     </div>
     {items.length ? (
       <ul className="max-h-72 space-y-2 overflow-y-auto">
         {items.map((item) => {
-          const { lost, remaining } = getItemPlantCounts(item);
+          const { initial, lost, remaining } = getItemPlantCounts(item);
           return (
-            <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-              <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
+            <li key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 border-l-2 border-l-emerald-400 bg-slate-50/70 px-3 py-2.5">
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
+                {(item.loss_baseline_plant_count != null || item.plant_count != null) && <span className="block text-[10px] text-slate-500">เริ่มต้น {initial.toLocaleString('th-TH')} ต้น</span>}
+              </span>
               {item.loss_baseline_plant_count == null && item.plant_count == null ? (
                 <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
               ) : (
                 <span className="shrink-0 text-right">
-                  <strong className="block text-xs text-emerald-700">เหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
-                  <span className="block text-[11px] text-rose-600">เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
+                  <strong className="block text-xs text-emerald-700">คงเหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
+                  <span className={`block text-[11px] ${lost > 0 ? 'text-rose-600' : 'text-slate-500'}`}>เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
                 </span>
               )}
             </li>
