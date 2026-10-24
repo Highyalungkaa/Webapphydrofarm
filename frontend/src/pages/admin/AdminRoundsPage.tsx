@@ -1,6 +1,7 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
 import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
+import { PlotCapacityBar } from '../../components/admin/PlotCapacityBar.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -172,6 +173,25 @@ export const AdminRoundsPage: React.FC = () => {
     {},
     Object.fromEntries(Object.entries(plotOccupancyMap).map(([id, usage]) => [id, usage.occupiedSlots])),
   );
+  const selectedPlotsForSummary = activePlots.filter((plot) =>
+    items.some((item) => item.selected_plot_ids?.includes(plot.id))
+  );
+  const cropColorIndexes = new Map([...new Set(items.map((item) => item.crop_id))].map((id, index) => [id, index]));
+  const cropSegmentsForPlots = (plotIds: string[]) => {
+    const segments = new Map<string, { name: string; count: number; cropIndex: number }>();
+    items.forEach((item, itemIndex) => {
+      const count = plotIds.reduce((sum, plotId) => sum + (plotSlotAllocation.allocatedByItem[itemIndex]?.[plotId] || 0), 0);
+      if (count === 0) return;
+      const existing = segments.get(item.crop_id);
+      if (existing) existing.count += count;
+      else segments.set(item.crop_id, {
+        name: crops.find((crop) => crop.id === item.crop_id)?.name || 'ผัก',
+        count,
+        cropIndex: cropColorIndexes.get(item.crop_id) || 0,
+      });
+    });
+    return [...segments.values()];
+  };
   const itemOccupiedSlots = (index: number, plotId: string) =>
     plotSlotAllocation.beforeItem[index]?.[plotId] ?? plotOccupancyMap[plotId]?.occupiedSlots ?? 0;
 
@@ -977,6 +997,9 @@ export const AdminRoundsPage: React.FC = () => {
                       const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
                       const totalSelectedRawCapacity = selectedPlots.reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
                       const totalSelectedOccupied = selectedPlots.reduce((sum, p) => sum + itemOccupiedSlots(idx, p.id), 0);
+                      const selectedPlotPreviousUse = selectedPlots.reduce((sum, p) => sum + (plotOccupancyMap[p.id]?.occupiedSlots || 0), 0);
+                      const selectedPlotCropSegments = cropSegmentsForPlots(selectedPlotIds);
+                      const allocatedForThisCrop = selectedPlots.reduce((sum, p) => sum + (plotSlotAllocation.allocatedByItem[idx]?.[p.id] || 0), 0);
                       const totalSelectedAvailableSlots = selectedPlots.reduce((sum, p) => {
                         const occ = itemOccupiedSlots(idx, p.id);
                         return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
@@ -1000,7 +1023,6 @@ export const AdminRoundsPage: React.FC = () => {
                       const matchCapacityPlants = Math.floor(totalSelectedAvailableSlots);
 
                       // Gauge bar calculation
-                      const usagePercent = totalSelectedAvailableSlots > 0 ? Math.min(100, Math.round((requiredSlots / totalSelectedAvailableSlots) * 100)) : (isSelectedPlotsZeroFree ? 100 : 0);
                       const invalidGrowingDays = it.growing_days === '' || !Number.isSafeInteger(it.growing_days) || it.growing_days < 1;
 
                       return (
@@ -1128,9 +1150,9 @@ export const AdminRoundsPage: React.FC = () => {
                                 <div className="flex items-start gap-2">
                                   <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
                                   <div>
-                                    <p className="font-bold">🚨 แปลงที่เลือกถูกรอบอื่นใช้งานเต็ม 100% แล้ว (ไม่มีพื้นที่ว่าง)!</p>
+                                    <p className="font-bold">🚨 แปลงที่เลือกไม่มีพื้นที่ว่างสำหรับผักนี้แล้ว!</p>
                                     <p className="text-[11px] text-rose-800 mt-0.5">
-                                      แปลงที่เลือก ({selectedPlots.map((p) => p.name).join(', ')}) ถูกรอบเดิมที่กำลังดำเนินการใช้งานเต็มความจุ {totalSelectedRawCapacity.toLocaleString()} ต้น ไม่สามารถปลูกในรอบนี้ได้ กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง
+                                      แปลงที่เลือก ({selectedPlots.map((p) => p.name).join(', ')}) มีความจุรวม {totalSelectedRawCapacity.toLocaleString()} ต้น ซึ่งรอบเดิมหรือผักชนิดอื่นในรอบนี้ใช้เต็มแล้ว กรุณาเลือกแปลงอื่นที่มีพื้นที่ว่าง
                                     </p>
                                   </div>
                                 </div>
@@ -1146,7 +1168,7 @@ export const AdminRoundsPage: React.FC = () => {
                                     <p className="font-bold">🚨 พื้นที่ว่างในแปลงที่เลือกไม่เพียงพอสำหรับจำนวนที่ปลูก {requiredSlots.toLocaleString()} ต้น!</p>
                                     <p className="text-[11px] text-rose-800 mt-0.5">
                                       ต้องการ <strong>{requiredSlots.toLocaleString()} ต้น</strong> แต่แปลงที่เลือกเหลือพื้นที่ว่างจริงเพียง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong>
-                                      {totalSelectedOccupied > 0 && ` (รอบเดิมใช้ไป ${totalSelectedOccupied.toLocaleString()} ต้น)`}
+                                      {totalSelectedOccupied > 0 && ` (รอบเดิมและผักที่เพิ่มก่อนหน้าใช้ไป ${totalSelectedOccupied.toLocaleString()} ต้น)`}
                                       {' '}(ขาดอีก <strong>{missingSlots.toLocaleString()} ต้น</strong>)
                                     </p>
                                   </div>
@@ -1243,50 +1265,27 @@ export const AdminRoundsPage: React.FC = () => {
 
                             {/* CROP TOTAL CAPACITY GAUGE BAR */}
                             {selectedPlots.length > 0 && (
-                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1.5">
-                                <div className="flex justify-between text-[11px]">
+                              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-2">
+                                <div className="flex flex-wrap justify-between gap-x-3 text-[11px]">
                                   <span className="font-semibold text-slate-700">
-                                    การใช้พื้นที่แปลงที่เลือกของ {selectedCrop?.name}:
+                                    การใช้พื้นที่รวมของแปลงที่เลือกสำหรับ {selectedCrop?.name}:
                                   </span>
-                                  <span className="font-bold text-slate-800">
-                                    {isSelectedPlotsZeroFree ? (
-                                      <span className="text-rose-600">รอบเดิมใช้เต็ม 100% (ว่าง 0 ต้น)</span>
-                                    ) : (
-                                      <span>ใช้ {requiredSlots.toLocaleString()} / พื้นที่ว่าง {totalSelectedAvailableSlots.toLocaleString()} ต้น ({usagePercent}%)</span>
-                                    )}
+                                  <span className={`font-bold ${allocatedForThisCrop < requiredSlots ? 'text-rose-600' : 'text-slate-800'}`}>
+                                    ผักนี้จัดพื้นที่ได้ {allocatedForThisCrop.toLocaleString()} / ต้องการ {requiredSlots.toLocaleString()} ต้น
                                   </span>
                                 </div>
-                                <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden flex">
-                                  {/* Occupied by other rounds in these plots */}
-                                  <div
-                                    className="h-full bg-rose-500 transition-all duration-300"
-                                    style={{
-                                      width: `${totalSelectedRawCapacity > 0 ? Math.min(100, (totalSelectedOccupied / totalSelectedRawCapacity) * 100) : 0}%`,
-                                    }}
-                                    title={`รอบเดิมใช้: ${totalSelectedOccupied} ต้น`}
-                                  />
-                                  {/* Used by this crop in this round */}
-                                  <div
-                                    className={`h-full transition-all duration-300 ${
-                                      isOverCapacity ? 'bg-rose-500' : usagePercent >= 100 ? 'bg-emerald-600' : 'bg-sky-500'
-                                    }`}
-                                    style={{
-                                      width: `${totalSelectedRawCapacity > 0 ? Math.min(100 - (totalSelectedOccupied / totalSelectedRawCapacity) * 100, (requiredSlots / totalSelectedRawCapacity) * 100) : 0}%`,
-                                    }}
-                                    title={`รอบนี้ใช้: ${requiredSlots} ต้น`}
-                                  />
-                                </div>
+                                <PlotCapacityBar capacity={totalSelectedRawCapacity} previousUsed={selectedPlotPreviousUse} crops={selectedPlotCropSegments} />
                                 <div className="flex justify-between text-[10px] text-slate-500">
-                                  <span>จำนวนที่ปลูก: {it.plant_count.toLocaleString()} ต้น</span>
+                                  <span>ความจุแปลงที่เลือกทั้งหมด {totalSelectedRawCapacity.toLocaleString()} ต้น</span>
                                   <span>
                                     {isSelectedPlotsZeroFree ? (
-                                      <strong className="text-rose-600">รอบอื่นใช้งานเต็มแล้ว</strong>
+                                      <strong className="text-rose-600">ไม่มีพื้นที่ว่างก่อนจัดผักนี้</strong>
                                     ) : isOverCapacity ? (
                                       <strong className="text-rose-600">เกินพื้นที่ว่าง {missingSlots.toLocaleString()} ต้น</strong>
                                     ) : extraSlots > 0 ? (
-                                      <strong className="text-sky-700">เหลือพื้นที่ว่าง {extraSlots.toLocaleString()} ต้น</strong>
+                                      <strong className="text-sky-700">ผักนี้ใช้พื้นที่ว่างไป {allocatedForThisCrop.toLocaleString()} ต้น</strong>
                                     ) : (
-                                      <strong className="text-emerald-700">เต็มพื้นที่ว่างพอดี 100%</strong>
+                                      <strong className="text-emerald-700">ผักนี้ใช้พื้นที่ว่างที่เหลือพอดี</strong>
                                     )}
                                   </span>
                                 </div>
@@ -1295,24 +1294,19 @@ export const AdminRoundsPage: React.FC = () => {
 
                             {/* PLOT CARDS RENDERER HELPER */}
                             {(() => {
-                              let remainingToAllocate = requiredSlots;
-
                               const renderPlotCard = (plot: Plot) => {
                                 const isChecked = selectedPlotIds.includes(plot.id);
                                 const cap = Number(plot.slot_capacity || 0);
                                 const occ = plotOccupancyMap[plot.id];
                                 const occupiedByOtherRounds = itemOccupiedSlots(idx, plot.id);
+                                const previouslyUsed = occ?.occupiedSlots || 0;
+                                const plotCropSegments = cropSegmentsForPlots([plot.id]);
                                 const occupyingRoundNames = occ?.occupyingRounds.map((r) => r.roundName) || [];
                                 const availableInPlot = Math.max(0, cap - occupiedByOtherRounds);
                                 const isPlotFull = availableInPlot === 0;
 
-                                let usedInPlot = 0;
-                                if (isChecked) {
-                                  usedInPlot = Math.min(availableInPlot, Math.max(0, remainingToAllocate));
-                                  remainingToAllocate -= usedInPlot;
-                                }
-
-                                const remainingFreeInPlot = isChecked ? Math.max(0, availableInPlot - usedInPlot) : availableInPlot;
+                                const usedInPlot = plotSlotAllocation.allocatedByItem[idx]?.[plot.id] || 0;
+                                const plotFreeAfterAllocation = Math.max(0, cap - previouslyUsed - plotCropSegments.reduce((sum, crop) => sum + crop.count, 0));
 
                                 // Other item using this plot?
                                 const otherItemUsing = items.find(
@@ -1325,7 +1319,7 @@ export const AdminRoundsPage: React.FC = () => {
                                     key={plot.id}
                                     onClick={() => {
                                       if (isPlotFull && !isChecked) {
-                                        alert(`แปลง "${plot.name}" ถูกใช้งานเต็ม 100% แล้วโดย: ${occupyingRoundNames.join(', ')}\nไม่สามารถเลือกใช้ในรอบนี้ได้`);
+                                        alert(`แปลง "${plot.name}" ไม่มีพื้นที่ว่างสำหรับผักนี้แล้ว (รอบเดิมหรือผักชนิดอื่นในรอบนี้ใช้เต็ม) กรุณาเลือกแปลงอื่น`);
                                         return;
                                       }
                                       handleTogglePlot(idx, plot.id);
@@ -1364,7 +1358,7 @@ export const AdminRoundsPage: React.FC = () => {
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         {isPlotFull ? (
                                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
-                                            🔴 เต็ม (ติด {occupyingRoundNames[0] || 'รอบอื่น'})
+                                            🔴 เต็ม (ติด {occupyingRoundNames[0] || 'ผักอื่นในรอบนี้'})
                                           </span>
                                         ) : otherItemUsing ? (
                                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
@@ -1394,49 +1388,20 @@ export const AdminRoundsPage: React.FC = () => {
 
                                     {/* Per-plot capacity bar */}
                                     <div className="space-y-0.5">
-                                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200 flex">
-                                        {/* Occupied by other rounds */}
-                                        <div
-                                          className="h-full bg-rose-500 transition-all duration-300"
-                                          style={{ width: `${cap > 0 ? Math.min(100, (occupiedByOtherRounds / cap) * 100) : 0}%` }}
-                                        />
-                                        {/* Used in this round */}
-                                        {isChecked && (
-                                          <div
-                                            className="h-full bg-emerald-500 transition-all duration-300"
-                                            style={{
-                                              width: `${cap > 0 ? Math.min(100 - (occupiedByOtherRounds / cap) * 100, (usedInPlot / cap) * 100) : 0}%`,
-                                            }}
-                                          />
-                                        )}
-                                      </div>
+                                      <PlotCapacityBar capacity={cap} previousUsed={previouslyUsed} crops={plotCropSegments} />
 
                                       <div className="flex justify-between text-[10px] text-slate-500">
                                         <span>
-                                          {isPlotFull ? (
-                                            <span className="text-rose-600 font-bold">รอบเดิมใช้เต็ม {cap} ต้น</span>
-                                          ) : isChecked ? (
+                                          {isChecked ? (
                                             <>
-                                              รอบนี้ใช้ <strong className="text-slate-800">{usedInPlot}</strong> / ว่าง {availableInPlot} ต้น
+                                              ผักนี้ใช้ <strong className="text-slate-800">{usedInPlot}</strong> ต้น
                                             </>
-                                          ) : occupiedByOtherRounds > 0 ? (
-                                            <>รอบเดิมใช้ {occupiedByOtherRounds} / {cap} ต้น</>
                                           ) : (
-                                            <>ความจุ {cap} ต้น (ว่าง 100%)</>
+                                            <>ใช้รวม {cap - plotFreeAfterAllocation} / {cap} ต้น</>
                                           )}
                                         </span>
                                         <span>
-                                          {isPlotFull ? (
-                                            <span className="text-rose-600 font-semibold">สร้างรอบทับไม่ได้</span>
-                                          ) : isChecked ? (
-                                            remainingFreeInPlot > 0 ? (
-                                              <span className="text-sky-700 font-semibold">เหลือ {remainingFreeInPlot} ต้น</span>
-                                            ) : (
-                                              <span className="text-emerald-700 font-semibold">เต็มพื้นที่ว่าง</span>
-                                            )
-                                          ) : (
-                                            <span className="text-emerald-600 font-medium">ว่าง {availableInPlot} ต้น</span>
-                                          )}
+                                          <span className="font-semibold text-sky-700">แปลงว่าง {plotFreeAfterAllocation} ต้น</span>
                                         </span>
                                       </div>
                                     </div>
@@ -1488,125 +1453,43 @@ export const AdminRoundsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Crop-Specific Summary Table with Area Progress Bars */}
+              {/* One shared capacity bar per plot, with a color for each crop. */}
               {items.length > 0 && (
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2.5">
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>สรุปพื้นที่แปลงปลูกแยกตามชนิดผัก:</span>
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>สรุปการใช้พื้นที่ตามแปลงที่เลือก</span>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[11px]">
-                      <thead>
-                        <tr className="text-slate-400 border-b border-slate-200 pb-1.5 font-semibold">
-                          <th className="py-1 px-1">ชนิดผัก</th>
-                          <th className="py-1 px-2">จำนวนต้น / น้ำหนักคำนวณ</th>
-                          <th className="py-1 px-2">แปลงที่เลือกปลูก</th>
-                          <th className="py-1 px-2 min-w-[140px]">หลอดความจุแปลง</th>
-                          <th className="py-1 px-2">สถานะพื้นที่</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {items.map((it, idx) => {
-                          const crop = crops.find((c) => c.id === it.crop_id);
-                          const requiredSlots = it.plant_count;
-
-                          const selectedPlotIds = it.selected_plot_ids || [];
-                          const selectedPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
-                          const rawSelectedSlots = selectedPlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
-                          const availableSelectedSlots = selectedPlots.reduce((s, p) => {
-                            const occ = itemOccupiedSlots(idx, p.id);
-                            return s + Math.max(0, Number(p.slot_capacity || 0) - occ);
-                          }, 0);
-                          const usedPercent = availableSelectedSlots > 0 ? Math.min(100, Math.round((requiredSlots / availableSelectedSlots) * 100)) : 0;
-
-                          const isNoPlot = selectedPlots.length === 0;
-                          const isZeroAvail = selectedPlots.length > 0 && availableSelectedSlots === 0;
-                          const isOver = selectedPlots.length > 0 && availableSelectedSlots > 0 && requiredSlots > availableSelectedSlots;
-                          const isUnder = selectedPlots.length > 0 && availableSelectedSlots > 0 && availableSelectedSlots > requiredSlots;
-
-                          return (
-                            <tr key={idx} className="hover:bg-white/60">
-                              <td className="py-2 px-1 font-bold text-slate-800 whitespace-nowrap">
-                                {crop?.name || 'ผัก'}
-                              </td>
-                              <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
-                                <strong className="text-emerald-800">{requiredSlots.toLocaleString()} ต้น</strong>
-
-                              </td>
-                              <td className="py-2 px-2 text-slate-700 whitespace-nowrap">
-                                {selectedPlots.length > 0 ? (
-                                  <div>
-                                    <span className="font-bold text-slate-900">{selectedPlots.length} แปลง</span>
-                                    <span className="text-[10px] text-slate-400 block">
-                                      {selectedPlots.map((p) => p.name).join(', ')} (ว่าง {availableSelectedSlots.toLocaleString()}/{rawSelectedSlots.toLocaleString()} ต้น)
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-amber-700 font-semibold italic">ยังไม่ได้เลือกแปลง</span>
-                                )}
-                              </td>
-                              {/* Gauge Bar */}
-                              <td className="py-2 px-2">
-                                {selectedPlots.length > 0 ? (
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-[10px]">
-                                      <span className="font-semibold text-slate-700">
-                                        {requiredSlots.toLocaleString()} / ว่าง {availableSelectedSlots.toLocaleString()} ต้น
-                                      </span>
-                                      <span className={`font-bold ${isZeroAvail || isOver ? 'text-rose-600' : 'text-slate-700'}`}>
-                                        {isZeroAvail ? 'เต็ม 100%' : `${usedPercent}%`}
-                                      </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full ${
-                                          isZeroAvail || isOver
-                                            ? 'bg-rose-500'
-                                            : usedPercent >= 100
-                                            ? 'bg-emerald-600'
-                                            : 'bg-sky-500'
-                                        }`}
-                                        style={{ width: `${isZeroAvail ? 100 : usedPercent}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-400">-</span>
-                                )}
-                              </td>
-                              <td className="py-2 px-2 whitespace-nowrap">
-                                {isNoPlot ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                    ⚠️ ยังไม่เลือกแปลง
-                                  </span>
-                                ) : isZeroAvail ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                                    🔴 ติดรอบอื่น (เต็ม)
-                                  </span>
-                                ) : isOver ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                                    🚨 ขาด {(requiredSlots - availableSelectedSlots).toLocaleString()} ต้น
-                                  </span>
-                                ) : isUnder ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
-                                    ℹ️ ว่าง {(availableSelectedSlots - requiredSlots).toLocaleString()} ต้น
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                    ✓ พอดีพื้นที่ว่าง
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    แต่ละหลอดแสดงความจุของหนึ่งแปลง สีแต่ละสีคือผักคนละชนิด สีเทาเข้มคือรอบเดิม และสีเทาอ่อนคือพื้นที่ว่าง
+                  </p>
+                  {selectedPlotsForSummary.length === 0 ? (
+                    <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">ยังไม่ได้เลือกแปลงปลูก</p>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {selectedPlotsForSummary.map((plot) => {
+                        const capacity = Number(plot.slot_capacity || 0);
+                        const previousUsed = plotOccupancyMap[plot.id]?.occupiedSlots || 0;
+                        const cropSegments = cropSegmentsForPlots([plot.id]);
+                        const usedThisRound = cropSegments.reduce((sum, crop) => sum + crop.count, 0);
+                        const free = Math.max(0, capacity - previousUsed - usedThisRound);
+                        return (
+                          <div key={plot.id} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                            <div className="flex flex-wrap items-baseline justify-between gap-1 text-xs">
+                              <strong className="text-slate-900">{plot.name}</strong>
+                              <span className="font-semibold text-slate-600">ความจุ {capacity.toLocaleString()} ต้น</span>
+                            </div>
+                            <PlotCapacityBar capacity={capacity} previousUsed={previousUsed} crops={cropSegments} />
+                            <p className="text-[11px] text-slate-600">
+                              รอบนี้ใช้ {usedThisRound.toLocaleString()} ต้น · รอบเดิมใช้ {previousUsed.toLocaleString()} ต้น · ว่าง {free.toLocaleString()} ต้น
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
-
               {/* Notes */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">หมายเหตุเพิ่มเติม (ถ้ามี)</label>

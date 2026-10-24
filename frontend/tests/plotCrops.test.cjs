@@ -28,6 +28,8 @@ test('different crops share a plot without counting its capacity twice', () => {
   );
   assert.equal(result.beforeItem[0].p, 20);
   assert.equal(result.beforeItem[1].p, 60);
+  assert.equal(result.allocatedByItem[0].p, 40);
+  assert.equal(result.allocatedByItem[1].p, 40);
   assert.equal(result.used.p, 100);
 });
 
@@ -41,5 +43,17 @@ test('plant counts reserve actual space even when calculated kilograms round dow
     { a: 4.5, b: 4.5 }, {},
   );
   assert.equal(result.beforeItem[1].p, 100);
+  assert.equal(result.allocatedByItem[0].p, 100);
+  assert.equal(result.allocatedByItem[1].p, 20);
   assert.equal(result.used.p, 120);
+});
+
+test('one crop is split across plots without showing the same plants twice', () => {
+  const result = helpers.allocatePlotSlots(
+    [{ id: 'a', slot_capacity: 100 }, { id: 'b', slot_capacity: 100 }],
+    [{ crop_id: 'lettuce', selected_plot_ids: ['a', 'b'], plant_count: 130 }],
+    {}, { a: 20 },
+  );
+  assert.equal(result.allocatedByItem[0].a, 80);
+  assert.equal(result.allocatedByItem[0].b, 50);
 });

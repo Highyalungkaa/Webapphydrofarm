@@ -17,16 +17,20 @@ export function allocatePlotSlots(
 ) {
   const used = { ...occupied };
   const beforeItem: Record<string, number>[] = [];
+  const allocatedByItem: Record<string, number>[] = [];
   for (const item of items) {
     beforeItem.push({ ...used });
+    const allocatedInPlots: Record<string, number> = {};
     let needed = item.plant_count ?? Math.max(0, Math.round(Number(item.bookable_qty_kg || 0) * (rates[item.crop_id] || 4)));
     for (const plot of plots) {
       if (!item.selected_plot_ids?.includes(plot.id)) continue;
       const available = Math.max(0, Number(plot.slot_capacity) - (used[plot.id] || 0));
       const allocated = Math.min(needed, available);
+      if (allocated > 0) allocatedInPlots[plot.id] = allocated;
       used[plot.id] = (used[plot.id] || 0) + allocated;
       needed -= allocated;
     }
+    allocatedByItem.push(allocatedInPlots);
   }
-  return { beforeItem, used };
+  return { beforeItem, allocatedByItem, used };
 }
