@@ -214,6 +214,7 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const handleConfirmStepUpdate = async () => {
     if (!round || !inputDate) return;
+    if (activeStepTab !== (round.current_step || 1) || round.status === 'completed' || !!round.completed_date) return;
     if (activeStepTab === 5 && !isBookingConfirmed) {
       setError('กรุณาเปิดรอบจองที่หน้า “การเปิดสั่งจองล่วงหน้า” ก่อน จึงจะยืนยันไปสถานะถัดไปได้');
       return;
@@ -293,6 +294,8 @@ export const AdminRoundDetailPage: React.FC = () => {
 
   const currentStep = round.current_step || 1;
   const isRoundCompleted = round.status === 'completed' || !!round.completed_date;
+  const isViewingPastStep = activeStepTab < currentStep || isRoundCompleted;
+  const nextStepInfo = currentStep < 8 ? STEPS[currentStep] : null;
   const isBookingConfirmed = ['booking_open', 'booking_closed'].includes(round.status)
     && !!round.booking_opens_at;
   const growingDays = round.growing_days || 45;
@@ -330,9 +333,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">{round.name}</h1>
             <RoundStatusBadge round={round} />
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            วงจรการปลูกไฮโดรโปนิกส์ 8 ขั้นตอน • ควบคุมและอัปเดตสเต็ปตามขั้นตอนจริง
-          </p>
+          <p className="text-sm text-slate-500 mt-1">ติดตามความคืบหน้าและบันทึกวันที่ของแต่ละขั้นตอน</p>
         </div>
 
         {/* Quick summary numbers */}
@@ -358,71 +359,61 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Interactive 8-Step Visual Stepper Bar */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs overflow-x-auto">
-        <div className="flex items-center min-w-[960px] justify-between relative">
-          {/* Background progress bar line */}
-          <div className="absolute top-1/2 left-6 right-6 -translate-y-1/2 h-1 bg-slate-100 z-0" />
-          <div
-            className="absolute top-1/2 left-6 -translate-y-1/2 h-1 bg-emerald-500 z-0 transition-all duration-500"
-            style={{ width: `${Math.max(0, Math.min(100, ((currentStep - 1) / 7) * 100))}%` }}
-          />
-
+      {/* Round progress and step navigation */}
+      <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6" aria-label="ขั้นตอนของรอบการปลูก">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900">ความคืบหน้ารอบการปลูก</h2>
+            <p className="mt-1 text-xs text-slate-500">กดขั้นตอนที่ทำแล้วเพื่อดูวันที่บันทึกไว้</p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+            {isRoundCompleted ? 'ครบทั้ง 8 ขั้นตอนแล้ว' : `กำลังทำขั้นตอนที่ ${currentStep} จาก 8`}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={8} aria-valuenow={isRoundCompleted ? 8 : currentStep}>
+          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(isRoundCompleted ? 8 : currentStep) * 12.5}%` }} />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:grid-cols-8">
           {STEPS.map((step) => {
             const isCompleted = step.number < currentStep || (isRoundCompleted && step.number === 8);
             const isCurrent = step.number === currentStep && !isRoundCompleted;
             const isSelected = step.number === activeStepTab;
             const unsoldStep = round.closure_reason === 'unsold' && step.number === 7;
             const recordedDate = unsoldStep ? round.completed_date : (round as any)[step.field];
-
             return (
               <button
                 key={step.number}
                 type="button"
                 disabled={step.number > currentStep}
                 onClick={() => handleSelectStepTab(step.number)}
-                className={`relative z-10 flex flex-col items-center group transition-transform ${
-                  step.number > currentStep ? 'cursor-not-allowed opacity-50' : isSelected ? 'scale-105' : 'hover:scale-102'
+                aria-pressed={isSelected}
+                aria-current={isCurrent ? 'step' : undefined}
+                className={`min-h-28 rounded-2xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 ${
+                  isSelected ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100' : isCompleted ? 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50' : 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
                 }`}
               >
-                {/* Step Circle Icon */}
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs transition-all ${
-                    isCompleted
-                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-100'
-                      : isCurrent
-                      ? 'bg-emerald-500 text-white ring-4 ring-emerald-300 animate-pulse'
-                      : 'bg-white border-2 border-slate-200 text-slate-400'
-                  } ${isSelected ? 'ring-4 ring-emerald-500' : ''}`}
-                >
-                  {isCompleted ? <Check className="w-5 h-5 stroke-[3]" /> : step.icon}
-                </div>
-
-                {/* Step Title & Date */}
-                <div className="text-center mt-2">
-                  <span
-                    className={`block text-xs font-bold ${
-                      isCurrent
-                        ? 'text-emerald-700 font-black'
-                        : isCompleted
-                        ? 'text-slate-800'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {unsoldStep ? '7. มีผักขายไม่ออก' : step.title}
+                <div className="mb-2 flex items-center justify-between gap-1">
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${isCompleted || isCurrent ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                    {isCompleted ? <Check className="h-4 w-4" /> : step.icon}
                   </span>
-                  <span className="block text-[10px] text-slate-400 font-medium">
-                    {recordedDate ? formatDateDMY(String(recordedDate)) : step.subtitle}
+                  <span className={`text-[10px] font-bold ${isCurrent ? 'text-emerald-700' : isCompleted ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {isCurrent ? 'กำลังทำ' : isCompleted ? 'เสร็จแล้ว' : 'ยังไม่ถึง'}
                   </span>
                 </div>
+                <span className={`block text-xs font-bold leading-snug ${isSelected || isCompleted ? 'text-slate-900' : 'text-slate-500'}`}>
+                  {step.number}. {unsoldStep ? 'มีผักขายไม่ออก' : step.title.replace(/^\d+\.\s*/, '')}
+                </span>
+                <span className="mt-1 block text-[11px] text-slate-500">
+                  {recordedDate ? formatDateDMY(String(recordedDate)) : isCurrent ? 'รอบันทึกวันที่' : '—'}
+                </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* Current Step Action Card */}
-      <div className="bg-gradient-to-br from-white to-emerald-50/30 rounded-3xl p-6 sm:p-8 border border-emerald-100 shadow-xs space-y-6">
+      {/* Selected step details */}
+      <section className="bg-gradient-to-br from-white to-emerald-50/30 rounded-3xl p-5 sm:p-8 border border-emerald-100 shadow-xs space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-100/80 pb-4">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{STEPS[activeStepTab - 1].icon}</span>
@@ -431,25 +422,32 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">
                   ขั้นตอนที่ {activeStepTab} จาก 8
                 </span>
-                {activeStepTab === currentStep && !isRoundCompleted && (
-                  <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    กำลังดำเนินการ
+                {!isViewingPastStep && (
+                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    ทำขั้นตอนนี้ต่อ
                   </span>
                 )}
-                {(activeStepTab < currentStep || (isRoundCompleted && activeStepTab === 8)) && (
+                {isViewingPastStep && (
                   <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    ยืนยันแล้ว
+                    ดูข้อมูลที่บันทึกไว้
                   </span>
                 )}
               </div>
               <h2 className="text-xl font-black text-slate-900 mt-1">
-                {round.closure_reason === 'unsold' && activeStepTab === 7 ? '7. มีผักขายไม่ออก: บันทึกผักคงเหลือและสิ้นสุดรอบ' : `${STEPS[activeStepTab - 1].title}: ${STEPS[activeStepTab - 1].subtitle}`}
+                {round.closure_reason === 'unsold' && activeStepTab === 7 ? 'มีผักขายไม่ออก' : STEPS[activeStepTab - 1].title.replace(/^\d+\.\s*/, '')}
               </h2>
+              <p className="mt-1 text-sm text-slate-600">{STEPS[activeStepTab - 1].subtitle}</p>
             </div>
           </div>
         </div>
+
+        {isViewingPastStep && (
+          <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            {isRoundCompleted ? 'รอบนี้สิ้นสุดแล้ว ข้อมูลขั้นตอนต่าง ๆ ใช้สำหรับดูย้อนหลัง' : 'ขั้นตอนนี้บันทึกแล้ว เลือกขั้นตอนที่กำลังทำด้านบนเพื่อดำเนินการต่อ'}
+          </p>
+        )}
 
         {actionSuccess && (
           <div className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2 border border-emerald-200">
@@ -466,28 +464,31 @@ export const AdminRoundDetailPage: React.FC = () => {
         )}
 
         {/* Step-specific content and confirmation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <div className="space-y-5">
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
             {activeStepTab === 5 ? (
-              <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${isBookingConfirmed ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-                {isBookingConfirmed
+              <div className={`rounded-2xl border p-4 text-xs leading-relaxed ${round.booking_opens_at ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                {isViewingPastStep
+                  ? round.booking_opens_at ? `เปิดรอบจองเมื่อ ${formatDateTimeDMY(round.booking_opens_at)}` : 'ยังไม่มีวันเปิดรอบจองที่บันทึกไว้'
+                  : isBookingConfirmed
                   ? `เปิดรอบจองแล้ว (กำหนดเริ่มรับจอง ${formatDateTimeDMY(round.booking_opens_at)}) ยืนยันเพื่อไปยังขั้นตอนถัดไปได้`
                   : 'ขั้นตอนนี้ต้องเปิดรอบจองจากหน้า “การเปิดสั่งจองล่วงหน้า” ก่อน จึงจะยืนยันสถานะถัดไปได้'}
               </div>
             ) : <div>
               <label className="font-bold text-slate-800 block text-xs sm:text-sm mb-1.5">
-                เลือก{STEPS[activeStepTab - 1].title.replace(/^\d+\.\s*/, '')} <span className="text-rose-500">*</span>
+                {isViewingPastStep ? 'วันที่บันทึก: ' : 'เลือก'}{STEPS[activeStepTab - 1].title.replace(/^\d+\.\s*/, '')} {!isViewingPastStep && <span className="text-rose-500">*</span>}
               </label>
               <div className="relative max-w-sm">
                 <input
                   type="date"
                   value={inputDate}
                   onChange={(e) => setInputDate(e.target.value)}
-                  className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-2xs"
+                  disabled={isViewingPastStep}
+                  className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-2xs disabled:cursor-default disabled:bg-slate-50"
                 />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5">
+              {!isViewingPastStep && <p className="text-[11px] text-slate-500 mt-1.5">
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
                 {activeStepTab === 2 && '🧪 ระบุวันที่เริ่มให้ปุ๋ย AB สูตรอนุบาล (ปกติ 5-7 วันหลังปักเม็ด)'}
                 {activeStepTab === 3 && '🌱 ระบุวันเริ่มปลูกหลังจากใส่ปุ๋ยและอนุบาลต้นกล้า'}
@@ -495,7 +496,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 {activeStepTab === 6 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
                 {activeStepTab === 7 && '🏷️ ระบุวันที่ผลผลิตในรอบนี้ถูกจองหรือขายหมดแล้ว'}
                 {activeStepTab === 8 && '🏁 ระบุวันที่จัดส่งมอบเสร็จสิ้น และปิดรอบการปลูก'}
-              </p>
+              </p>}
             </div>}
 
             {/* Special Feature for Step 4: Auto Harvest Calculation per Vegetable */}
@@ -535,6 +536,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                     type="number"
                                     min="1"
                                     value={itemDays}
+                                    disabled={isViewingPastStep}
                                     onChange={(e) => {
                                       const val = parseInt(e.target.value, 10) || 1;
                                       setItemDaysMap((prev) => ({
@@ -669,85 +671,43 @@ export const AdminRoundDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Action button to confirm step */}
+            {/* Only the current step can advance the round. */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
               {isRoundCompleted ? (
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-purple-200 bg-purple-50 px-5 py-3 text-xs font-bold text-purple-800 sm:text-sm">
                   <CheckCircle2 className="h-4 w-4 text-purple-600" />
                   <span>สิ้นสุดรอบการปลูกแล้ว{round.completed_date ? ` เมื่อ ${formatDateDMY(round.completed_date)}` : ''}</span>
                 </div>
+              ) : isViewingPastStep ? (
+                <button type="button" onClick={() => handleSelectStepTab(currentStep)} className="rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-50">
+                  กลับไปขั้นตอนที่กำลังทำ
+                </button>
               ) : <>
-              {(activeStepTab !== 5 || isBookingConfirmed) && <button
-                type="button"
-                onClick={handleConfirmStepUpdate}
-                disabled={updatingStep || !inputDate}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all disabled:opacity-50"
-              >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>
-                  {updatingStep
-                    ? 'กำลังบันทึก...'
-                    : activeStepTab === 1
-                    ? 'กดยืนยันวันที่ปักเม็ด ➔ ไปสถานะถัดไป (วันใส่ปุ๋ย)'
-                    : activeStepTab === 2
-                    ? 'กดยืนยันวันใส่ปุ๋ย ➔ ไปสถานะถัดไป (วันเริ่มปลูก)'
-                    : activeStepTab === 3
-                    ? 'กดยืนยันวันเริ่มปลูก ➔ ไปสถานะถัดไป (วันปลูกจริง)'
-                    : activeStepTab === 4
-                    ? 'กดยืนยันวันปลูกจริง ➔ ไปสถานะถัดไป (เปิดสั่งจองล่วงหน้า)'
-                    : activeStepTab === 5
-                    ? 'ยืนยันเปิดจองแล้ว ➔ ไปสถานะถัดไป (วันที่พร้อมเก็บและขาย)'
-                    : activeStepTab === 6
-                    ? 'กดยืนยันวันที่พร้อมเก็บและขาย ➔ ไปสถานะถัดไป (วันที่ขายหมด)'
-                    : activeStepTab === 7
-                    ? 'กดยืนยันวันที่ขายหมด ➔ ไปสถานะถัดไป (สิ้นสุดรอบ)'
-                    : 'กดยืนยันสถานะสิ้นสุดรอบการปลูก'}
-                </span>
-              </button>}
-
-              {activeStepTab === 5 && (
-                !isBookingConfirmed ? (
-                  <Link
-                    to="/admin/bookings"
-                    className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors"
-                  >
-                    <BookmarkCheck className="w-4 h-4" />
-                    <span>ไปจัดการเปิดรับจองที่หน้า “การเปิดสั่งจองล่วงหน้า”</span>
+                {(activeStepTab !== 5 || isBookingConfirmed) && (
+                  <button type="button" onClick={handleConfirmStepUpdate} disabled={updatingStep || !inputDate}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">
+                    <Check className="h-4 w-4" />
+                    {updatingStep ? 'กำลังบันทึก...' : activeStepTab === 8 ? 'ยืนยันสิ้นสุดรอบ' : activeStepTab === 5 ? 'ยืนยันเปิดจองและไปขั้นตอนถัดไป' : 'บันทึกวันที่และไปขั้นตอนถัดไป'}
+                  </button>
+                )}
+                {activeStepTab === 5 && (
+                  <Link to="/admin/bookings" className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold ${isBookingConfirmed ? 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}>
+                    <BookmarkCheck className="h-4 w-4" />
+                    {isBookingConfirmed ? 'จัดการการจอง' : 'ไปเปิดรับจอง'}
                   </Link>
-                ) : <Link
-                  to="/admin/bookings"
-                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm border border-slate-200 transition-colors"
-                >
-                  <BookmarkCheck className="w-4 h-4" />
-                  <span>จัดการการจอง</span>
-                </Link>
-              )}
+                )}
+                {nextStepInfo && <span className="text-xs text-slate-500">ขั้นตอนถัดไป: {nextStepInfo.title.replace(/^\d+\.\s*/, '')}</span>}
               </>}
             </div>
-            {(round.closure_reason === 'unsold' || ((activeStepTab === 6 || activeStepTab === 7) && currentStep >= 6 && !round.sold_out_date && !isRoundCompleted && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
-          </div>
-
-          {/* Right Column: Visual Status & Step 5 Stock Progress Gauge */}
-          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800">
-                สรุปคำสั่งจองในรอบนี้
-              </span>
-              <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                {round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}
-              </span>
-            </div>
-
-            <p className="text-sm text-slate-700">ลูกค้าสั่งจองรวม <strong>{totalBooked.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</strong> · บันทึกน้ำหนักชั่งจริงแยกแต่ละออเดอร์</p>
-
+            {(round.closure_reason === 'unsold' || (!isViewingPastStep && (activeStepTab === 6 || activeStepTab === 7) && currentStep >= 6 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
         </div>
+      </section>
+
+      <div className="space-y-1">
+        <h2 className="text-lg font-extrabold text-slate-900">ยอดจองและคำสั่งซื้อ</h2>
+        <p className="text-sm text-slate-500">ดูน้ำหนักที่จอง น้ำหนักที่ชั่ง และคำสั่งจองของลูกค้าในรอบนี้</p>
       </div>
-
-      <PlantLossPanel roundId={round.id} onChanged={loadRound} />
-
-      <PurchaseLimitPanel round={round} onChanged={loadRound} />
-
       <RoundWeightSummary round={round} />
 
       {/* Customer Orders in this Round */}
@@ -822,6 +782,13 @@ export const AdminRoundDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <div className="space-y-1">
+        <h2 className="text-lg font-extrabold text-slate-900">ข้อมูลผลผลิตและการตั้งค่า</h2>
+        <p className="text-sm text-slate-500">บันทึกผักเสียและกำหนดจำนวนที่ลูกค้าแต่ละคนจองได้</p>
+      </div>
+      <PlantLossPanel roundId={round.id} onChanged={loadRound} />
+      <PurchaseLimitPanel round={round} onChanged={loadRound} />
     </div>
   );
 };
