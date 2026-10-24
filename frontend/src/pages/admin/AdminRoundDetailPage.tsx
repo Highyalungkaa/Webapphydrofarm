@@ -359,34 +359,6 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <section className="space-y-4 rounded-3xl border border-emerald-100 bg-white p-4 shadow-xs sm:p-6" aria-labelledby="round-crops-heading">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="round-crops-heading" className="text-base font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h2>
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
-            {(round.round_items || []).length} รายการ
-          </span>
-        </div>
-        {round.round_items?.length ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {round.round_items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                  <Leaf className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-900">{item.crop_name || item.crops?.name || 'ผัก'}</p>
-                  <p className="text-xs text-slate-600">
-                    {item.plant_count == null ? 'ยังไม่ระบุจำนวนต้น' : `ปลูก ${Number(item.plant_count).toLocaleString('th-TH')} ต้น`}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
-        )}
-      </section>
-
       {/* Round progress and step navigation */}
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6" aria-label="ขั้นตอนของรอบการปลูก">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -492,7 +464,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         )}
 
         {/* Step-specific content and confirmation */}
-        <div className="space-y-5">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)] lg:items-start">
           {/* Left Column: Date Input & Details */}
           <div className="space-y-4">
             {activeStepTab === 5 ? (
@@ -729,6 +701,29 @@ export const AdminRoundDetailPage: React.FC = () => {
             </div>
             {(round.closure_reason === 'unsold' || (!isViewingPastStep && (activeStepTab === 6 || activeStepTab === 7) && currentStep >= 6 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
+
+          <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs" aria-labelledby="round-crops-heading">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
+              <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                {(round.round_items || []).length} รายการ
+              </span>
+            </div>
+            {round.round_items?.length ? (
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
+                {round.round_items.map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
+                    <span className="shrink-0 text-xs font-bold text-emerald-700">
+                      {item.plant_count == null ? 'ไม่ระบุจำนวน' : `${Number(item.plant_count).toLocaleString('th-TH')} ต้น`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
+            )}
+          </aside>
         </div>
       </section>
 
