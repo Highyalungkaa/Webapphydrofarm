@@ -10,7 +10,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
-import { PlantingRound } from '../../types/index.js';
+import { PlantingRound, RoundItem } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
   ArrowLeft,
@@ -125,6 +125,12 @@ function addDaysToDateStr(dateStr: string, days: number): string {
   } catch {
     return dateStr;
   }
+}
+
+function getItemPlantCounts(item: RoundItem) {
+  const initial = Math.max(0, Number(item.loss_baseline_plant_count ?? item.plant_count ?? 0));
+  const lost = Math.max(0, Number(item.lost_plant_count || 0));
+  return { initial, lost, remaining: Math.max(0, initial - lost) };
 }
 
 export const AdminRoundDetailPage: React.FC = () => {
@@ -303,9 +309,8 @@ export const AdminRoundDetailPage: React.FC = () => {
     .reduce((sum: number, order: any) => sum + Math.round(Number(order.total_amount || 0) * 100), 0) / 100;
 
   const plantCounts = (round.round_items || []).reduce((sum, item) => {
-    const initial = Math.max(0, Number(item.loss_baseline_plant_count ?? item.plant_count ?? 0));
-    const lost = Math.max(0, Number(item.lost_plant_count || 0));
-    return { initial: sum.initial + initial, remaining: sum.remaining + Math.max(0, initial - lost) };
+    const { initial, remaining } = getItemPlantCounts(item);
+    return { initial: sum.initial + initial, remaining: sum.remaining + remaining };
   }, { initial: 0, remaining: 0 });
 
   return (
@@ -705,15 +710,33 @@ export const AdminRoundDetailPage: React.FC = () => {
               </span>
             </div>
             {round.round_items?.length ? (
-              <ul className="max-h-72 space-y-2 overflow-y-auto">
-                {round.round_items.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                    <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
-                    <span className="shrink-0 text-xs font-bold text-emerald-700">
-                      {item.plant_count == null ? 'ไม่ระบุจำนวน' : `${Number(item.plant_count).toLocaleString('th-TH')} ต้น`}
-                    </span>
-                  </li>
-                ))}
+              <ul className="max-h-80 space-y-2 overflow-y-auto">
+                {round.round_items.map((item) => {
+                  const { initial, lost, remaining } = getItemPlantCounts(item);
+                  return (
+                    <li key={item.id} className="rounded-xl bg-slate-50 p-3">
+                      <p className="truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</p>
+                      {item.loss_baseline_plant_count == null && item.plant_count == null ? (
+                        <p className="mt-1 text-xs text-slate-500">ยังไม่ระบุจำนวนต้น</p>
+                      ) : (
+                        <div className="mt-2 grid grid-cols-3 gap-1.5 text-center text-[11px]">
+                          <div className="rounded-lg bg-white p-1.5 text-slate-600">
+                            <span className="block">เริ่มต้น</span>
+                            <strong className="text-slate-800">{initial.toLocaleString('th-TH')} ต้น</strong>
+                          </div>
+                          <div className="rounded-lg bg-rose-50 p-1.5 text-rose-700">
+                            <span className="block">เสียหาย</span>
+                            <strong>{lost.toLocaleString('th-TH')} ต้น</strong>
+                          </div>
+                          <div className="rounded-lg bg-emerald-50 p-1.5 text-emerald-700">
+                            <span className="block">คงเหลือ</span>
+                            <strong>{remaining.toLocaleString('th-TH')} ต้น</strong>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-xs text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
