@@ -359,6 +359,34 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
       </div>
 
+      <section className="space-y-4 rounded-3xl border border-emerald-100 bg-white p-4 shadow-xs sm:p-6" aria-labelledby="round-crops-heading">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="round-crops-heading" className="text-base font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h2>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+            {(round.round_items || []).length} รายการ
+          </span>
+        </div>
+        {round.round_items?.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {round.round_items.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                  <Leaf className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900">{item.crop_name || item.crops?.name || 'ผัก'}</p>
+                  <p className="text-xs text-slate-600">
+                    {item.plant_count == null ? 'ยังไม่ระบุจำนวนต้น' : `ปลูก ${Number(item.plant_count).toLocaleString('th-TH')} ต้น`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
+        )}
+      </section>
+
       {/* Round progress and step navigation */}
       <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6" aria-label="ขั้นตอนของรอบการปลูก">
         <div className="flex flex-wrap items-start justify-between gap-2">
