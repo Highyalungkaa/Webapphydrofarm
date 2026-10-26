@@ -52,6 +52,7 @@ async function enrichRoundItems(roundId: string, limited = false) {
       id:item.id,round_id:item.round_id,crop_id:item.crop_id,price_per_kg:item.price_per_kg,crops:item.crops,
       crop_name:item.crops?.name || 'ผัก',booked_qty_kg,
       max_qty_per_order_kg:limited ? item.max_qty_per_order_kg : null,
+      order_limit_remaining:item.order_limit_remaining,
       available_qty_kg:null,is_sold_out:false,
     };
   });

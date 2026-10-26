@@ -23,4 +23,22 @@ router.patch('/:id/order-limit',async(req:AuthenticatedRequest,res:Response)=>{
     res.json(data);
   } catch {res.status(500).json({error:'บันทึกจำนวนออเดอร์ไม่สำเร็จ กรุณาลองอีกครั้ง'});}
 });
+const cropOrderLimitInput=z.object({items:z.array(z.object({id:z.string().uuid(),remaining:z.number().int().min(0).max(1000000)}))
+  .refine(items=>new Set(items.map(item=>item.id)).size===items.length,'เลือกชนิดผักซ้ำกัน')});
+router.patch('/:id/crop-order-limits',async(req:AuthenticatedRequest,res:Response)=>{
+  const parsed=cropOrderLimitInput.safeParse(req.body);
+  if(!parsed.success||!z.string().uuid().safeParse(req.params.id).success){
+    res.status(400).json({error:!parsed.success?parsed.error.errors[0].message:'รหัสรอบไม่ถูกต้อง'});return;
+  }
+  try{
+    const {data,error}=await supabaseAdmin.rpc('set_round_item_order_limits',{
+      p_actor_id:req.user!.id,p_round_id:req.params.id,p_items:parsed.data.items,
+    });
+    if(error){
+      const missing=['42883','PGRST202','42703'].includes(error.code);
+      res.status(missing?503:400).json({error:missing?'กรุณารัน migration 037 ก่อนตั้งโควตาออเดอร์แยกตามผัก':error.message});return;
+    }
+    res.json(data);
+  }catch{res.status(500).json({error:'บันทึกโควตาออเดอร์ของผักไม่สำเร็จ กรุณาลองอีกครั้ง'});}
+});
 export default router;

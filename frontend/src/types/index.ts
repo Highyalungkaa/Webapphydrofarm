@@ -103,6 +103,7 @@ export interface RoundItem {
   price_per_kg: number;
   growing_days?: number;
   max_qty_per_order_kg?: number | null;
+  order_limit_remaining?: number | null;
   booked_qty_kg?: number;
   available_qty_kg?: number | null;
   is_sold_out?: boolean;

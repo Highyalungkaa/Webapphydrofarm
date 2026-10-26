@@ -230,7 +230,8 @@ export const RoundDetailPage: React.FC = () => {
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
             const available = item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg);
-            const isBookingClosed = round.order_limit_remaining===0 || round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
+            const cropOrderLimitReached = item.order_limit_remaining === 0;
+            const isBookingClosed = round.order_limit_remaining===0 || cropOrderLimitReached || round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
             const isSoldOut = false;
 
             return (
@@ -248,7 +249,11 @@ export const RoundDetailPage: React.FC = () => {
                   </div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-lg font-black leading-snug text-slate-950">{cropName}</h3>
-                    {isBookingClosed ? (
+                    {cropOrderLimitReached ? (
+                      <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                        ผักนี้รับออเดอร์ครบแล้ว
+                      </span>
+                    ) : isBookingClosed ? (
                       <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
                         ปิดรับจองแล้ว
                       </span>
@@ -271,6 +276,11 @@ export const RoundDetailPage: React.FC = () => {
                   {item.max_qty_per_order_kg && (
                     <p className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block mb-3 border border-amber-200">
                       จำกัดสูงสุด {item.max_qty_per_order_kg} กก./ออเดอร์
+                    </p>
+                  )}
+                  {item.order_limit_remaining != null && item.order_limit_remaining > 0 && (
+                    <p className="mb-3 inline-block rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-800">
+                      ผักนี้รับได้อีก {item.order_limit_remaining.toLocaleString()} ออเดอร์
                     </p>
                   )}
                 </div>
@@ -328,7 +338,7 @@ export const RoundDetailPage: React.FC = () => {
 
                   {isBookingClosed ? (
                     <span className="text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                      ปิดรับการจองแล้ว
+                      {cropOrderLimitReached ? 'ผักนี้รับออเดอร์ครบแล้ว' : 'ปิดรับการจองแล้ว'}
                     </span>
                   ) : isSoldOut ? (
                     <span className="text-xs text-slate-400 font-medium">ไม่สามารถจองได้</span>

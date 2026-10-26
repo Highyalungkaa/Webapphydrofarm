@@ -40,6 +40,7 @@ export const BookingReviewPage: React.FC = () => {
   }
 
   const exceedsLimit=!!round?.purchase_limit_enabled && items.some(i=>{const cap=round.items?.find(r=>r.id===i.round_item_id)?.max_qty_per_order_kg;return cap!=null && i.qty_kg>Number(cap);});
+  const cropOrderLimitReached=items.some(i=>round?.items?.find(r=>r.id===i.round_item_id)?.order_limit_remaining===0);
 
   return <div className="mx-auto max-w-3xl space-y-5 pb-24">
     <Link to={`/rounds/${roundId}`} className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-emerald-800"><ArrowLeft className="h-4 w-4" />กลับไปแก้ไขรายการ</Link>
@@ -48,6 +49,7 @@ export const BookingReviewPage: React.FC = () => {
     </CustomerPageHeader>
 
     <OrderLimitNotice remaining={round?.order_limit_remaining}/>
+    {cropOrderLimitReached&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm font-semibold text-rose-800">ผักบางชนิดในรายการรับออเดอร์ครบจำนวนแล้ว กรุณากลับไปแก้ไขรายการ</p>}
     {exceedsLimit&&<p role="alert" className="rounded-xl bg-orange-50 p-4 text-sm text-orange-900">ฟาร์มจำกัดจำนวนการซื้อของรอบนี้แล้ว กรุณากลับไปปรับจำนวนผักให้ไม่เกินเพดานก่อนยืนยัน</p>}
     <section className="overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 className="font-black text-slate-900">ผักที่เลือก</h2><p className="mt-0.5 text-xs text-slate-500">{items.length} ชนิด · รวม {formatKg(totalKg)} กก.</p></div><ShoppingBag className="h-5 w-5 text-emerald-700" /></div>
@@ -56,6 +58,6 @@ export const BookingReviewPage: React.FC = () => {
       <div className="space-y-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6"><div className="flex justify-between text-sm text-slate-600"><span>น้ำหนักรวม</span><span className="font-bold text-slate-900">{formatKg(totalKg)} กก.</span></div><div className="flex justify-between text-base"><span className="font-bold text-slate-700">ยอดรวมโดยประมาณ</span><span className="text-lg font-black text-emerald-800">{money(totalAmount)}</span></div></div>
     </section>
 
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between"><Link to={`/rounds/${roundId}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />แก้ไขจำนวนผัก</Link><button type="button" disabled={!round||items.length===0||exceedsLimit||round.order_limit_remaining===0} onClick={() => navigate('/checkout')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-6 py-3 text-sm font-extrabold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">ไปหน้ายืนยันการสั่งจอง<ArrowRight className="h-4 w-4" /></button></div>
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between"><Link to={`/rounds/${roundId}`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />แก้ไขจำนวนผัก</Link><button type="button" disabled={!round||items.length===0||exceedsLimit||cropOrderLimitReached||round.order_limit_remaining===0} onClick={() => navigate('/checkout')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-6 py-3 text-sm font-extrabold text-white shadow-md transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">ไปหน้ายืนยันการสั่งจอง<ArrowRight className="h-4 w-4" /></button></div>
   </div>;
 };
