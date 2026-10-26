@@ -797,7 +797,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                       #{ord.id.slice(0, 8)}
                     </td>
                     <td className="py-3 px-3">
-                      <div className="font-medium text-slate-800">{(ord.customer_name || ord.profiles?.full_name) || 'ลูกค้า'}{ord.order_source === 'facebook_chat' && <span className="ml-2 text-xs text-blue-700">จากแชตแฟนเพจ</span>}</div>
+                      <div className="font-medium text-slate-800">{(ord.customer_name || ord.profiles?.full_name) || 'ลูกค้า'}{ord.order_source === 'facebook_chat' && <span className="ml-2 text-xs text-blue-700">ออเดอร์นอกระบบ</span>}</div>
                       <span className="text-[11px] text-slate-400">{ord.contact_phone}</span>
                     </td>
                     <td className="py-3 px-3">

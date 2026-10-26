@@ -54,7 +54,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/80"><StatusIcon className="h-5 w-5" /></span>
           <div>
             <p className="text-sm font-extrabold">ออเดอร์ #{order.id.slice(0, 8)}</p>
-            {order.order_source === 'facebook_chat' && <p className="mt-1 text-xs font-bold text-blue-700">จากแชตแฟนเพจ</p>}
+            {order.order_source === 'facebook_chat' && <p className="mt-1 text-xs font-bold text-blue-700">ออเดอร์นอกระบบ</p>}
             <p className="mt-0.5 text-[11px] opacity-80">{isCompleted ? 'ปิดรายการเมื่อ' : isCancelled ? 'ยกเลิกเมื่อ' : 'บันทึกเมื่อ'} {formatDateTimeDMY(isCancelled ? order.cancelled_at || order.updated_at : order.updated_at)}</p>
           </div>
         </div>

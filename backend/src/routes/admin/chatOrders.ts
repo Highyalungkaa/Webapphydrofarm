@@ -60,7 +60,7 @@ router.post('/from-chat', async (req: AuthenticatedRequest, res: Response) => {
     });
     if (error) {
       const missing = ['42883','42P01','42703','PGRST202','PGRST204','PGRST205'].includes(error.code);
-      res.status(missing ? 503 : 400).json({ error: missing ? 'กรุณารัน migration 033 ใน Supabase ก่อนเพิ่มออเดอร์จากแชต' : error.message }); return;
+      res.status(missing ? 503 : 400).json({ error: missing ? 'กรุณารัน migration 033 ใน Supabase ก่อนเพิ่มออเดอร์นอกระบบ' : error.message }); return;
     }
     res.status(201).json(data);
   } catch { res.status(500).json({ error: 'บันทึกไม่สำเร็จ กรุณาลองอีกครั้งด้วยข้อมูลเดิมเพื่อป้องกันออเดอร์ซ้ำ' }); }

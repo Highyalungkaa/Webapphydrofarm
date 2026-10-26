@@ -271,7 +271,7 @@ export const AdminOrdersPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3 py-3 text-xs">
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold text-slate-400">ลูกค้า</p>
-                      <p className="truncate font-bold text-slate-800">{(order.customer_name || order.profiles?.full_name) || 'ลูกค้า'}{order.order_source === 'facebook_chat' && <span className="ml-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">จากแชตแฟนเพจ</span>}</p>
+                      <p className="truncate font-bold text-slate-800">{(order.customer_name || order.profiles?.full_name) || 'ลูกค้า'}{order.order_source === 'facebook_chat' && <span className="ml-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">ออเดอร์นอกระบบ</span>}</p>
                       <p className="text-slate-500">{order.contact_phone}</p>
                     </div>
                     <div className="min-w-0">
@@ -331,7 +331,7 @@ export const AdminOrdersPage: React.FC = () => {
 
                       <td className="py-3 px-4">
                         <div className="font-semibold text-slate-900">
-                          {(order.customer_name || order.profiles?.full_name) || 'ลูกค้า'}{order.order_source === 'facebook_chat' && <span className="ml-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">จากแชตแฟนเพจ</span>}
+                          {(order.customer_name || order.profiles?.full_name) || 'ลูกค้า'}{order.order_source === 'facebook_chat' && <span className="ml-2 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">ออเดอร์นอกระบบ</span>}
                         </div>
                         <span className="text-[11px] text-slate-500">{order.contact_phone}</span>
                         {(order.profiles?.no_show_count ?? 0) > 0 && (
@@ -433,7 +433,7 @@ export const AdminOrdersPage: React.FC = () => {
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 grid grid-cols-2 gap-3 text-xs">
               <div>
                 <span className="text-slate-400 block font-medium">ลูกค้า</span>
-                <p className="font-bold text-slate-900">{(selectedOrder.customer_name || selectedOrder.profiles?.full_name)}</p>{selectedOrder.order_source === 'facebook_chat' && <p className="mt-1 text-sm text-blue-700">จากแชตแฟนเพจ{selectedOrder.admin_request_payload?.order_origin && <span className="block break-words text-slate-700">ช่องทางที่ลูกค้าสั่ง: {selectedOrder.admin_request_payload.order_origin}</span>}{selectedOrder.source_reference && <span className="block break-words text-slate-600">ชื่อบัญชี Facebook: {selectedOrder.source_reference}</span>}</p>}
+                <p className="font-bold text-slate-900">{(selectedOrder.customer_name || selectedOrder.profiles?.full_name)}</p>{selectedOrder.order_source === 'facebook_chat' && <p className="mt-1 text-sm text-blue-700">ออเดอร์นอกระบบ{selectedOrder.admin_request_payload?.order_origin && <span className="block break-words text-slate-700">ช่องทางที่ลูกค้าสั่ง: {selectedOrder.admin_request_payload.order_origin}</span>}{selectedOrder.source_reference && <span className="block break-words text-slate-600">ชื่อบัญชีที่ติดต่อ: {selectedOrder.source_reference}</span>}</p>}
                 <p className="text-slate-500">{selectedOrder.profiles?.email}</p>
                 <p className="text-slate-700 mt-1">โทร: {selectedOrder.contact_phone}</p>
               </div>
