@@ -52,6 +52,11 @@ export const AdminRoundsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const createFormRef = React.useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (formError) createFormRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [formError]);
 
   useEffect(() => {
     loadData();
@@ -716,18 +721,19 @@ export const AdminRoundsPage: React.FC = () => {
 
       {/* Create Round Modal - Organised by Crop & Designated Plots */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl space-y-5 my-1 sm:my-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-xs sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="create-round-title" className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-7">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">สร้างรอบการปลูกใหม่</h2>
+                <h2 id="create-round-title" className="text-lg font-black text-slate-900">สร้างรอบการปลูกใหม่</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  เลือกได้เฉพาะชนิดผักที่กำหนดไว้ในแปลงปลูก และเลือกแปลงของผักชนิดนั้นเท่านั้น
+                  ตั้งชื่อรอบ เลือกผักและแปลงปลูก แล้วตรวจสอบข้อมูลก่อนสร้าง
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
+                aria-label="ปิดหน้าสร้างรอบการปลูก"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -735,12 +741,13 @@ export const AdminRoundsPage: React.FC = () => {
             </div>
 
             {formError && (
-              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-start gap-2 shadow-xs">
+              <div role="alert" className="mx-5 mt-3 flex items-start gap-2 rounded-2xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800 shadow-xs sm:mx-7">
                 <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
                 <span className="font-semibold leading-relaxed">{formError}</span>
               </div>
             )}
 
+            <form ref={createFormRef} onSubmit={handleCreateSubmit} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 text-xs sm:px-7 sm:text-sm">
             {isFarmFullyOccupied && (
               <div className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-400 text-rose-900 space-y-2 shadow-sm">
                 <div className="flex items-start gap-2.5">
@@ -763,35 +770,35 @@ export const AdminRoundsPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs sm:text-sm">
               {/* Round Name */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-700 text-xs font-black text-white">1</span><h3 className="font-black text-slate-900">ตั้งชื่อรอบปลูก</h3></div>
+                <label htmlFor="new-round-name" className="font-bold text-slate-700 block mb-1">
                   ชื่อรอบการปลูก <span className="text-rose-500">*</span>
                 </label>
                 <input
+                  id="new-round-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="เช่น รอบการปลูกที่ 1/2569 โซน A"
                   required
-                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
+                <p className="text-[11px] text-slate-500">ระบบตั้งชื่อเริ่มต้นให้แล้ว คุณแก้ชื่อให้จำง่ายได้</p>
               </div>
 
               {/* Vegetables to plant in this round */}
-              <div className="rounded-3xl border-2 border-emerald-400 bg-emerald-100 shadow-sm">
-                <div className="flex flex-col gap-3 rounded-t-3xl border-b-2 border-emerald-300 bg-emerald-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 shadow-sm">
+                <div className="flex flex-col gap-3 rounded-t-2xl border-b border-emerald-100 bg-emerald-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
-                      <Leaf className="h-4 w-4" />
-                    </div>
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-700 text-xs font-black text-white">2</span>
                     <div>
                       <label className="block text-sm font-black text-emerald-950">
-                        ผักที่จะปลูกในรอบนี้ <span className="text-rose-500">*</span>
+                        เลือกผักและแปลงปลูก <span className="text-rose-500">*</span>
                       </label>
-                      <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-500">
-                        เลือกผักและระบุจำนวนต้น ระบบคำนวณน้ำหนักจากจำนวนต้นต่อกิโลกรัม โดยปัดเศษลงเป็นกิโลกรัมจำนวนเต็ม
+                      <span className="mt-0.5 block text-[11px] leading-relaxed text-slate-600">
+                        เพิ่มผัก ระบุจำนวนต้นและระยะเวลาปลูก แล้วเลือกแปลงที่มีพื้นที่พอ
                       </span>
                     </div>
                   </div>
@@ -984,7 +991,7 @@ export const AdminRoundsPage: React.FC = () => {
                     <p className="mt-1 text-[11px] text-slate-500">เริ่มต้นโดยกด “เพิ่มชนิดผัก” แล้วเลือกผักที่ต้องการปลูก</p>
                   </div>
                 ) : (
-                  <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
+                  <div className="space-y-3">
                     {items.map((it, idx) => {
                       const selectedCrop = crops.find((c) => c.id === it.crop_id);
                       const requiredSlots = it.plant_count;
@@ -1015,8 +1022,6 @@ export const AdminRoundsPage: React.FC = () => {
                       const isNoPlot = selectedPlots.length === 0;
                       const isSelectedPlotsZeroFree = selectedPlots.length > 0 && totalSelectedAvailableSlots === 0;
                       const isOverCapacity = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && requiredSlots > totalSelectedAvailableSlots;
-                      const isUnderCapacity = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots > requiredSlots;
-                      const isOptimal = selectedPlots.length > 0 && totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots === requiredSlots;
 
                       const missingSlots = Math.max(0, requiredSlots - totalSelectedAvailableSlots);
                       const extraSlots = Math.max(0, totalSelectedAvailableSlots - requiredSlots);
@@ -1185,39 +1190,6 @@ export const AdminRoundsPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* 5. Undercapacity Info (Available Space > Target) */}
-                            {isUnderCapacity && (
-                              <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-300 text-sky-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs">
-                                <div className="flex items-start gap-2">
-                                  <Info className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="font-bold">ℹ️ แปลงที่เลือกมีพื้นที่ว่างเหลือ!</p>
-                                    <p className="text-[11px] text-sky-800 mt-0.5">
-                                      แปลงที่เลือกมีพื้นที่ว่าง <strong>{totalSelectedAvailableSlots.toLocaleString()} ต้น</strong> เป้าหมายรอบนี้ใช้ <strong>{requiredSlots.toLocaleString()} ต้น</strong> (เหลือว่างอีก <strong>{extraSlots.toLocaleString()} ต้น</strong>)
-                                    </p>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMatchCapacityPlants(idx)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold text-[11px] transition-colors whitespace-nowrap shadow-2xs"
-                                >
-                                  ⚡ ปรับเป้าหมายเป็น {matchCapacityPlants.toLocaleString()} ต้น (เต็มพื้นที่ว่าง)
-                                </button>
-                              </div>
-                            )}
-
-                            {/* 6. Optimal Capacity */}
-                            {isOptimal && (
-                              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                                  <span className="font-bold">
-                                    ✓ พื้นที่ว่างในแปลงที่เลือกพอดีกับเป้าหมายผลผลิต ({totalSelectedAvailableSlots.toLocaleString()} ต้น)
-                                  </span>
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           {/* PLOTS MANAGEMENT BOX */}
@@ -1490,31 +1462,39 @@ export const AdminRoundsPage: React.FC = () => {
                   )}
                 </div>
               )}
-              {/* Notes */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+              {/* Final review */}
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-full bg-emerald-700 text-xs font-black text-white">3</span><h3 className="font-black text-slate-900">ตรวจสอบก่อนสร้างรอบ</h3></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3"><span className="block text-[11px] text-slate-500">ชนิดผัก</span><strong className="text-sm text-slate-900">{items.length} ชนิด</strong></div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3"><span className="block text-[11px] text-slate-500">จำนวนปลูก</span><strong className="text-sm text-slate-900">{items.reduce((sum, item) => sum + item.plant_count, 0).toLocaleString()} ต้น</strong></div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3"><span className="block text-[11px] text-slate-500">แปลงที่เลือก</span><strong className="text-sm text-slate-900">{selectedPlotsForSummary.length} แปลง</strong></div>
+                </div>
+                <label htmlFor="new-round-notes" className="font-bold text-slate-700 block">หมายเหตุเพิ่มเติม (ถ้ามี)</label>
                 <input
+                  id="new-round-notes"
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="เช่น ปลูกในโรงเรือน A รางที่ 1-4"
-                  className="w-full p-2.5 rounded-xl border border-slate-200"
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3"
                 />
+                <p className="text-[11px] text-slate-500">หลังสร้างรอบ ระบบจะพาไปหน้าจัดการรอบปลูกเพื่อบันทึกขั้นตอนแรก</p>
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="sticky bottom-0 z-10 -mx-4 -mb-5 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_20px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-7 sm:flex-row sm:items-center sm:justify-end sm:px-7">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="rounded-xl px-4 py-2.5 font-semibold text-slate-600 hover:bg-slate-100"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
                   disabled={saving || isFarmFullyOccupied}
-                  className={`inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold transition-colors ${
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-5 py-2.5 font-bold transition-colors ${
                     isFarmFullyOccupied
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
@@ -1525,8 +1505,8 @@ export const AdminRoundsPage: React.FC = () => {
                     {saving
                       ? 'กำลังสร้างรอบ...'
                       : isFarmFullyOccupied
-                      ? '❌ แปลงในฟาร์มเต็มแล้ว (สร้างรอบใหม่ไม่ได้)'
-                      : 'สร้างรอบปลูก ➔ เข้าสู่หน้าจัดการ'}
+                      ? 'แปลงในฟาร์มเต็มแล้ว'
+                      : 'สร้างรอบปลูก'}
                   </span>
                 </button>
               </div>
