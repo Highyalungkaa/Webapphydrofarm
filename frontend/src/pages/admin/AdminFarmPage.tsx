@@ -78,7 +78,7 @@ export const AdminFarmPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">ตั้งค่าฟาร์มและกำลังการผลิต</h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            กำหนดความจุจำนวนช่องปลูกทั้งหมดในฟาร์มเพื่อใช้เป็นเกณฑ์จัดสรรแปลงปลูก
+            กำหนดจำนวนต้นสูงสุดที่ฟาร์มรองรับได้ เพื่อใช้จัดสรรจำนวนต้นให้แต่ละแปลงปลูก
           </p>
         </div>
         <Link
@@ -108,21 +108,21 @@ export const AdminFarmPage: React.FC = () => {
       {/* Capacity Overview Statistics Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-          <span className="text-xs font-semibold text-slate-500">ความจุช่องปลูกทั้งหมด</span>
-          <p className="text-2xl font-black text-slate-900">{total.toLocaleString()} <span className="text-xs font-normal text-slate-500">ช่อง</span></p>
-          <span className="text-[11px] text-slate-400 block">Total Farm Capacity</span>
+          <span className="text-xs font-semibold text-slate-500">จำนวนต้นสูงสุดที่ฟาร์มรองรับ</span>
+          <p className="text-2xl font-black text-slate-900">{total.toLocaleString()} <span className="text-xs font-normal text-slate-500">ต้น</span></p>
+          <span className="text-[11px] text-slate-400 block">ความจุรวมของฟาร์ม</span>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-          <span className="text-xs font-semibold text-emerald-700">จัดสรรในแปลงแล้ว</span>
-          <p className="text-2xl font-black text-emerald-600">{allocated.toLocaleString()} <span className="text-xs font-normal text-slate-500">ช่อง</span></p>
+          <span className="text-xs font-semibold text-emerald-700">จำนวนต้นที่จัดสรรให้แปลงแล้ว</span>
+          <p className="text-2xl font-black text-emerald-600">{allocated.toLocaleString()} <span className="text-xs font-normal text-slate-500">ต้น</span></p>
           <span className="text-[11px] text-emerald-600 font-medium">{percent}% ของความจุฟาร์ม</span>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
-          <span className="text-xs font-semibold text-amber-700">โควตา Slot คงเหลือ</span>
-          <p className="text-2xl font-black text-amber-600">{available.toLocaleString()} <span className="text-xs font-normal text-slate-500">ช่อง</span></p>
-          <span className="text-[11px] text-slate-400 block">สามารถสร้างแปลงเพิ่มได้</span>
+          <span className="text-xs font-semibold text-amber-700">จำนวนต้นที่ยังจัดสรรได้</span>
+          <p className="text-2xl font-black text-amber-600">{available.toLocaleString()} <span className="text-xs font-normal text-slate-500">ต้น</span></p>
+          <span className="text-[11px] text-slate-400 block">สำหรับเพิ่มความจุให้แปลงปลูก</span>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-1">
@@ -136,7 +136,7 @@ export const AdminFarmPage: React.FC = () => {
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-3">
         <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
           <span className="text-slate-800">
-            สัดส่วนการจัดสรรช่องปลูก (Slots Allocation): {allocated.toLocaleString()} / {total.toLocaleString()} ช่อง
+            สัดส่วนจำนวนต้นที่จัดสรรให้แปลงปลูก: {allocated.toLocaleString()} / {total.toLocaleString()} ต้น
           </span>
           <span className="text-emerald-700 font-extrabold">{percent}%</span>
         </div>
@@ -155,9 +155,9 @@ export const AdminFarmPage: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>0 ช่อง</span>
+          <span>0 ต้น</span>
           <span>50%</span>
-          <span>{total.toLocaleString()} ช่องปลูก (เต็มความจุ)</span>
+          <span>{total.toLocaleString()} ต้น (เต็มความจุ)</span>
         </div>
       </div>
 
@@ -166,14 +166,14 @@ export const AdminFarmPage: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-slate-900">แก้ไขข้อมูลและการตั้งค่าฟาร์ม</h2>
           <p className="text-xs text-slate-500">
-            จำนวน Slot ทั้งหมดจะถูกใช้เป็นเพดานสูงสุดในการตรวจสอบเมื่อสร้างแปลงปลูกใหม่
+            จำนวนต้นสูงสุดที่ฟาร์มรองรับได้จะใช้ตรวจสอบความจุเมื่อสร้างหรือแก้ไขแปลงปลูก
           </p>
         </div>
 
         <div className="space-y-4">
           <div>
             <label className="font-bold text-xs sm:text-sm text-slate-800 block mb-1">
-              จำนวน Slot ช่องปลูกผักทั้งหมดในฟาร์ม (Total Slots Capacity) *
+              จำนวนต้นสูงสุดที่ฟาร์มรองรับได้ *
             </label>
             <input
               type="number"
@@ -185,7 +185,7 @@ export const AdminFarmPage: React.FC = () => {
               className="w-full sm:w-64 px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
             <span className="text-[11px] text-slate-500 mt-1 block">
-              * ต้องไม่น้อยกว่าจำนวน slot ที่จัดสรรลงในแปลงปลูกปัจจุบัน ({allocated.toLocaleString()} ช่อง)
+              * ต้องไม่น้อยกว่าจำนวนต้นที่จัดสรรให้แปลงปลูกแล้ว ({allocated.toLocaleString()} ต้น)
             </span>
           </div>
         </div>
