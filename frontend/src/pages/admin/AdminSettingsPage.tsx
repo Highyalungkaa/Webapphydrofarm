@@ -121,10 +121,10 @@ export const AdminSettingsPage: React.FC = () => {
         {/* Cancellation Deadline */}
         <div className="space-y-1.5 border-b border-slate-100 pb-5">
           <label className="font-bold text-sm text-slate-900 block">
-            เส้นตายเวลายกเลิกออเดอร์ของลูกค้า (ชั่วโมงก่อนถึงกำหนดส่งมอบ)
+            ระยะเวลายกเลิกออเดอร์ของลูกค้า (ชั่วโมงก่อนถึงกำหนดส่งมอบ)
           </label>
           <p className="text-xs text-slate-500">
-            ลูกค้าสามารถกดยกเลิกออเดอร์ได้เองจนถึงเส้นตายนี้ หลังจากนั้นจะมีเพียงแอดมินเท่านั้นที่ยกเลิกได้
+            ลูกค้าสามารถกดยกเลิกออเดอร์ได้เองก่อนถึงกำหนดส่งมอบตามจำนวนชั่วโมงที่ตั้งไว้ หลังจากนั้นจะมีเพียงแอดมินเท่านั้นที่ยกเลิกได้
           </p>
           <div className="w-40 pt-1">
             <input
