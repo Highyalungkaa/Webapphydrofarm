@@ -86,7 +86,7 @@ export const AdminLayout: React.FC = () => {
   return (
     <div className="min-h-screen flex bg-slate-100">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-slate-900 text-slate-300 border-r border-slate-800">
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:self-start w-64 shrink-0 flex-col bg-slate-900 text-slate-300 border-r border-slate-800">
         <div className="p-5 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-bold">
@@ -100,7 +100,7 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         {/* Navigation list */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="min-h-0 flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
