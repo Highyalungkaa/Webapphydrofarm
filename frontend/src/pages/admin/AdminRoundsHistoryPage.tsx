@@ -1,6 +1,6 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { Order, PlantingRound } from '../../types/index.js';
@@ -67,7 +67,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-600">
           <span className="inline-flex items-center gap-1">{order.fulfillment_method === 'pickup' ? <Store className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}{order.fulfillment_method === 'pickup' ? 'รับที่ฟาร์ม' : 'จัดส่งปกติ'}</span>
-          <span>ชำระเงิน: {order.payment_status === 'paid' ? 'ชำระแล้ว' : 'รอชำระ'}</span>
+          {(order.status !== 'cancelled' || order.payment_status !== 'unpaid') && <span>ชำระเงิน: {order.payment_status === 'paid' ? 'ชำระแล้ว' : 'รอชำระ'}</span>}
           <span className="font-extrabold text-slate-800">฿{Number(order.total_amount).toLocaleString()}</span>
         </div>
         <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
@@ -109,13 +109,14 @@ const ClosedBookingCard: React.FC<{ round: PlantingRound }> = ({ round }) => {
 };
 
 export const AdminRoundsHistoryPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [closedBookingRounds, setClosedBookingRounds] = useState<PlantingRound[]>([]);
   const [archivedOrders, setArchivedOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('order_id') || '');
   const [selectedDate, setSelectedDate] = useState('');
-  const [activeSection, setActiveSection] = useState<'rounds' | 'orders' | 'bookings'>('rounds');
+  const [activeSection, setActiveSection] = useState<'rounds' | 'orders' | 'bookings'>(searchParams.get('section') === 'orders' || searchParams.has('order_id') ? 'orders' : 'rounds');
 
   useEffect(() => {
     loadCompletedRounds();

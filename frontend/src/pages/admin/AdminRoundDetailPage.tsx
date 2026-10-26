@@ -814,7 +814,10 @@ export const AdminRoundDetailPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-3 text-right">
                       <Link
-                        to={`/admin/orders/${ord.id}`}
+                        to={['completed', 'cancelled', 'no_show'].includes(ord.status)
+                          ? `/admin/rounds/history?section=orders&order_id=${encodeURIComponent(ord.id)}`
+                          : `/admin/orders?round_id=${encodeURIComponent(round.id)}&order_id=${encodeURIComponent(ord.id)}`}
+                        aria-label={`ดูออเดอร์ ${ord.id.slice(0, 8)}`}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-slate-100 inline-block"
                       >
                         <Eye className="w-4 h-4" />

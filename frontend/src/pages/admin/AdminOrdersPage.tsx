@@ -55,6 +55,16 @@ export const AdminOrdersPage: React.FC = () => {
     loadOrders();
   }, [selectedRound, selectedStatus, selectedFulfillment, selectedPayment]);
 
+  useEffect(() => {
+    const orderId = searchParams.get('order_id');
+    const matchingOrder = orders.find((order) => order.id === orderId);
+    if (!matchingOrder) return;
+    handleOpenDetailModal(matchingOrder);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('order_id');
+    setSearchParams(nextParams, { replace: true });
+  }, [orders, searchParams, setSearchParams]);
+
   const loadOrders = async () => {
     try {
       setLoading(true);
