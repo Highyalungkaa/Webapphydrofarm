@@ -179,6 +179,7 @@ export interface Order {
   customer_name?: string | null;
   order_source?: 'website' | 'facebook_chat';
   source_reference?: string | null;
+  admin_request_payload?: { order_origin?: string } | null;
   created_by?: string | null;
   fulfillment_method: FulfillmentMethod;
   delivery_address?: string | null;

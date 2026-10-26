@@ -433,7 +433,7 @@ export const AdminOrdersPage: React.FC = () => {
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 grid grid-cols-2 gap-3 text-xs">
               <div>
                 <span className="text-slate-400 block font-medium">ลูกค้า</span>
-                <p className="font-bold text-slate-900">{(selectedOrder.customer_name || selectedOrder.profiles?.full_name)}</p>{selectedOrder.order_source === 'facebook_chat' && <p className="mt-1 text-sm text-blue-700">จากแชตแฟนเพจ{selectedOrder.source_reference && <span className="block break-words text-slate-600">{selectedOrder.source_reference}</span>}</p>}
+                <p className="font-bold text-slate-900">{(selectedOrder.customer_name || selectedOrder.profiles?.full_name)}</p>{selectedOrder.order_source === 'facebook_chat' && <p className="mt-1 text-sm text-blue-700">จากแชตแฟนเพจ{selectedOrder.admin_request_payload?.order_origin && <span className="block break-words text-slate-700">ช่องทางที่ลูกค้าสั่ง: {selectedOrder.admin_request_payload.order_origin}</span>}{selectedOrder.source_reference && <span className="block break-words text-slate-600">ชื่อบัญชี Facebook: {selectedOrder.source_reference}</span>}</p>}
                 <p className="text-slate-500">{selectedOrder.profiles?.email}</p>
                 <p className="text-slate-700 mt-1">โทร: {selectedOrder.contact_phone}</p>
               </div>

@@ -5,11 +5,36 @@ import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewar
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
+
+router.get('/chat-origins', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('orders')
+      .select('admin_request_payload')
+      .eq('order_source', 'facebook_chat')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (error) { res.status(500).json({ error: 'โหลดช่องทางที่เคยบันทึกไม่สำเร็จ' }); return; }
+    const seen = new Set<string>();
+    const origins: string[] = [];
+    for (const order of data || []) {
+      const origin = order.admin_request_payload?.order_origin;
+      if (typeof origin !== 'string') continue;
+      const value = origin.trim();
+      const key = value.toLocaleLowerCase('th-TH');
+      if (!value || seen.has(key)) continue;
+      seen.add(key);
+      origins.push(value);
+    }
+    res.json(origins);
+  } catch { res.status(500).json({ error: 'โหลดช่องทางที่เคยบันทึกไม่สำเร็จ' }); }
+});
+
 const schema = z.object({
   request_id: z.string().uuid(), round_id: z.string().uuid(),
   customer_id: z.string().uuid().nullable().default(null),
   customer_name: z.string().trim().min(1, 'กรุณากรอกชื่อลูกค้า').max(200),
   contact_phone: z.string().trim().min(9, 'กรุณากรอกเบอร์โทรศัพท์').max(30),
+  order_origin: z.string().trim().max(100).optional(),
   fulfillment_method: z.enum(['pickup', 'delivery']),
   delivery_address: z.string().trim().max(2000).default(''),
   source_reference: z.string().trim().max(1000).default(''),
