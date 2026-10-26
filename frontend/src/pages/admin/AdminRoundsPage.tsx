@@ -1039,10 +1039,11 @@ export const AdminRoundsPage: React.FC = () => {
                           <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
                             {/* Crop select */}
                             <div className="min-w-0 flex-1">
-                              <label className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                              <label htmlFor={`crop-select-${idx}`} className="mb-1.5 block text-sm font-extrabold text-emerald-950">
                                 ชนิดผักที่ ({idx + 1})
                               </label>
                               <select
+                                id={`crop-select-${idx}`}
                                 value={it.crop_id}
                                 onChange={(e) => handleItemCropChange(idx, e.target.value)}
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 text-slate-900"
