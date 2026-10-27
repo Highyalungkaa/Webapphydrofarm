@@ -253,11 +253,13 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
       res.json({message:'บันทึกน้ำหนักจัดจริงและออเดอร์แล้ว',order:data}); return;
     }
 
-    const { data: currentOrder } = await supabaseAdmin
+    const { data: currentOrder,error:currentError } = await supabaseAdmin
       .from('orders')
       .select('*')
       .eq('id', id)
       .single();
+
+    if(currentError){res.status(500).json({error:'ไม่สามารถอ่านออเดอร์ล่าสุดได้ กรุณาลองใหม่'});return;}
 
     if (!currentOrder) {
       res.status(404).json({ error: 'ไม่พบคำสั่งจองที่ระบุ' });
@@ -301,116 +303,22 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<v
       }
     }
 
-    const updates: any = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (parsed.data.status) {
-      updates.status = parsed.data.status;
-      if (parsed.data.status === 'confirmed' && currentOrder.status === 'pending_confirmation') {
-        updates.confirmed_at = new Date().toISOString();
-      }
-      if (parsed.data.status === 'cancelled') {
-        updates.cancelled_at = new Date().toISOString();
-        if (parsed.data.cancel_reason) {
-          updates.cancel_reason = parsed.data.cancel_reason;
-        }
-      }
-      // Rule 4.5: If marked no_show, increment no_show_count on customer profile
-      if (parsed.data.status === 'no_show' && currentOrder.status !== 'no_show' && currentOrder.customer_id) {
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('no_show_count')
-          .eq('id', currentOrder.customer_id)
-          .single();
-
-        const currentNoShow = profile?.no_show_count || 0;
-        await supabaseAdmin
-          .from('profiles')
-          .update({
-            no_show_count: currentNoShow + 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', currentOrder.customer_id);
-      }
-    }
-
-    if (parsed.data.payment_status) {
-      updates.payment_status = parsed.data.payment_status;
-      if (parsed.data.payment_status === 'paid') {
-        updates.paid_at = new Date().toISOString();
-        if (parsed.data.payment_method) {
-          updates.payment_method = parsed.data.payment_method;
-        }
-      } else {
-        updates.paid_at = null;
-        updates.payment_method = null;
-      }
-    }
-
-    if (parsed.data.note !== undefined) {
-      updates.note = parsed.data.note;
-    }
-
-    const { data: updated, error } = await supabaseAdmin
-      .from('orders')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      res.status(400).json({ error: error.message });
-      return;
-    }
-
-    if (parsed.data.substitute_items) {
-      for (const substitute of parsed.data.substitute_items) {
-        const item = substituteItemsById!.get(substitute.id)!;
-        const hasSubstitute = substitute.qty_kg > 0;
-        const { error: substituteError } = await supabaseAdmin
-          .from('order_items')
-          .update({
-            fulfilled_qty_kg: hasSubstitute ? substitute.qty_kg : null,
-            fulfillment_source: hasSubstitute ? 'substitute' : null,
-            substitute_cost_per_kg: hasSubstitute ? Number((substitute.total_cost / substitute.qty_kg).toFixed(2)) : null,
-            substitute_total_cost: hasSubstitute ? Number(substitute.total_cost.toFixed(2)) : null,
-          })
-          .eq('id', item.id)
-          .eq('order_id', id);
-
-        if (substituteError) {
-          res.status(400).json({ error: substituteError.message });
-          return;
-        }
-      }
-    }
-
-    if (parsed.data.item_discounts) {
-      const { error: discountError } = await supabaseAdmin.rpc('apply_order_item_discounts', {
-        p_order_id: id,
-        p_discounts: parsed.data.item_discounts,
-      });
-      if (discountError) {
-        res.status(400).json({ error: discountError.message });
-        return;
-      }
-    }
-
-    await recordAuditLog({
-      actorId: req.user!.id,
-      actorEmail: req.user!.email,
-      entityType: 'orders',
-      entityId: id,
-      action: parsed.data.payment_status ? 'payment_update' : 'status_change',
-      oldData: currentOrder,
-      newData: updated,
+    const {data:storedItems,error:itemsError}=await supabaseAdmin.from('order_items').select('*').eq('order_id',id);
+    if(itemsError||!storedItems){res.status(500).json({error:'ไม่สามารถอ่านรายการผักได้ กรุณาลองใหม่'});return;}
+    const allocation_items=storedItems.map((item:any)=>{
+      const substitute=parsed.data.substitute_items?.find(i=>i.id===item.id);
+      const discount=parsed.data.item_discounts?.find(i=>i.id===item.id);
+      return {id:item.id,own_qty_kg:item.own_qty_kg??null,
+        substitute_qty_kg:substitute?.qty_kg??(item.fulfillment_source==='substitute'?Number(item.fulfilled_qty_kg||0):0),
+        substitute_total_cost:substitute?.total_cost??(item.fulfillment_source==='substitute'?Number(item.substitute_total_cost??Number(item.fulfilled_qty_kg||0)*Number(item.substitute_cost_per_kg||0)):0),
+        discount_amount:discount?.discount_amount??Number(item.discount_amount||0)};
     });
-
-    res.json({
-      message: 'อัปเดตคำสั่งจองเรียบร้อยแล้ว',
-      order: updated,
+    const {data,error}=await supabaseAdmin.rpc('save_admin_order_allocation',{
+      p_actor_id:req.user!.id,p_order_id:id,
+      p_payload:{...parsed.data,expected_updated_at:parsed.data.expected_updated_at||currentOrder.updated_at,allocation_items},
     });
+    if(error){res.status(400).json({error:error.message});return;}
+    res.json({message:'อัปเดตคำสั่งจองเรียบร้อยแล้ว',order:data});
   } catch (err: any) {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการอัปเดตคำสั่งจอง' });
   }

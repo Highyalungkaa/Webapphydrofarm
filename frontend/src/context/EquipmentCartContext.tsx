@@ -1,20 +1,21 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { EquipmentProduct } from '../types/index.js';
 import { useAuth } from './AuthContext.js';
+import {readCartValue,persistCartValue,restoreEquipmentCart} from '../lib/cartStorage.js';
 
 interface EquipmentCartLine { product: EquipmentProduct; quantity: number }
 interface EquipmentCartValue {
   items: EquipmentCartLine[]; itemCount: number; totalAmount: number;
   add: (product: EquipmentProduct) => void; setQuantity: (productId: string, quantity: number) => void;
   remove: (productId: string) => void; clear: () => void;
+  syncProducts:(products:EquipmentProduct[])=>void;
 }
 const CartContext = createContext<EquipmentCartValue | undefined>(undefined);
 const cartKey = (userId: string) => `hydrofarm_equipment_cart:${userId}`;
 
 const readCart = (userId: string): EquipmentCartLine[] => {
   try {
-    const saved = JSON.parse(localStorage.getItem(cartKey(userId)) || '[]');
-    return Array.isArray(saved) ? saved : [];
+    return restoreEquipmentCart(readCartValue('localStorage',cartKey(userId)));
   } catch {
     return [];
   }
@@ -31,7 +32,7 @@ export const EquipmentCartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     if (cart.userId && cart.userId === user?.id) {
-      localStorage.setItem(cartKey(cart.userId), JSON.stringify(cart.items));
+      persistCartValue('localStorage',cartKey(cart.userId), JSON.stringify(cart.items));
     }
   }, [cart, user?.id]);
 
@@ -56,6 +57,7 @@ export const EquipmentCartProvider: React.FC<{ children: React.ReactNode }> = ({
     setQuantity: (productId, quantity) => updateItems((current) => current.map((row) => row.product.id === productId ? { ...row, quantity: Math.max(1, Math.min(quantity, row.product.stock_quantity)) } : row)),
     remove: (productId) => updateItems((current) => current.filter((row) => row.product.id !== productId)),
     clear: () => updateItems(() => []),
+    syncProducts:(products)=>updateItems(current=>current.map(row=>({ ...row,product:products.find(p=>p.id===row.product.id)||{...row.product,is_active:false,stock_quantity:0}}))),
   }), [items, user?.id, isLoading]);
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

@@ -39,9 +39,16 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
   try {
     const settings = req.body; // e.g. { delivery_min_total_kg: 0, large_order_threshold_kg: 10, ... }
 
-    if (!settings || typeof settings !== 'object') {
+    if (!settings || typeof settings !== 'object'||Array.isArray(settings)) {
       res.status(400).json({ error: 'ข้อมูลการตั้งค่าไม่ถูกต้อง' });
       return;
+    }
+    for(const key of ['delivery_min_total_kg','cancellation_deadline_hours_before_harvest','no_show_limit','large_order_threshold_kg']){
+      const value=settings[key];if(value===undefined)continue;
+      if(typeof value!=='number'||!Number.isFinite(value)||value<0||(key==='large_order_threshold_kg'&&value===0)
+        ||(['no_show_limit','cancellation_deadline_hours_before_harvest'].includes(key)&&!Number.isInteger(value))){
+        res.status(400).json({error:'ค่าจำนวนและระยะเวลาในการตั้งค่าต้องถูกต้อง ไม่ติดลบ และจำนวนครั้งหรือชั่วโมงต้องเป็นจำนวนเต็ม'});return;
+      }
     }
 
     if (settings.farm_contact_phone !== undefined) {

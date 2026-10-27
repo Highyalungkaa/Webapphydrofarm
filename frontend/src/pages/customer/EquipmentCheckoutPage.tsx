@@ -1,4 +1,4 @@
-import type { EquipmentTransferAccount } from '../../types/index.js';
+import type { EquipmentTransferAccount,EquipmentProduct } from '../../types/index.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, LockKeyhole, Minus, Plus, ShoppingCart, Trash2, Truck, UploadCloud } from 'lucide-react';
@@ -11,7 +11,7 @@ const money = (amount: number) => `฿${Number(amount).toLocaleString('th-TH', {
 
 export const EquipmentCheckoutPage: React.FC = () => {
   const { user, profile } = useAuth();
-  const { items, totalAmount, setQuantity, remove, clear } = useEquipmentCart();
+  const { items, totalAmount, setQuantity, remove, clear,syncProducts } = useEquipmentCart();
   const navigate = useNavigate();
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
@@ -22,9 +22,12 @@ export const EquipmentCheckoutPage: React.FC = () => {
   const [slipPreview, setSlipPreview] = useState('');
   const [slipPath, setSlipPath] = useState('');
   const [shippingFee, setShippingFee] = useState<number | null>(null);
+  const [productsReady,setProductsReady]=useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const didPrefill = useRef(false);
+  const orderRequest=useRef({key:'',id:crypto.randomUUID()});
+  useEffect(()=>{let active=true;api.get<EquipmentProduct[]>('/equipment/products').then(products=>{if(active){syncProducts(products);setProductsReady(true);}}).catch(()=>{if(active)setError('ตรวจสอบราคาและสต๊อกล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่ก่อนสั่งซื้อ');});return()=>{active=false;};},[]);
 
   useEffect(() => {
     if (profile && !didPrefill.current) {
@@ -54,6 +57,8 @@ export const EquipmentCheckoutPage: React.FC = () => {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setError('');
     if (!user) { setError('กรุณาเข้าสู่ระบบก่อนยืนยันคำสั่งซื้อ'); return; }
+    if(!productsReady||shippingFee==null){setError('กรุณารอการตรวจสอบราคา สต๊อก และค่าส่งให้ครบก่อนสั่งซื้อ');return;}
+    if(items.some(i=>!i.product.is_active||i.quantity>i.product.stock_quantity)){setError('มีสินค้าปิดขายหรือจำนวนเกินสต๊อกล่าสุด กรุณาลดจำนวนหรือนำสินค้าออก');return;}
     if (!address.trim() || phone.trim().length < 9) { setError('กรุณากรอกที่อยู่จัดส่งและเบอร์โทรศัพท์อย่างน้อย 9 หลัก'); return; }
     if (paymentMethod === 'transfer' && (!transferAccount?.transfer_enabled || !slipFile)) { setError('กรุณาแนบสลิปการโอนเงินก่อนยืนยันคำสั่งซื้อ'); return; }
     try {
@@ -69,10 +74,14 @@ export const EquipmentCheckoutPage: React.FC = () => {
         const uploaded = await api.post<{ path: string }>('/equipment/orders/payment-slip', { mime_type: slipFile.type, data });
         receiptPath = uploaded.path; setSlipPath(receiptPath);
       }
-      const result = await api.post<{ id: string }>('/equipment/orders', {
+      const payload={
+        expected_total_amount:Math.round((totalAmount+Number(shippingFee))*100)/100,
         items: items.map(({ product, quantity }) => ({ product_id: product.id, quantity })),
         shipping_address: address.trim(), contact_phone: phone.trim(), payment_method: paymentMethod, payment_slip_path: paymentMethod === 'transfer' ? receiptPath : null, note: note.trim() || null,
-      });
+      };
+      const key=JSON.stringify(payload);
+      if(orderRequest.current.key!==key)orderRequest.current={key,id:crypto.randomUUID()};
+      const result = await api.post<{ id: string }>('/equipment/orders',{...payload,request_id:orderRequest.current.id});
       clear();
       navigate(`/orders?type=equipment&order=${result.id}`, { replace: true });
     } catch (err: any) { setError(err.message || 'ไม่สามารถยืนยันคำสั่งซื้อได้'); }
@@ -120,7 +129,7 @@ export const EquipmentCheckoutPage: React.FC = () => {
         <div className="space-y-2 border-t border-slate-100 pt-4 text-sm"><div className="flex justify-between text-slate-600"><span>{items.reduce((sum, item) => sum + item.quantity, 0)} ชิ้น</span><span>{money(totalAmount)}</span></div><div className="flex justify-between text-slate-600"><span>ค่าจัดส่ง</span><span>{shippingFee === null ? 'กำลังโหลด…' : money(shippingFee)}</span></div><div className="mt-3 flex justify-between border-t border-slate-100 pt-3 text-lg font-extrabold text-slate-950"><span>ยอดรวมสุทธิ</span><span>{shippingFee === null ? '—' : money(totalAmount + shippingFee)}</span></div><p className="text-xs text-slate-500">ค่าส่งสำหรับร้านอุปกรณ์ปลูก</p></div>
         {error && <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error}</p>}
         {!user && <p className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800"><LockKeyhole className="h-4 w-4 shrink-0" />เข้าสู่ระบบก่อนยืนยันคำสั่งซื้อ</p>}
-        <button disabled={submitting || !user || shippingFee === null} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3.5 font-extrabold text-white shadow-sm hover:bg-emerald-800 disabled:bg-slate-300"><CheckCircle2 className="h-5 w-5" />{submitting ? 'กำลังบันทึกคำสั่งซื้อ...' : 'ยืนยันคำสั่งซื้อ'}</button>
+        <button disabled={submitting || !user || shippingFee === null||!productsReady} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3.5 font-extrabold text-white shadow-sm hover:bg-emerald-800 disabled:bg-slate-300"><CheckCircle2 className="h-5 w-5" />{submitting ? 'กำลังบันทึกคำสั่งซื้อ...' : !productsReady?'กำลังตรวจสอบราคาล่าสุด...':'ยืนยันคำสั่งซื้อ'}</button>
         {!user && <Link to="/login" state={{ returnTo: '/equipment/checkout' }} className="block text-center text-sm font-bold text-emerald-700">ไปหน้าเข้าสู่ระบบ</Link>}
       </section></aside>
     </form>

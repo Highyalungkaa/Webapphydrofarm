@@ -17,10 +17,11 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const db = getSupabaseClient(req);
 
     // 1. Fetch settings from app_settings
-    const { data: settingsData } = await db
+    const { data: settingsData,error:settingsError } = await db
       .from('app_settings')
       .select('key, value')
       .in('key', ['farm_total_slots']);
+    if(settingsError)throw settingsError;
 
     const settingsMap: Record<string, any> = {};
     for (const item of settingsData || []) {
@@ -32,10 +33,10 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     // 2. Fetch all plots to calculate allocated slots and metrics
     const { data: plots, error: plotsError } = await db
       .from('plots')
-      .select('id, slot_capacity, is_active, status, zone_name');
+      .select('id, slot_capacity, is_active, zone_name');
 
     if (plotsError) {
-      console.warn('Plots fetch warning:', plotsError.message);
+      throw plotsError;
     }
 
     const plotList = plots || [];
@@ -46,7 +47,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     let activePlots = 0;
     let inactivePlots = 0;
     for (const p of plotList) {
-      const active = p.is_active !== undefined ? !!p.is_active : p.status !== 'empty';
+      const active = !!p.is_active;
       if (active) activePlots++;
       else inactivePlots++;
     }
@@ -82,7 +83,8 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const db = getSupabaseClient(req);
 
     // Check if new total slots is less than already allocated slots
-    const { data: plots } = await db.from('plots').select('slot_capacity');
+    const { data: plots,error:plotsError } = await db.from('plots').select('slot_capacity');
+    if(plotsError)throw plotsError;
     const currentAllocated = (plots || []).reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
 
     if (farm_total_slots < currentAllocated) {

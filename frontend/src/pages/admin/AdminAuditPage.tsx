@@ -57,6 +57,8 @@ export const AdminAuditPage: React.FC = () => {
           >
             <option value="">-- ข้อมูลทุกประเภท --</option>
             <option value="planting_rounds">รอบการปลูก</option>
+            <option value="plots">แปลงปลูก</option>
+            <option value="equipment_orders">คำสั่งซื้ออุปกรณ์</option>
             <option value="orders">คำสั่งจอง</option>
             <option value="crops">แคตตาล็อกผัก</option>
             <option value="app_settings">การตั้งค่า</option>

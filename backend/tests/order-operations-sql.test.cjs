@@ -44,6 +44,7 @@ test('confirmation expiry and atomic order amendments',async t=>{
   await db.exec(migration('040_pooled_crop_booking.sql'));
 
   for(const name of ['041_order_confirmation_deadlines.sql','042_amend_order_items.sql','041_order_confirmation_deadlines.sql','042_amend_order_items.sql'])await db.exec(migration(name));
+  await db.exec(migration('043_audit_account_and_order_guards.sql'));
   async function setup(){const crop=randomUUID(),a=randomUUID(),b=randomUUID(),ia=randomUUID(),ib=randomUUID();
     await db.query("INSERT INTO crops(id,name,slots_per_kg,growing_days) VALUES($1,'Oak',5,30)",[crop]);
     for(const [id,day] of [[a,1],[b,8]])await db.query("INSERT INTO planting_rounds(id,status,current_step,expected_harvest_date,booking_opens_at) VALUES($1,'booking_open',5,$2::DATE+$3::INTEGER,now()-interval '1 day')",[id,today,day]);
@@ -58,6 +59,13 @@ test('confirmation expiry and atomic order amendments',async t=>{
     return call(preview);
   }
   const qty=async id=>Number((await db.query('SELECT available_qty_kg FROM booking_sources WHERE id=$1',[id])).rows[0].available_qty_kg);
+  await t.test('allocation status changes count a no-show once after migration, without a second RPC increment',async()=>{
+    const before=(await db.query('SELECT no_show_count FROM profiles WHERE id=$1',[customer])).rows[0].no_show_count;
+    const x=await setup(),id=await book(x);const item=(await db.query('SELECT id FROM order_items WHERE order_id=$1',[id])).rows[0];
+    await db.query('SELECT save_admin_order_allocation($1,$2,$3)',[actor,id,JSON.stringify({status:'no_show',allocation_items:[{id:item.id,own_qty_kg:null,substitute_qty_kg:0,substitute_total_cost:0,discount_amount:0}]})]);
+    assert.equal((await db.query('SELECT no_show_count FROM profiles WHERE id=$1',[customer])).rows[0].no_show_count,before+1);
+    await db.query('UPDATE profiles SET no_show_count=$1 WHERE id=$2',[before,customer]);
+  });
   await t.test('preview does not mutate; saving reduces reservations and keeps original source price',async()=>{
     const x=await setup(),o=await book(x,15);await db.query('UPDATE round_items SET price_per_kg=99 WHERE id=$1',[x.ia]);
     const preview=await amend(o,[{crop_id:x.crop,qty_kg:6}],true);assert.equal(Number(preview.total_amount),300);assert.equal(await qty(x.ia),0);

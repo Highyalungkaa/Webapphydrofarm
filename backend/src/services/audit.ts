@@ -3,7 +3,7 @@ import { supabaseAdmin } from '../config/supabase.js';
 export interface AuditLogPayload {
   actorId?: string;
   actorEmail?: string;
-  entityType: 'planting_rounds' | 'round_items' | 'orders' | 'order_items' | 'crops' | 'districts' | 'app_settings' | 'admin_users';
+  entityType: 'planting_rounds' | 'round_items' | 'orders' | 'order_items' | 'crops' | 'districts' | 'app_settings' | 'admin_users' | 'plots';
   entityId: string;
   action: 'create' | 'update' | 'delete' | 'status_change' | 'reschedule' | 'payment_update' | 'cancel';
   oldData?: any;

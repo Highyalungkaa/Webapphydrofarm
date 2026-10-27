@@ -6,7 +6,7 @@ import { requireAuth, AuthenticatedRequest } from '../middlewares/auth.js';
 const router = Router();
 
 const updateProfileSchema = z.object({
-  full_name: z.string().min(1, 'กรุณาระบุชื่อ-นามสกุล').max(150, 'ชื่อยาวเกินไป'),
+  full_name: z.string().trim().min(1, 'กรุณาระบุชื่อ-นามสกุล').max(150, 'ชื่อยาวเกินไป'),
   phone: z.string().min(9, 'เบอร์โทรศัพท์ต้องมีอย่างน้อย 9 หลัก').max(20, 'เบอร์โทรศัพท์ยาวเกินไป'),
   address_detail: z.string().optional().nullable(),
   district_id: z.string().uuid('รหัสอำเภอ/ตำบลไม่ถูกต้อง').optional().nullable(),

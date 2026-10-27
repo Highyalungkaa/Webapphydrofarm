@@ -8,7 +8,7 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 const districtSchema = z.object({
-  name: z.string().min(1, 'กรุณาระบุชื่ออำเภอ/ตำบล').max(100),
+  name: z.string().trim().min(1, 'กรุณาระบุชื่ออำเภอ/ตำบล').max(100),
   is_active: z.boolean().default(true),
 });
 

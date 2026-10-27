@@ -29,7 +29,7 @@ const createOrderSchema = z.object({
   items: z.array(
     z.object({
       round_item_id: z.string().uuid('รหัสรายการผักไม่ถูกต้อง'),
-      qty_kg: z.number().min(0.5, 'จำนวนผักต้องไม่ต่ำกว่า 0.5 กก.'),
+      qty_kg: z.number().min(0.5, 'จำนวนผักต้องไม่ต่ำกว่า 0.5 กก.').max(99999999).refine(n=>Math.abs(n*100-Math.round(n*100))<0.000001,'จำนวนผักมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง'),
     })
   ).min(1, 'กรุณาเลือกผักอย่างน้อย 1 ชนิด').superRefine((items, ctx) => {
     const seen = new Set<string>();

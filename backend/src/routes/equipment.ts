@@ -58,7 +58,9 @@ router.post('/orders/payment-slip', requireAuth, async (req: AuthenticatedReques
 router.post('/orders', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const parsed = z.object({
-      items: z.array(z.object({ product_id: z.string().uuid(), quantity: z.number().int().min(1) })).min(1),
+      request_id:z.string().uuid().optional(),
+      expected_total_amount:z.number().finite().min(0).max(9999999999.99).optional(),
+      items: z.array(z.object({ product_id: z.string().uuid(), quantity: z.number().int().min(1) })).min(1).max(100).refine(items=>new Set(items.map(i=>i.product_id)).size===items.length,'สินค้าในออเดอร์ต้องไม่ซ้ำกัน'),
       shipping_address: z.string().trim().min(5), contact_phone: z.string().trim().min(9),
       payment_method: z.enum(['cash_on_delivery', 'transfer']), note: z.string().optional().nullable(),
       payment_slip_path: z.string().max(200).optional().nullable(),
@@ -73,6 +75,8 @@ router.post('/orders', requireAuth, async (req: AuthenticatedRequest, res: Respo
       p_shipping_address: parsed.data.shipping_address, p_contact_phone: parsed.data.contact_phone,
       p_payment_method: parsed.data.payment_method, p_note: parsed.data.note || null,
       p_payment_slip_path: slipPath || null,
+      p_request_id:parsed.data.request_id||null,
+      p_expected_total:parsed.data.expected_total_amount??null,
     });
     if (error) { res.status(400).json({ error: error.message }); return; }
     res.status(201).json({ id: data });
@@ -228,14 +232,16 @@ router.get('/admin/orders', async (req, res) => {
 
 router.patch('/admin/orders/:id', async (req: AuthenticatedRequest, res: Response) => {
   const parsed = z.object({
+    expected_updated_at:z.string().datetime({offset:true}).optional(),
     status: z.enum(['pending_confirmation','confirmed','processing','shipped','completed','cancelled']).optional(),
     payment_status: z.enum(['unpaid','paid']).optional(), tracking_number: z.string().trim().max(100).optional().nullable(),
     delivery_update_image_url: z.string().trim().url().optional().nullable(),
     delivery_update_message: z.string().trim().max(1000).optional().nullable(),
-  }).refine((v) => Object.keys(v).length > 0).safeParse(req.body);
+  }).refine((v) => Object.keys(v).some(key=>key!=='expected_updated_at')).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'ข้อมูลอัปเดตออเดอร์ไม่ถูกต้อง' }); return; }
   const { data: existing, error: lookupError } = await supabaseAdmin.from('equipment_orders').select('*').eq('id', req.params.id).maybeSingle();
-  if (lookupError || !existing) { res.status(404).json({ error: 'ไม่พบคำสั่งซื้อ' }); return; }
+  if(lookupError){res.status(500).json({error:'ไม่สามารถอ่านคำสั่งซื้อล่าสุดได้ กรุณาลองใหม่'});return;}
+  if (!existing) { res.status(404).json({ error: 'ไม่พบคำสั่งซื้อ' }); return; }
   if ((parsed.data.status ?? existing.status) === 'completed' && (parsed.data.payment_status ?? existing.payment_status) !== 'paid'
     && ((parsed.data.status !== undefined && parsed.data.status !== existing.status)
       || (parsed.data.payment_status !== undefined && parsed.data.payment_status !== existing.payment_status))) {
@@ -254,18 +260,10 @@ router.patch('/admin/orders/:id', async (req: AuthenticatedRequest, res: Respons
     if (!(parsed.data.delivery_update_image_url || existing.delivery_update_image_url)) { res.status(400).json({ error: 'กรุณาแนบรูปหลักฐานการส่งของก่อนเปลี่ยนเป็นจัดส่งแล้ว' }); return; }
     if (!(parsed.data.delivery_update_message || existing.delivery_update_message || '').trim()) { res.status(400).json({ error: 'กรุณาเขียนข้อความแจ้งลูกค้าก่อนเปลี่ยนเป็นจัดส่งแล้ว' }); return; }
   }
-  const updates: Record<string, any> = { ...parsed.data, updated_at: new Date().toISOString() };
-  if (parsed.data.payment_status === 'paid') updates.paid_at = existing.paid_at || new Date().toISOString();
-  if (parsed.data.payment_status === 'unpaid') updates.paid_at = null;
-  if (parsed.data.status === 'shipped') updates.shipped_at = existing.shipped_at || new Date().toISOString();
-  if (parsed.data.status === 'completed') updates.completed_at = existing.completed_at || new Date().toISOString();
-  if (parsed.data.status === 'cancelled' && existing.status !== 'cancelled') {
-    const { error: cancelError } = await supabaseAdmin.rpc('cancel_equipment_order', { p_order_id: req.params.id, p_actor_id: req.user!.id });
-    if (cancelError) { res.status(400).json({ error: cancelError.message }); return; }
-    delete updates.status;
-    delete updates.cancelled_at;
-  }
-  const { data, error } = await supabaseAdmin.from('equipment_orders').update(updates).eq('id', req.params.id).select('*, equipment_order_items(*)').single();
+  const {expected_updated_at,...payload}=parsed.data;
+  const { data, error } = await supabaseAdmin.rpc('save_equipment_order',{
+    p_actor_id:req.user!.id,p_order_id:req.params.id,p_expected_updated_at:expected_updated_at||existing.updated_at,p_payload:payload,
+  });
   if (error) { res.status(400).json({ error: error.message }); return; }
   res.json(data);
 });

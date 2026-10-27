@@ -87,7 +87,7 @@ router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<
 });
 
 const cropSchema = z.object({
-  name: z.string().min(1, 'กรุณาระบุชื่อชนิดผัก').max(100),
+  name: z.string().trim().min(1, 'กรุณาระบุชื่อชนิดผัก').max(100),
   default_price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ติดลบ'),
   slots_per_kg: z.number().min(0.1, 'จำนวนต้นต่อกิโลกรัมต้องอย่างน้อย 0.1').max(999.99)
     .refine(n=>Math.abs(n*100-Math.round(n*100))<0.00001,'จำนวนต้นต่อกิโลกรัมมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง').optional(),
@@ -125,7 +125,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    const { name, default_price_per_kg, slots_per_kg, image_url, description, is_active } = parsed.data;
+    const { name, default_price_per_kg, slots_per_kg, growing_days, image_url, description, is_active } = parsed.data;
     const db = getSupabaseClient(req);
 
     const { data, error } = await db
@@ -133,6 +133,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       .insert({
         name: name.trim(),
         default_price_per_kg,
+        growing_days,
         ...(slots_per_kg !== undefined ? { slots_per_kg } : {}),
         image_url: image_url ? image_url.trim() : null,
         description: description ? description.trim() : null,
@@ -171,7 +172,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
-    const { name, default_price_per_kg, slots_per_kg, image_url, description, is_active } = parsed.data;
+    const { name, default_price_per_kg, slots_per_kg, growing_days, image_url, description, is_active } = parsed.data;
     const db = getSupabaseClient(req);
 
     const { data: oldCrop } = await db.from('crops').select('*').eq('id', id).single();
@@ -181,6 +182,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       .update({
         name: name.trim(),
         default_price_per_kg,
+        growing_days,
         ...(slots_per_kg !== undefined ? { slots_per_kg } : {}),
         image_url: image_url ? image_url.trim() : null,
         description: description ? description.trim() : null,

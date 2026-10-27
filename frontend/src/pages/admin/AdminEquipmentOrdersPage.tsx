@@ -71,7 +71,7 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
         const uploaded = await api.post<{ image_url: string }>(`/equipment/admin/orders/${selectedOrder.id}/shipping-image`, { mime_type: shipmentImageFile.type, data: await fileToBase64(shipmentImageFile) });
         imageUrl = uploaded.image_url;
       }
-      await api.patch(`/equipment/admin/orders/${selectedOrder.id}`, { ...draft, ...(savingShipmentUpdate ? { delivery_update_image_url: imageUrl, delivery_update_message: shipmentMessage.trim() || null } : {}) });
+      await api.patch(`/equipment/admin/orders/${selectedOrder.id}`, { ...draft,expected_updated_at:selectedOrder.updated_at, ...(savingShipmentUpdate ? { delivery_update_image_url: imageUrl, delivery_update_message: shipmentMessage.trim() || null } : {}) });
       await load();
       if (isEquipmentOrderInHistory(draft)) {
         setSelectedId(null);

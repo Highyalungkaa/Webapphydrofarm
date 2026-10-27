@@ -29,8 +29,9 @@ async function enrichRoundItems(roundId: string, limited = false) {
     .eq('round_id', roundId);
 
   if (itemsError || !items) {
-    return [];
+    throw itemsError||new Error('ไม่สามารถอ่านรายการผักได้');
   }
+  if(!items.length)return [];
 
   // Get booked amounts for this round's items from active orders
   const { data: bookedData, error: bookedError } = await supabaseAdmin
@@ -49,6 +50,7 @@ async function enrichRoundItems(roundId: string, limited = false) {
     .neq('orders.status', 'cancelled');
 
   const bookedMap = new Map<string, number>();
+  if(bookedError)throw bookedError;
   if (!bookedError && bookedData) {
     for (const row of bookedData) {
       const current = bookedMap.get(row.round_item_id) || 0;
@@ -123,7 +125,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (round.status === 'booking_open' && new Date(round.booking_opens_at) > new Date()) {
+    if (round.status==='draft'||(round.status === 'booking_open' && new Date(round.booking_opens_at) > new Date())) {
       res.status(404).json({ error: 'รอบการจองนี้ยังไม่เปิดให้ลูกค้าเข้าชม' });
       return;
     }

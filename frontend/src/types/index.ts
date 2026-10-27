@@ -282,6 +282,7 @@ export interface EquipmentOrderItem {
 
 export type EquipmentOrderStatus = 'pending_confirmation' | 'confirmed' | 'processing' | 'shipped' | 'completed' | 'cancelled';
 export interface EquipmentOrder {
+  updated_at?:string;
   id: string;
   customer_id: string;
   status: EquipmentOrderStatus;

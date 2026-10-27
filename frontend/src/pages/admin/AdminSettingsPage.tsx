@@ -10,6 +10,7 @@ export const AdminSettingsPage: React.FC = () => {
   const [pendingHours,setPendingHours]=useState(0);
 
   const [loading, setLoading] = useState(true);
+  const [loaded,setLoaded]=useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +29,11 @@ export const AdminSettingsPage: React.FC = () => {
       if (map.no_show_limit !== undefined) setNoShowLimit(Number(map.no_show_limit));
       if (typeof map.farm_contact_phone === 'string') setFarmContactPhone(map.farm_contact_phone);
       if(map.pending_confirmation_hours!==undefined)setPendingHours(Number(map.pending_confirmation_hours));
+      setLoaded(true);
+      setError(null);
     } catch (err: any) {
-      console.error(err);
+      setLoaded(false);
+      setError('โหลดค่าตั้งระบบไม่สำเร็จ กรุณาลองโหลดใหม่ก่อนบันทึก');
     } finally {
       setLoading(false);
     }
@@ -40,6 +44,7 @@ export const AdminSettingsPage: React.FC = () => {
     setSuccess(null);
     setError(null);
     const digits = farmContactPhone.replace(/\D/g, '');
+    if(!loaded){setError('กรุณาโหลดค่าตั้งระบบให้สำเร็จก่อนบันทึก');return;}
     if (farmContactPhone.trim() && (!/^\+?[\d\s()-]+$/.test(farmContactPhone) || digits.length < 9 || digits.length > 15)) {
       setError('กรุณากรอกเบอร์โทรฟาร์มเป็นตัวเลข 9–15 หลัก');
       return;
@@ -174,12 +179,13 @@ export const AdminSettingsPage: React.FC = () => {
         <div className="pt-4 border-t border-slate-100 flex justify-end">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving||!loaded}
             className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}</span>
           </button>
+          {!loaded&&<button type="button" onClick={()=>void loadSettings()} className="ml-3 rounded-xl border border-emerald-300 px-4 py-2 text-sm font-bold text-emerald-800">โหลดการตั้งค่าอีกครั้ง</button>}
         </div>
       </form>
     </div>

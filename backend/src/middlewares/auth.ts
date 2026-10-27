@@ -35,7 +35,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     const { data: adminRecord, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('email')
-      .ilike('email', user.email.trim())
+      .ilike('email', user.email.trim().replace(/[\\%_]/g,'\\$&'))
       .limit(1)
       .maybeSingle();
     if (adminError) {
@@ -43,7 +43,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
       res.status(500).json({ error: 'ไม่สามารถตรวจสอบสิทธิ์ผู้ดูแลระบบได้' });
       return;
     }
-    const isAdmin = !!adminRecord;
+    const isAdmin = adminRecord?.email?.trim().toLowerCase() === user.email.trim().toLowerCase();
 
     req.user = {
       id: user.id,
@@ -88,13 +88,13 @@ export async function optionalAuth(req: AuthenticatedRequest, res: Response, nex
         const { data: adminRecord } = await supabaseAdmin
           .from('admin_users')
           .select('email')
-          .ilike('email', user.email)
+          .ilike('email', user.email.trim().replace(/[\\%_]/g,'\\$&'))
           .maybeSingle();
 
         req.user = {
           id: user.id,
           email: user.email,
-          isAdmin: !!adminRecord,
+          isAdmin: adminRecord?.email?.trim().toLowerCase() === user.email.trim().toLowerCase(),
         };
       }
     }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { CartItem } from '../types/index.js';
 import { cartLineTotal } from '../lib/pooledBooking.js';
+import {readCartValue,persistCartValue,restoreVegetableCart} from '../lib/cartStorage.js';
 
 interface CartContextType {
   roundId: string | null;
@@ -17,13 +18,12 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [roundId, setRoundId] = useState<string | null>(() => {
-    return sessionStorage.getItem('hydrofarm_cart_round_id') || null;
+    return readCartValue('sessionStorage','hydrofarm_cart_round_id') || null;
   });
 
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
-      const saved = sessionStorage.getItem('hydrofarm_cart_items');
-      return saved ? JSON.parse(saved) : [];
+      return restoreVegetableCart(readCartValue('sessionStorage','hydrofarm_cart_items'));
     } catch {
       return [];
     }
@@ -31,14 +31,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (roundId) {
-      sessionStorage.setItem('hydrofarm_cart_round_id', roundId);
+      persistCartValue('sessionStorage','hydrofarm_cart_round_id', roundId);
     } else {
-      sessionStorage.removeItem('hydrofarm_cart_round_id');
+      persistCartValue('sessionStorage','hydrofarm_cart_round_id',null);
     }
   }, [roundId]);
 
   useEffect(() => {
-    sessionStorage.setItem('hydrofarm_cart_items', JSON.stringify(items));
+    persistCartValue('sessionStorage','hydrofarm_cart_items', JSON.stringify(items));
   }, [items]);
 
   const setRound = (newRoundId: string) => {
@@ -57,6 +57,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     qty: number
   ): { success: boolean; message?: string } => {
     // If qty <= 0, remove
+    if(!Number.isFinite(qty)||Math.abs(qty*100-Math.round(qty*100))>0.000001)return {success:false,message:'จำนวนผักต้องเป็นตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง'};
     if (qty <= 0) {
       setItems((prev) => prev.filter((i) => i.round_item_id !== itemData.round_item_id));
       return { success: true };
@@ -98,8 +99,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     setItems([]);
     setRoundId(null);
-    sessionStorage.removeItem('hydrofarm_cart_items');
-    sessionStorage.removeItem('hydrofarm_cart_round_id');
+    persistCartValue('sessionStorage','hydrofarm_cart_items',null);
+    persistCartValue('sessionStorage','hydrofarm_cart_round_id',null);
   };
 
   const totalKg = items.reduce((sum, i) => sum + i.qty_kg, 0);

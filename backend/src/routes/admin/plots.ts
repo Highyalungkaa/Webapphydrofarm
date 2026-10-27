@@ -12,8 +12,8 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 const plotSchema = z.object({
-  name: z.string().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
-  zone_name: z.string().min(1, 'กรุณาระบุชื่อโซน').max(100),
+  name: z.string().trim().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
+  zone_name: z.string().trim().min(1, 'กรุณาระบุชื่อโซน').max(100),
   slot_capacity: z.number().int().min(1, 'จำนวนต้น ต้องมากกว่า 0'),
   crop_ids: z.array(z.string().uuid('รหัสชนิดผักไม่ถูกต้อง')).optional(),
   crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง').optional().nullable(),
@@ -186,7 +186,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         crop_id: selectedCropIds[0] || null,
         crop_ids: selectedCropIds,
         is_active,
-        status: is_active ? 'growing' : 'empty', // backward compatibility
         notes: notes ? notes.trim() : null,
       })
       .select(`
@@ -207,7 +206,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     await recordAuditLog({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
-      entityType: 'planting_rounds',
+      entityType: 'plots',
       entityId: data.id,
       action: 'create',
       newData: data,
@@ -286,7 +285,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         crop_id: selectedCropIds[0] || null,
         crop_ids: selectedCropIds,
         is_active,
-        status: is_active ? 'growing' : 'empty', // backward compatibility
         notes: notes ? notes.trim() : null,
         updated_at: new Date().toISOString(),
       })
@@ -309,7 +307,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     await recordAuditLog({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
-      entityType: 'planting_rounds',
+      entityType: 'plots',
       entityId: id,
       action: 'update',
       oldData: oldPlot,
@@ -343,7 +341,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     await recordAuditLog({
       actorId: req.user!.id,
       actorEmail: req.user!.email,
-      entityType: 'planting_rounds',
+      entityType: 'plots',
       entityId: id,
       action: 'delete',
       oldData: oldPlot,
