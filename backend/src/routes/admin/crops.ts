@@ -89,7 +89,8 @@ router.post('/image', async (req: AuthenticatedRequest, res: Response): Promise<
 const cropSchema = z.object({
   name: z.string().min(1, 'กรุณาระบุชื่อชนิดผัก').max(100),
   default_price_per_kg: z.number().min(0, 'ราคาต่อกก. ต้องไม่ติดลบ'),
-  slots_per_kg: z.number().min(0.1).optional(),
+  slots_per_kg: z.number().min(0.1, 'จำนวนต้นต่อกิโลกรัมต้องอย่างน้อย 0.1').max(999.99)
+    .refine(n=>Math.abs(n*100-Math.round(n*100))<0.00001,'จำนวนต้นต่อกิโลกรัมมีทศนิยมได้ไม่เกิน 2 ตำแหน่ง').optional(),
   growing_days: z.number().int().min(1, 'ระยะเวลาปลูกต้องอย่างน้อย 1 วัน').default(45),
   image_url: z.string().url('รูปแบบ URL รูปภาพไม่ถูกต้อง').optional().nullable().or(z.literal('')),
   description: z.string().optional().nullable(),

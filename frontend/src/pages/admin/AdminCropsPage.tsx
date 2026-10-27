@@ -112,6 +112,11 @@ export const AdminCropsPage: React.FC = () => {
     const priceNum = Number(defaultPrice);
     const slotsNum = Number(slotsPerKg);
 
+    if (!Number.isFinite(slotsNum) || slotsNum<0.1 || slotsNum>999.99 || Math.abs(slotsNum*100-Math.round(slotsNum*100))>0.00001) {
+      setError('กรุณากรอกจำนวนต้นต่อกิโลกรัมตั้งแต่ 0.1 ถึง 999.99 ทศนิยมไม่เกิน 2 ตำแหน่ง');
+      return;
+    }
+
     if (isNaN(priceNum) || priceNum < 0) {
       setError('ราคาต่อ กก. ต้องเป็นตัวเลขและไม่ติดลบ');
       return;
@@ -130,6 +135,7 @@ export const AdminCropsPage: React.FC = () => {
       const payload = {
         name: name.trim(),
         default_price_per_kg: priceNum,
+        slots_per_kg: slotsNum,
         image_url: savedImageUrl || null,
         description: description.trim() || null,
         is_active: isActive,
@@ -218,6 +224,7 @@ export const AdminCropsPage: React.FC = () => {
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
                   <th className="py-3.5 px-4">รูปภาพ / ชนิดผัก</th>
                   <th className="py-3.5 px-4">ราคาตั้งต้น / กก.</th>
+                  <th className="py-3.5 px-4">จำนวนต้น / กก.</th>
                   <th className="py-3.5 px-4 hidden md:table-cell">รายละเอียดสินค้า</th>
                   <th className="py-3.5 px-4 text-center">สถานะ</th>
                   <th className="py-3.5 px-4 text-right">การจัดการ</th>
@@ -261,6 +268,7 @@ export const AdminCropsPage: React.FC = () => {
                       <span className="text-[11px] text-slate-400 ml-1">/กก.</span>
                     </td>
 
+                    <td className="py-3.5 px-4 whitespace-nowrap text-sm font-semibold text-emerald-800">{Number(crop.slots_per_kg).toLocaleString()} ต้น/กก.</td>
                     {/* Description (desktop) */}
                     <td className="py-3.5 px-4 hidden md:table-cell max-w-xs">
                       {crop.description ? (
@@ -366,7 +374,7 @@ export const AdminCropsPage: React.FC = () => {
                 />
               </div>
 
-              {/* 2. Price and 3. Slots per Kg Grid */}
+              {/* Price and planting rate */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Price per Kg */}
                 <div>
@@ -387,13 +395,17 @@ export const AdminCropsPage: React.FC = () => {
                   </div>
                   <p className="text-[10px] text-slate-400 mt-1">ราคาตั้งต้นที่จะใช้อ้างอิงตอนเปิดรอบ</p>
                 </div>
-
+                <div>
+                  <label htmlFor="crop-plants-per-kg" className="font-bold text-slate-700 block mb-1">3. จำนวนต้น / กก. <span className="text-rose-500">*</span></label>
+                  <input id="crop-plants-per-kg" required type="number" min="0.1" max="999.99" step="0.01" value={slotsPerKg} onChange={e=>setSlotsPerKg(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold"/>
+                  <p className="text-[10px] text-slate-500 mt-1">เช่น 5 ต้น = 1 กก. ใช้คำนวณน้ำหนักประมาณจากจำนวนที่ปลูก</p>
+                </div>
               </div>
 
               {/* 4. Crop image */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  3. รูปภาพชนิดผัก
+                  4. รูปภาพชนิดผัก
                 </label>
                 <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center">
                   <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 py-2.5 font-bold text-white hover:bg-emerald-900">
@@ -492,7 +504,7 @@ export const AdminCropsPage: React.FC = () => {
               {/* 5. Product Description */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  4. รายละเอียดสินค้า (Description)
+                  5. รายละเอียดสินค้า (Description)
                 </label>
                 <textarea
                   rows={3}

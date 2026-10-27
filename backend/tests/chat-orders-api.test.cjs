@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {randomUUID}=require('node:crypto');
 function setup(error=null){
   const middleware=[],calls=[];let handler;
-  const router={use:(...args)=>middleware.push(...args),post:(route,fn)=>{assert.equal(route,'/from-chat');handler=fn;}};
+  const router={get(){},use:(...args)=>middleware.push(...args),post:(route,fn)=>{assert.equal(route,'/from-chat');handler=fn;}};
   const auth=()=>{},admin=()=>{},actor=randomUUID();
   const db={rpc:async(name,args)=>{calls.push({name,args});return{data:{order_id:randomUUID()},error};}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/routes/admin/chatOrders.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,

@@ -20,7 +20,7 @@ function setup({ publicRoute=false, missing=false, rpcError=null, legacy=false, 
   for(const method of ['get','post','put','patch','delete']) router[method]=(url,...handlers)=>routes.set(`${method} ${url}`,handlers.at(-1));
   const auth=()=>{}, admin=()=>{};
   const round={ id:ids.round,purchase_limit_enabled:limited, status:'booking_open', current_step:5, notes:JSON.stringify(legacy?{note:'legacy',cropGrowingDays:{[ids.crop]:30},bookingCreated:true}:{cropPlotIds:{[ids.crop]:[ids.plot]}}) };
-  const items=[{id:ids.item,crop_id:ids.crop,plant_count:500,loss_baseline_plant_count:500,loss_plants_per_kg:5,
+  const items=[{id:ids.item,crop_id:ids.crop,plant_count:500,planting_plants_per_kg:5,loss_baseline_plant_count:500,loss_plants_per_kg:5,
     lost_plant_count:50,estimated_qty_kg:100,remaining_estimated_qty_kg:90,bookable_qty_kg:100,max_qty_per_order_kg:2.5,crops:{name:'Green Oak',slots_per_kg:99}}];
   round.round_items=items;
   const noteUpdates=[];
@@ -109,3 +109,5 @@ test('customer sees per-crop limits only when explicitly enabled on the round',a
 test('direct customer round detail also allows ordering without a projected kilogram balance',async()=>{
  for(const limited of [false,true]){const res=await setup({publicRoute:true,limited}).request('get /:id');assert.equal(res.statusCode,200);assert.equal(res.body.is_all_sold_out,false);assert.equal(res.body.total_available_kg,null);assert.equal(res.body.items[0].available_qty_kg,null);assert.equal(res.body.items[0].max_qty_per_order_kg,limited?2.5:null);}
 });
+
+test('customer forecasts come from the stored planting rate without imposing kilogram availability',async()=>{for(const route of ['get /open','get /:id']){const res=await setup({publicRoute:true}).request(route);const item=(Array.isArray(res.body)?res.body[0]:res.body).items[0];assert.equal(item.plant_count,500);assert.equal(item.planting_plants_per_kg,5);assert.equal(item.estimated_qty_kg,100);assert.equal(item.available_qty_kg,null);}});

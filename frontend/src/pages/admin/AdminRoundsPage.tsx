@@ -1,4 +1,5 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
+import {plantCountToKg} from '../../lib/plantingQuantities.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
 import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
 import { PlotCapacityBar } from '../../components/admin/PlotCapacityBar.js';
@@ -1075,6 +1076,8 @@ export const AdminRoundsPage: React.FC = () => {
                                 }
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500"
                               />
+                              <p className="mt-2 text-xs font-bold text-emerald-800">ประมาณ {plantCountToKg(it.plant_count,Number(selectedCrop?.slots_per_kg)).toLocaleString()} กก.</p>
+                              <p className="mt-0.5 text-[10px] text-slate-500">{Number(selectedCrop?.slots_per_kg||0).toLocaleString()} ต้น/กก. · ปัดเศษลง</p>
                             </div>
 
                             {/* Growing Days */}
