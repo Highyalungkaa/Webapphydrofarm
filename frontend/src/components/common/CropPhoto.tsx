@@ -13,5 +13,5 @@ export const CropPhoto: React.FC<{ imageUrl?: string | null; name: string; class
     );
   }
 
-  return <img src={imageUrl} alt={name} loading="lazy" onError={() => setFailedUrl(imageUrl)} className={`${sizeClass} object-cover`} />;
+  return <img src={imageUrl} alt={name} loading="lazy" onError={() => setFailedUrl(imageUrl)} className={`${sizeClass} bg-slate-50 object-contain`} />;
 };
