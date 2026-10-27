@@ -153,6 +153,7 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
         ),
         order_items (
           id,
+          round_item_id,
           qty_kg,
           price_per_kg,
           discount_amount,
@@ -204,9 +205,11 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
         ),
         order_items (
           id,
+          round_item_id,
           qty_kg,
           price_per_kg,
           discount_amount,
+          own_qty_kg,
           fulfilled_qty_kg,
           fulfillment_source,
           round_items (

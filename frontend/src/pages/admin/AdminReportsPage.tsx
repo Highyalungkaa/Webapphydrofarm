@@ -1,3 +1,4 @@
+import {orderMetrics,deliveredItemKg} from '../../lib/orderReport.js';
 import {scopeOrderToRound} from '../../lib/pooledBooking.js';
 import { orderCustomerKey } from '../../lib/orderCustomer.js';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -21,7 +22,7 @@ type CropReport = { name: string; bookedKg: number; soldKg: number };
 type SubstituteReport = { name: string; qtyKg: number; totalCost: number };
 type CustomerReport = { id: string; name: string; phone: string; orderCount: number; bookedKg: number };
 
-const numberFormat = new Intl.NumberFormat('th-TH', { maximumFractionDigits: 1 });
+const numberFormat = new Intl.NumberFormat('th-TH', { maximumFractionDigits: 2 });
 const kg = (value: number) => `${numberFormat.format(value)} กก.`;
 
 export const AdminReportsPage: React.FC = () => {
@@ -67,6 +68,7 @@ export const AdminReportsPage: React.FC = () => {
     const scopedOrders = selectedRoundId ? orders.map(order=>scopeOrderToRound(order,selectedRoundId)).filter((order):order is Order=>order!==null) : orders;
     const scopedRounds = selectedRoundId ? rounds.filter((round) => round.id === selectedRoundId) : rounds;
     const countableOrders = scopedOrders.filter((order) => order.status !== 'cancelled');
+    const totals=orderMetrics(scopedOrders);
     const soldOrders = scopedOrders.filter((order) => order.status === 'completed');
     const cropMap = new Map<string, CropReport>();
     const customerMap = new Map<string, CustomerReport>();
@@ -110,18 +112,19 @@ export const AdminReportsPage: React.FC = () => {
       for (const item of order.order_items || []) {
         const name = item.round_items?.crops?.name || 'ไม่ระบุชนิดผัก';
         const row = cropMap.get(name) || { name, bookedKg: 0, soldKg: 0 };
-        row.soldKg += Number(item.qty_kg || 0);
+        row.soldKg += Number(deliveredItemKg(order,item)||0);
         cropMap.set(name, row);
       }
     }
 
     const crops = [...cropMap.values()].sort((a, b) => b.bookedKg - a.bookedKg);
     const customers = [...customerMap.values()].sort((a, b) => b.orderCount - a.orderCount || b.bookedKg - a.bookedKg);
-    const reservedKg = countableOrders.reduce((sum, order) => sum + (order.order_items || []).reduce((itemSum, item) => itemSum + Number(item.qty_kg || 0), 0), 0);
-    const soldKg = soldOrders.reduce((sum, order) => sum + (order.order_items || []).reduce((itemSum, item) => itemSum + Number(item.qty_kg || 0), 0), 0);
+    const reservedKg = totals.bookedKg;
+    const soldKg = totals.deliveredKg;
     const openedKg = reservedKg;
 
     return {
+      ...totals,
       countableOrders,
       uniqueCustomers: new Set(countableOrders.map(orderCustomerKey)).size,
       reservedKg,
@@ -135,7 +138,7 @@ export const AdminReportsPage: React.FC = () => {
     };
   }, [orders, rounds, selectedRoundId]);
 
-  const sellThrough = report.openedKg > 0 ? Math.min(100, (report.soldKg / report.openedKg) * 100) : 0;
+  const sellThrough = report.openedKg > 0 ? (report.soldKg / report.openedKg) * 100 : 0;
 
   const handleExport = async () => {
     try {
@@ -156,7 +159,7 @@ export const AdminReportsPage: React.FC = () => {
         <div>
           <div className="mb-1 inline-flex items-center gap-2 text-xs font-bold text-emerald-700"><BarChart3 className="h-4 w-4" /> รายงานภาพรวมฟาร์ม</div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900">รายงาน</h1>
-          <p className="mt-1 text-xs text-slate-500">สรุปคำสั่งจอง ลูกค้า ผลผลิตที่เปิดจอง และยอดขายสำเร็จ</p>
+          <p className="mt-1 text-xs text-slate-500">สรุปคำสั่งจอง ลูกค้า ผลผลิตที่เปิดจอง และยอดส่งมอบจริง</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
@@ -179,24 +182,29 @@ export const AdminReportsPage: React.FC = () => {
       {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
 
       {loading && orders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-16 text-center text-sm text-slate-500">กำลังรวบรวมข้อมูลรายงาน...</div> : <>
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="คำสั่งจอง" value={`${report.countableOrders.length}`} detail="ไม่นับออเดอร์ที่ยกเลิก" icon={ShoppingBag} tone="emerald" />
           <MetricCard label="ลูกค้าที่สั่งจอง" value={`${report.uniqueCustomers}`} detail="จำนวนลูกค้าไม่ซ้ำกัน" icon={Users} tone="blue" />
           <MetricCard label="ปริมาณที่จอง" value={kg(report.reservedKg)} detail="รวมออเดอร์ที่ไม่ถูกยกเลิก" icon={Leaf} tone="amber" />
-          <MetricCard label="ขายสำเร็จแล้ว" value={kg(report.soldKg)} detail="นับจากออเดอร์สถานะสำเร็จ" icon={PackageCheck} tone="purple" />
+          <MetricCard label="ส่งมอบจริง" value={kg(report.soldKg)} detail="น้ำหนักชั่งจริงและผักทดแทนในส่งมอบจริง" icon={PackageCheck} tone="purple" />
+          <MetricCard label="มูลค่าจองสุทธิ" value={`฿${numberFormat.format(report.bookedAmount)}`} detail="ยอดจองหลังส่วนลด ไม่รวมออเดอร์ยกเลิก" icon={ShoppingBag} tone="emerald" />
+          <MetricCard label="เงินรับจริง" value={`฿${numberFormat.format(report.receivedAmount)}`} detail="ตามยอดที่บันทึกชำระแล้ว รวมรายการยกเลิกที่ยังรับเงินไว้" icon={TrendingUp} tone="blue" />
+          <MetricCard label="ยอดค้างรับ" value={`฿${numberFormat.format(report.outstandingAmount)}`} detail="ยอดจองที่ยังรับชำระไม่ครบ ไม่รวมยกเลิกและไม่มารับ" icon={ShoppingBag} tone="amber" />
           <MetricCard label="ผักที่ทดแทน" value={kg(report.substituteKg)} detail={`ซื้อมาแทนรวม ฿${numberFormat.format(report.substituteCost)}`} icon={Repeat2} tone="amber" />
         </section>
 
+        {report.unrecordedDeliveryItems>0&&<p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">มีรายการผักในส่งมอบจริง {report.unrecordedDeliveryItems} รายการที่ยังไม่มีน้ำหนักชั่งจริง ยอดส่งจริงไม่นำยอดจองมาแทน และยังไม่รวมรายการเหล่านี้</p>}
+        {report.cancelledReceivedAmount>0&&<p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950">มีเงินที่บันทึกรับแล้วในออเดอร์ยกเลิก ฿{numberFormat.format(report.cancelledReceivedAmount)} ยังคงนับเป็นเงินรับตามบันทึก ไม่ถือว่าคืนเงินแล้วโดยอัตโนมัติ</p>}
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="font-extrabold text-slate-900">ยอดจองแยกตามชนิดผัก</h2><p className="mt-1 text-xs text-slate-500">จำนวนกิโลกรัมที่ลูกค้าสั่ง แสดงเทียบกับยอดขายสำเร็จ</p></div>
+              <div><h2 className="font-extrabold text-slate-900">ยอดจองแยกตามชนิดผัก</h2><p className="mt-1 text-xs text-slate-500">จำนวนกิโลกรัมที่ลูกค้าสั่ง แสดงเทียบกับยอดส่งมอบจริง</p></div>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Leaf className="h-5 w-5" /></span>
             </div>
             {report.crops.length === 0 ? <EmptyReport text="ยังไม่มีข้อมูลคำสั่งจอง" /> : <>
               <div className="mt-5 flex flex-wrap gap-4 text-[11px] font-semibold text-slate-600">
                 <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ปริมาณจอง</span>
-                <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ขายสำเร็จ</span>
+                <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ส่งจริง</span>
               </div>
               <div className="mt-3 overflow-x-auto"><CropBarChart crops={report.crops} /></div>
               {report.crops.length > 8 && <p className="mt-2 text-center text-[11px] text-slate-400">แสดง 8 อันดับชนิดผักที่มียอดจองสูงสุด</p>}
@@ -205,17 +213,17 @@ export const AdminReportsPage: React.FC = () => {
 
           <div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="font-extrabold text-slate-900">ยอดสั่งจองเทียบกับออเดอร์สำเร็จ</h2><p className="mt-1 text-xs text-slate-500">รวมกิโลกรัมที่ลูกค้าสั่ง และจำนวนตามออเดอร์ที่ส่งมอบสำเร็จ</p></div>
+              <div><h2 className="font-extrabold text-slate-900">ยอดสั่งจองเทียบกับส่งมอบจริง</h2><p className="mt-1 text-xs text-slate-500">รวมกิโลกรัมที่ลูกค้าสั่ง เทียบกับน้ำหนักชั่งจริงและผักทดแทนที่ส่งมอบสำเร็จ</p></div>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-emerald-700 shadow-sm"><TrendingUp className="h-5 w-5" /></span>
             </div>
             <div className="mt-5 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <SalesDonut percentage={sellThrough} soldKg={report.soldKg} openedKg={report.openedKg} />
               <div className="w-full space-y-2 sm:max-w-[190px]">
                 <div className="rounded-2xl border border-slate-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-emerald-600" /> ยอดสั่งจอง</p><p className="mt-1 text-lg font-black text-slate-900">{kg(report.openedKg)}</p></div>
-                <div className="rounded-2xl border border-sky-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ออเดอร์สำเร็จ</p><p className="mt-1 text-lg font-black text-sky-800">{kg(report.soldKg)}</p></div>
+                <div className="rounded-2xl border border-sky-100 bg-white p-3.5"><p className="flex items-center gap-2 text-[11px] font-semibold text-slate-500"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" /> ส่งมอบจริง</p><p className="mt-1 text-lg font-black text-sky-800">{kg(report.soldKg)}</p></div>
               </div>
             </div>
-            <p className="mt-4 text-center text-[11px] text-slate-500">ยอดขายนับเฉพาะคำสั่งจองที่ยืนยันสถานะสำเร็จแล้ว</p>
+            <p className="mt-4 text-center text-[11px] text-slate-500">ยอดส่งจริงนับเฉพาะออเดอร์สำเร็จที่มีน้ำหนักชั่งบันทึกไว้ เงินรับจริงนับจากการบันทึกชำระเงิน</p>
           </div>
         </section>
 
@@ -292,7 +300,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const gap = Math.max(4, barWidth * 0.22);
   const y = (value: number) => top + plotHeight - (value / axisMax) * plotHeight;
 
-  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="กราฟแท่งเปรียบเทียบยอดจองและยอดขายสำเร็จของแต่ละชนิดผัก" className="min-w-[620px] w-full overflow-visible">
+  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="กราฟแท่งเปรียบเทียบยอดจองและยอดส่งมอบจริงของแต่ละชนิดผัก" className="min-w-[620px] w-full overflow-visible">
     {[0, 1, 2, 3, 4].map((tick) => {
       const value = step * tick;
       const yy = y(value);
@@ -309,7 +317,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
       const soldHeight = Math.max(crop.soldKg > 0 ? 2 : 0, crop.soldKg / axisMax * plotHeight);
       const bookedLabelY = y(crop.bookedKg) - 8 - (Math.abs(y(crop.bookedKg) - y(crop.soldKg)) < 16 ? 16 : 0);
       return <g key={crop.name}>
-        <title>{crop.name}: จอง {kg(crop.bookedKg)}, ขายสำเร็จ {kg(crop.soldKg)}</title>
+        <title>{crop.name}: จอง {kg(crop.bookedKg)}, ส่งจริง {kg(crop.soldKg)}</title>
         <rect x={bookedX} y={y(crop.bookedKg)} width={barWidth} height={bookedHeight} rx="6" fill="#10b981" />
         <rect x={soldX} y={y(crop.soldKg)} width={barWidth} height={soldHeight} rx="6" fill="#0ea5e9" />
         <text x={bookedX + barWidth / 2} y={bookedLabelY} textAnchor="middle" fill="#047857" fontSize="11" fontWeight="700">{numberFormat.format(crop.bookedKg)}</text>
@@ -325,7 +333,7 @@ const SalesDonut: React.FC<{ percentage: number; soldKg: number; openedKg: numbe
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
   const progress = circumference * (Math.min(100, Math.max(0, percentage)) / 100);
-  return <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`ขายสำเร็จ ${kg(soldKg)} จากยอดสั่งจอง ${kg(openedKg)} คิดเป็น ${percentage.toFixed(0)} เปอร์เซ็นต์`}>
+  return <div className="relative h-40 w-40 shrink-0" role="img" aria-label={`ส่งจริง ${kg(soldKg)} จากยอดสั่งจอง ${kg(openedKg)} คิดเป็น ${percentage.toFixed(0)} เปอร์เซ็นต์`}>
     <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
       <circle cx="70" cy="70" r={radius} fill="none" stroke="#d1fae5" strokeWidth="13" />
       <circle cx="70" cy="70" r={radius} fill="none" stroke="#059669" strokeWidth="13" strokeLinecap="round" strokeDasharray={`${progress} ${circumference}`} className="transition-all duration-700" />
@@ -333,7 +341,7 @@ const SalesDonut: React.FC<{ percentage: number; soldKg: number; openedKg: numbe
     </svg>
     <div className="absolute inset-0 flex flex-col items-center justify-center">
       <span className="text-3xl font-black tracking-tight text-emerald-800">{percentage.toFixed(0)}%</span>
-      <span className="mt-0.5 text-[10px] font-semibold text-slate-500">ขายสำเร็จ</span>
+      <span className="mt-0.5 text-[10px] font-semibold text-slate-500">ส่งจริง</span>
     </div>
   </div>;
 };

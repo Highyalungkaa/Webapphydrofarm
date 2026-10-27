@@ -181,6 +181,10 @@ export interface OrderItem {
 }
 
 export interface Order {
+  confirmation_expires_at?: string | null;
+  confirmation_expired_at?: string | null;
+  received_amount?: number | null;
+  completed_at?: string | null;
   is_pooled?: boolean;
   harvest_start_date?: string | null;
   harvest_end_date?: string | null;

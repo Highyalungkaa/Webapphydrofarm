@@ -1,4 +1,5 @@
 import {harvestRange,customerCropLines} from '../../lib/pooledBooking.js';
+import {OrderDeadlineNotice} from '../../components/common/OrderDeadlineNotice.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -150,6 +151,7 @@ export const OrderDetailPage: React.FC = () => {
       )}
 
       {/* Main Order Card */}
+      <OrderDeadlineNotice order={order}/>
       <div className="bg-white rounded-[1.75rem] p-6 sm:p-8 border border-emerald-100 shadow-sm space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">

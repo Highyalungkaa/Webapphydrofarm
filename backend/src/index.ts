@@ -27,6 +27,7 @@ import adminCustomersRouter from './routes/admin/customers.js';
 import adminFarmRouter from './routes/admin/farm.js';
 import adminPlotsRouter from './routes/admin/plots.js';
 import equipmentRouter from './routes/equipment.js';
+import {reconcileOrderExpiry} from './middlewares/orderExpiry.js';
 
 dotenv.config();
 
@@ -50,6 +51,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '8mb' }));
+app.use(['/api/rounds','/api/orders','/api/admin/orders','/api/admin/rounds'],reconcileOrderExpiry);
 
 // Health Check
 app.get('/health', (_req, res) => {

@@ -1,5 +1,6 @@
 import type { CartItem, Order, PriceTier } from '../types/index.js';
 import { formatDateDMY } from './dateFormat.js';
+import {receiptByItem,itemNetAmount} from './orderReport.js';
 
 export function harvestRange(start?: string | null,end?: string | null) {
   if(!start) return end?formatDateDMY(end):'รอฟาร์มแจ้งกำหนด';
@@ -18,9 +19,11 @@ export function priceLabel(price:number,tiers?:PriceTier[]) {
   return min===max?`฿${fmt(min)}`:`฿${fmt(min)}–${fmt(max)}`;
 }
 export function scopeOrderToRound<T extends Order>(order:T,roundId:string):T|null {
+  const receipts=receiptByItem(order);
   const items=(order.order_items||[]).filter(i=>i.round_items?.round_id===roundId||(!i.round_items?.round_id&&order.round_id===roundId));
   if(!items.length)return null;
-  return {...order,order_items:items,total_amount:items.reduce((n,i)=>n+Math.round((Number(i.qty_kg)*Number(i.price_per_kg)-Number(i.discount_amount||0))*100),0)/100};
+  return {...order,order_items:items,received_amount:items.reduce((n,i)=>n+Math.round((receipts.get(i.id)||0)*100),0)/100,
+    total_amount:items.reduce((n,i)=>n+Math.round(itemNetAmount(i)*100),0)/100};
 }
 
 export function customerCropLines(order:Order) {

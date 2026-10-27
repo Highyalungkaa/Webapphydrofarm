@@ -1,4 +1,6 @@
 import {harvestRange} from '../../lib/pooledBooking.js';
+import {EditOrderItems} from '../../components/admin/EditOrderItems.js';
+import {OrderDeadlineNotice} from '../../components/common/OrderDeadlineNotice.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -28,6 +30,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError,setLoadError]=useState('');
 
   // Filters
   const [selectedRound, setSelectedRound] = useState(searchParams.get('round_id') || '');
@@ -69,6 +72,7 @@ export const AdminOrdersPage: React.FC = () => {
   const loadOrders = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const params = new URLSearchParams();
       if (selectedRound) params.append('round_id', selectedRound);
       if (selectedStatus) params.append('status', selectedStatus);
@@ -78,8 +82,9 @@ export const AdminOrdersPage: React.FC = () => {
 
       const data = await api.get<Order[]>(`/admin/orders?${params.toString()}`);
       setOrders(data.filter((order) => !['completed', 'cancelled', 'no_show'].includes(order.status)));
-    } catch (err) {
+    } catch (err:any) {
       console.error(err);
+      setLoadError(err.message||'ไม่สามารถโหลดออเดอร์ได้ กรุณาลองใหม่');
     } finally {
       setLoading(false);
     }
@@ -144,6 +149,7 @@ export const AdminOrdersPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {loadError&&<p role="alert" className="rounded-xl bg-rose-50 p-4 text-sm font-bold text-rose-800">{loadError}</p>}
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -269,6 +275,7 @@ export const AdminOrdersPage: React.FC = () => {
                     </div>
                     <Badge status={order.status} type="order" />
                   </div>
+                  <OrderDeadlineNotice order={order} />
                   <div className="grid grid-cols-2 gap-3 py-3 text-xs">
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold text-slate-400">ลูกค้า</p>
@@ -374,6 +381,7 @@ export const AdminOrdersPage: React.FC = () => {
 
                       <td className="py-3 px-4">
                         <Badge status={order.status} type="order" />
+                        <OrderDeadlineNotice order={order} />
                         {order.status === 'pending_confirmation' && (
                           <span className="mt-1 block text-[10px] font-medium text-amber-700">ต้องตรวจรายละเอียดก่อนยืนยัน</span>
                         )}
@@ -456,6 +464,8 @@ export const AdminOrdersPage: React.FC = () => {
             </div>
 
             {/* Veggie Items & fixed amount discounts */}
+            <OrderDeadlineNotice order={selectedOrder}/>
+            <EditOrderItems order={selectedOrder} onSaved={async()=>{setSelectedOrder(null);await loadOrders();}}/>
             <section className="space-y-3">
               <div>
                 <h3 className="font-bold text-xs uppercase text-slate-500">รายการผักและส่วนลด</h3>

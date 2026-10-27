@@ -7,6 +7,7 @@ export const AdminSettingsPage: React.FC = () => {
   const [cancellationDeadlineHours, setCancellationDeadlineHours] = useState<number>(24);
   const [noShowLimit, setNoShowLimit] = useState<number>(0);
   const [farmContactPhone, setFarmContactPhone] = useState('');
+  const [pendingHours,setPendingHours]=useState(0);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,7 @@ export const AdminSettingsPage: React.FC = () => {
       if (map.cancellation_deadline_hours_before_harvest !== undefined) setCancellationDeadlineHours(Number(map.cancellation_deadline_hours_before_harvest));
       if (map.no_show_limit !== undefined) setNoShowLimit(Number(map.no_show_limit));
       if (typeof map.farm_contact_phone === 'string') setFarmContactPhone(map.farm_contact_phone);
+      if(map.pending_confirmation_hours!==undefined)setPendingHours(Number(map.pending_confirmation_hours));
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -50,6 +52,7 @@ export const AdminSettingsPage: React.FC = () => {
         cancellation_deadline_hours_before_harvest: Number(cancellationDeadlineHours),
         no_show_limit: Number(noShowLimit),
         farm_contact_phone: farmContactPhone.trim(),
+        pending_confirmation_hours:pendingHours,
       });
 
       setSuccess('บันทึกการตั้งค่าระบบเรียบร้อยแล้ว');
@@ -116,6 +119,14 @@ export const AdminSettingsPage: React.FC = () => {
               required
             />
           </div>
+        </div>
+
+        <div className="space-y-2 border-b border-slate-100 pb-5">
+          <label htmlFor="pending-confirmation-hours" className="block text-sm font-bold text-slate-900">กำหนดเวลาสำหรับออเดอร์รอยืนยัน (ชั่วโมง)</label>
+          <p className="text-xs leading-6 text-slate-600">เมื่อหมดเวลา ระบบยกเลิกออเดอร์รอยืนยันที่ยังไม่รับเงินและยังไม่เริ่มจัดผัก พร้อมคืนสต๊อกและโควตาจอง ตรวจอัตโนมัติประมาณทุก 1 นาที</p>
+          <input id="pending-confirmation-hours" type="number" min="0" max="8760" step="1" required value={pendingHours} onChange={e=>setPendingHours(Number(e.target.value))} className="w-40 rounded-xl border border-slate-200 p-2.5 text-sm font-bold"/>
+          <p className="text-xs text-slate-500">0 = ปิดการหมดอายุอัตโนมัติ · ออเดอร์เดิมที่ยังไม่มีกำหนดจะเริ่มนับจากเวลาบันทึก ออเดอร์ที่มีกำหนดอยู่แล้วคงวันเวลาเดิม</p>
+          <p className="text-xs text-amber-800">ออเดอร์ที่รับเงินหรือเริ่มจัดผักแล้วจะคงไว้ให้แอดมินตรวจสอบเอง</p>
         </div>
 
         {/* Cancellation Deadline */}

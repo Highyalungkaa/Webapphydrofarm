@@ -56,7 +56,17 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     const { data: oldSettings } = await supabaseAdmin.from('app_settings').select('*');
 
+    if (settings.pending_confirmation_hours !== undefined) {
+      const hours=settings.pending_confirmation_hours;
+      if(typeof hours!=='number'||!Number.isInteger(hours)||hours<0||hours>8760){
+        res.status(400).json({error:'เวลารอยืนยันต้องเป็นจำนวนเต็ม 0 ถึง 8760 ชั่วโมง'});return;
+      }
+      const {error}=await supabaseAdmin.rpc('set_order_confirmation_timeout',{p_actor_id:req.user!.id,p_hours:hours});
+      if(error){res.status(400).json({error:error.message});return;}
+    }
+
     for (const [key, value] of Object.entries(settings)) {
+      if(key==='pending_confirmation_hours')continue;
       const { error: saveError } = await supabaseAdmin
         .from('app_settings')
         .upsert({

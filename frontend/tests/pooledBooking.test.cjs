@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const ts=require('../../backend/node_modules/typescript');
-function load(name){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/lib',name+'.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>n==='./dateFormat.js'?load('dateFormat'):require(n)});return exports;}
+function load(name){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/lib',name+'.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>n.startsWith('./')&&n.endsWith('.js')?load(n.slice(2,-3)):require(n)});return exports;}
 const {cartLineTotal,priceLabel,harvestRange,scopeOrderToRound,customerCropLines}=load('pooledBooking');
 test('pooled cart totals use FIFO prices, including fractional source splits',()=>{
  const item={qty_kg:15,price_per_kg:50,price_tiers:[{available_qty_kg:10,price_per_kg:50},{available_qty_kg:10,price_per_kg:60}]};
