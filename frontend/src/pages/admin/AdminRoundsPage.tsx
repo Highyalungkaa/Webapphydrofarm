@@ -1288,7 +1288,6 @@ export const AdminRoundsPage: React.FC = () => {
                                 const otherItemUsing = items.find(
                                   (otherIt, otherIdx) => otherIdx !== idx && (otherIt.selected_plot_ids || []).includes(plot.id)
                                 );
-                                const otherCropUsing = otherItemUsing ? crops.find((c) => c.id === otherItemUsing.crop_id) : null;
 
                                 return (
                                   <div
@@ -1335,10 +1334,6 @@ export const AdminRoundsPage: React.FC = () => {
                                         {isPlotFull ? (
                                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
                                             🔴 เต็ม (ติด {occupyingRoundNames[0] || 'ผักอื่นในรอบนี้'})
-                                          </span>
-                                        ) : otherItemUsing ? (
-                                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
-                                            เลือกใน {otherCropUsing?.name || 'ผักอื่น'}
                                           </span>
                                         ) : isChecked ? (
                                           <span
