@@ -249,7 +249,7 @@ export const RoundDetailPage: React.FC = () => {
               >
                 <div>
                   <div className="-mx-5 -mt-5 mb-4 overflow-hidden rounded-t-[1.5rem]">
-                    <CropPhoto imageUrl={item.crops?.image_url} name={cropName} />
+                    <CropPhoto imageUrl={item.crops?.image_url} name={cropName} className="h-32 w-full sm:h-40" />
                   </div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-lg font-black leading-snug text-slate-950">{cropName}</h3>
