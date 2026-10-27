@@ -1,6 +1,6 @@
 import {roundOrderFilter,scopeRoundOrders} from '../../services/roundOrders.js';
 import {getPlotPlantingAllocations} from '../../services/plotPlantingAllocations.js';
-import {allocatePlotSlots} from '../../services/plantAllocation.js';
+import {allocateRecordedPlotSlots} from '../../services/plantAllocation.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
@@ -24,7 +24,7 @@ const roundItemInputSchema = z.object({
 });
 
 const roundSchema = z.object({
-  name: z.string().min(1, 'กรุณาระบุชื่อรอบการปลูก'),
+  name: z.string().trim().min(1, 'กรุณาระบุชื่อรอบการปลูก'),
   planted_at: z.string().optional(),
   growing_days: z.number().int().min(1, 'ระยะเวลาปลูกต้องมากกว่า 0 วัน').optional(),
   expected_harvest_date: z.string().optional(),
@@ -43,7 +43,61 @@ const roundSchema = z.object({
   completed_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   items: z.array(roundItemInputSchema).optional(),
+  request_id: z.string().uuid().optional(),
 });
+
+// The solver uses a single database snapshot. The save RPC locks all allocation
+// writers and compares its token again before writing anything.
+async function readAllocationState() {
+  const {data,error}=await supabaseAdmin.rpc('read_planting_allocation_state');
+  if(error||!data)throw Object.assign(new Error('ไม่สามารถตรวจสอบพื้นที่แปลงล่าสุดได้ กรุณาลองใหม่'),{status:500});
+  return data;
+}
+
+function planRoundAllocation(state:any,items:any[],currentRound?:any) {
+  const fail=(message:string):never=>{throw Object.assign(new Error(message),{status:400});};
+  const plots:any[]=state.plots||[];
+  const existing=getPlotPlantingAllocations(plots,(state.rounds||[]).filter((r:any)=>r.id!==currentRound?.id));
+  if(existing.unassignedItems.length)fail('มีรอบเดิมที่ยังจัดพื้นที่แปลงไม่ครบ กรุณาตรวจสอบแปลงของรอบเดิมก่อน');
+  for(const round of state.rounds||[]){
+    if(round.id===currentRound?.id||['completed','cancelled'].includes(round.status)||round.completed_date||Number(round.current_step)>=8||(round.sold_out_date&&Number(round.current_step)>=7))continue;
+    for(const item of round.round_items||[]){
+      const needed=item.plant_count??Math.round(Math.max(Number(item.estimated_qty_kg||0),Number(item.bookable_qty_kg||0))*Number(item.crops?.slots_per_kg||4));
+      const assigned=existing.allocations.filter(a=>a.round_id===round.id&&a.crop_id===item.crop_id).reduce((sum,a)=>sum+a.plant_count,0);
+      if(assigned<needed)fail('มีรอบเดิมที่ยังจัดพื้นที่แปลงไม่ครบ กรุณาตรวจสอบแปลงของรอบเดิมก่อน');
+    }
+  }
+  const occupied:Record<string,number>={};
+  for(const allocation of existing.allocations)occupied[allocation.plot_id]=(occupied[allocation.plot_id]||0)+allocation.plant_count;
+  let metadata:any={};
+  try{metadata=JSON.parse(currentRound?.notes||'{}');}catch{}
+  if(!metadata||typeof metadata!=='object'||Array.isArray(metadata))metadata={};
+  const oldItems:any[]=currentRound?.round_items||[];
+  const fullItems=items.map(item=>{
+    const old=oldItems.find(i=>i.id===item.id);
+    if(item.id&&!old)fail('ไม่พบรายการผักที่ต้องการแก้ไขในรอบนี้');
+    if(!old&&!item.plot_ids?.length)fail('กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก');
+    if(old&&old.crop_id!==item.crop_id)fail('ไม่สามารถเปลี่ยนชนิดผักของรายการเดิมได้');
+    const selected=item.plot_ids?.length?item.plot_ids:(metadata.cropPlotIds?.[item.crop_id]?.length?metadata.cropPlotIds[item.crop_id]:(old?.plot_ids?.length?old.plot_ids:plots.filter(p=>getPlotCropIds(p).includes(item.crop_id)).map(p=>p.id)));
+    const oldSelected=metadata.cropPlotIds?.[item.crop_id]?.length?metadata.cropPlotIds[item.crop_id]:(old?.plot_ids?.length?old.plot_ids:plots.filter(p=>getPlotCropIds(p).includes(item.crop_id)).map(p=>p.id));
+    const unchanged=old&&item.plant_count===old.plant_count&&[...selected].sort().join() === [...oldSelected].sort().join();
+    const crop=(state.crops||[]).find((c:any)=>c.id===item.crop_id);
+    if(!crop||(!crop.is_active&&!unchanged))fail('มีชนิดผักที่ปิดใช้งานหรือไม่พบในระบบ กรุณาเลือกผักที่เปิดใช้งาน');
+    if(item.plant_count==null&&!old)fail('กรุณาระบุจำนวนต้นที่ปลูกให้ครบทุกชนิดผัก');
+    if(!selected.length||new Set(selected).size!==selected.length)fail('กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก และไม่เลือกแปลงซ้ำในรายการเดียวกัน');
+    if(!selected.every((id:string)=>plots.some(p=>p.id===id&&(unchanged||p.is_active&&getPlotCropIds(p).includes(item.crop_id)))))fail('เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น');
+    return {...item,plot_ids:selected,selected_plot_ids:selected,plant_count:item.plant_count??old?.plant_count??Math.round(Math.max(Number(old?.estimated_qty_kg||0),Number(old?.bookable_qty_kg||0))*Number(crop.slots_per_kg||4))};
+  });
+  if(new Set(fullItems.map(i=>i.crop_id)).size!==fullItems.length)fail('ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน');
+  const selectedPlots=plots.filter(p=>fullItems.some(i=>i.plot_ids.includes(p.id)));
+  const plan=allocateRecordedPlotSlots(selectedPlots,fullItems,{},occupied,metadata.cropPlotAllocations||{});
+  if(plan.unallocatedByItem.some(n=>n>0))fail('พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิด กรุณาปรับจำนวนต้นหรือเลือกแปลงเพิ่ม');
+  return {items:fullItems,allocations:Object.fromEntries(fullItems.map((item,index)=>[item.crop_id,plan.allocatedByItem[index]]))};
+}
+
+function allocationErrorStatus(error:any) {
+  return ['40001','40P01','55P03'].includes(error?.code)?409:400;
+}
 
 const stepUpdateSchema = z.object({
   step: z.number().int().min(1).max(8),
@@ -364,72 +418,18 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    const { items, ...inputRoundData } = parsed.data;
-    const db = getSupabaseClient(req);
-
-    let cropPlotAllocations:Record<string,Record<string,number>>={};
-    if (items?.length) {
-      const missingDaysIndex = items.findIndex((item) => item.growing_days == null);
-      if (missingDaysIndex !== -1) {
-        res.status(400).json({ error: `กรุณาระบุวันปลูกของผักรายการที่ ${missingDaysIndex + 1}` });
-        return;
-      }
-      const cropIds = [...new Set(items.map((item) => item.crop_id))];
-      if (cropIds.length !== items.length) {
-        res.status(400).json({ error: 'ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน' });
-        return;
-      }
-      const { data: activeCropRows, error: cropError } = await db
-        .from('crops')
-        .select('id, slots_per_kg')
-        .in('id', cropIds)
-        .eq('is_active', true);
-      if (cropError || (activeCropRows || []).length !== cropIds.length) {
-        res.status(400).json({ error: 'มีชนิดผักที่ปิดใช้งานหรือไม่พบในระบบ กรุณาเลือกเฉพาะผักที่เปิดใช้งาน' });
-        return;
-      }
-
-      if (items.some(item => item.plant_count == null)) { res.status(400).json({error:'กรุณาระบุจำนวนต้นที่ปลูกให้ครบทุกชนิดผัก'}); return; }
-      const selectedPlotIds = items.flatMap((item) => item.plot_ids || []);
-      const uniquePlotIds = [...new Set(selectedPlotIds)];
-      if (items.some((item) => !item.plot_ids?.length || new Set(item.plot_ids).size !== item.plot_ids.length)) {
-        res.status(400).json({ error: 'กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก และไม่เลือกแปลงเดิมซ้ำในรายการผักเดียวกัน' });
-        return;
-      }
-      const { data: selectedPlots, error: plotsError } = await db
-        .from('plots')
-        .select('id, crop_id, crop_ids, is_active, slot_capacity')
-        .in('id', uniquePlotIds)
-        .order('zone_name', { ascending: true })
-        .order('name', { ascending: true });
-      if (plotsError || (selectedPlots || []).length !== uniquePlotIds.length) {
-        res.status(400).json({ error: 'ไม่พบแปลงปลูกที่เลือก กรุณาโหลดข้อมูลแปลงใหม่' });
-        return;
-      }
-      const selectedPlotMap = new Map((selectedPlots || []).map((plot) => [plot.id, plot]));
-      for (const item of items) {
-        if (!item.plot_ids?.every((plotId) => {
-          const plot = selectedPlotMap.get(plotId);
-          return plot?.is_active && getPlotCropIds(plot).includes(item.crop_id);
-        })) {
-          res.status(400).json({ error: 'เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น' });
-          return;
-        }
-      }
-      const [allPlotsResult,existingRoundsResult]=await Promise.all([
-        db.from('plots').select('id,crop_id,crop_ids,slot_capacity').order('zone_name',{ascending:true}).order('name',{ascending:true}),
-        db.from('planting_rounds').select('id,name,status,current_step,completed_date,sold_out_date,notes,round_items(id,crop_id,plant_count,estimated_qty_kg,bookable_qty_kg,crops(name,slots_per_kg))').order('created_at',{ascending:true}),
-      ]);
-      if(allPlotsResult.error||existingRoundsResult.error){res.status(500).json({error:'ไม่สามารถตรวจสอบพื้นที่แปลงที่ใช้งานอยู่ได้ กรุณาลองใหม่'});return;}
-      const existing=getPlotPlantingAllocations(allPlotsResult.data||[],existingRoundsResult.data||[]);
-      const occupied:Record<string,number>={};for(const a of existing.allocations)occupied[a.plot_id]=(occupied[a.plot_id]||0)+a.plant_count;
-      const plan=allocatePlotSlots(selectedPlots||[],items.map(item=>({...item,selected_plot_ids:item.plot_ids||[]})),{},occupied);
-      if(plan.unallocatedByItem.some(n=>n>0)){
-        res.status(400).json({error:'พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิด กรุณาปรับจำนวนต้นหรือเลือกแปลงเพิ่ม'});return;
-      }
-      cropPlotAllocations=Object.fromEntries(items.map((item,index)=>[item.crop_id,plan.allocatedByItem[index]]));
+    const { items, request_id, ...inputRoundData } = parsed.data;
+    if(request_id){
+      const {data:existing,error}=await supabaseAdmin.rpc('find_planting_round_request',{p_actor_id:req.user!.id,p_request_id:request_id,p_payload:parsed.data});
+      if(error){res.status(400).json({error:error.message});return;}
+      if(existing){res.status(201).json(existing);return;}
     }
-
+    const state = await readAllocationState();
+    if (items?.some(item => item.growing_days == null)) {
+      res.status(400).json({error:'กรุณาระบุวันปลูกให้ครบทุกชนิดผัก'}); return;
+    }
+    const plantingPlan = planRoundAllocation(state, items || []);
+    const cropPlotAllocations = plantingPlan.allocations;
     const todayStr = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const initialSeedDate = inputRoundData.seed_date || todayStr;
     const initialGrowingDays = inputRoundData.growing_days || 45;
@@ -479,60 +479,17 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       })(),
     };
 
-    const { data: createdRound, error: roundError } = await db
-      .from('planting_rounds')
-      .insert(roundDataToInsert)
-      .select()
-      .single();
-
-    if (roundError) {
-      res.status(400).json({ error: 'ไม่สามารถสร้างรอบการปลูกได้: ' + roundError.message });
-      return;
-    }
-
-    // Insert items
-    let createdItems: any[] = [];
-    if (items && items.length > 0) {
-      const itemsToInsert = items.map((i) => ({
-        round_id: createdRound.id,
-        crop_id: i.crop_id,
-        plant_count: i.plant_count ?? null,
-        estimated_qty_kg: 0,
-        bookable_qty_kg: 0,
-        price_per_kg: i.price_per_kg,
-        max_qty_per_order_kg: i.max_qty_per_order_kg || null,
-      }));
-
-      const { data: inserted, error: itemsError } = await db
-        .from('round_items')
-        .insert(itemsToInsert)
-        .select();
-
-      if (itemsError) {
-        res.status(400).json({ error: 'สร้างรายการผักไม่สำเร็จ: ' + itemsError.message });
-        return;
-      }
-      createdItems = inserted || [];
-    }
-
-    await recordAuditLog({
-      actorId: req.user!.id,
-      actorEmail: req.user!.email,
-      entityType: 'planting_rounds',
-      entityId: createdRound.id,
-      action: 'create',
-      newData: { ...createdRound, items: createdItems },
+    const {data: createdRound,error} = await supabaseAdmin.rpc('save_planting_round', {
+      p_actor_id:req.user!.id,p_round_id:null,p_round:roundDataToInsert,
+      p_items:plantingPlan.items.map(item=>({...item,id:undefined,estimated_qty_kg:0,bookable_qty_kg:0})),
+      p_state_token:state.token,p_request_id:request_id||null,p_request_payload:parsed.data,
     });
-
-    res.status(201).json({
-      ...createdRound,
-      round_items: createdItems,
-    });
+    if(error){res.status(allocationErrorStatus(error)).json({error:error.message});return;}
+    res.status(201).json(createdRound);
   } catch (err: any) {
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการสร้างรอบการปลูก' });
+    res.status(err.status||500).json({ error: err.status?err.message:'เกิดข้อผิดพลาดในการสร้างรอบการปลูก' });
   }
 });
-
 // PATCH /api/admin/rounds/:id/step - Stepper Lifecycle Progression (8 Steps)
 router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -704,112 +661,39 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
 // PUT /api/admin/rounds/:id - Update round details and items
 router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const id = req.params.id as string;
-    const parsed = roundSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message || 'ข้อมูลไม่ถูกต้อง' });
-      return;
+    const id=req.params.id as string;
+    const parsed=roundSchema.omit({request_id:true}).partial().safeParse(req.body);
+    if(!parsed.success){res.status(400).json({error:parsed.error.errors[0]?.message||'ข้อมูลไม่ถูกต้อง'});return;}
+    const {items,...roundData}=parsed.data;
+    const state=await readAllocationState();
+    const currentRound=state.rounds.find((r:any)=>r.id===id);
+    if(!currentRound){res.status(404).json({error:'ไม่พบรอบการปลูกที่ระบุ'});return;}
+    if(['completed','cancelled'].includes(currentRound.status)){res.status(400).json({error:'รอบนี้สิ้นสุดแล้ว ไม่สามารถเปลี่ยนรายการปลูกได้'});return;}
+    const mergedItems:any[]=(currentRound.round_items||[]).map((old:any)=>({...old,...items?.find(item=>item.id===old.id)}));
+    for(const item of items||[]){
+      if(item.id&&!currentRound.round_items.some((old:any)=>old.id===item.id)){res.status(400).json({error:'ไม่พบรายการผักที่ต้องการแก้ไขในรอบนี้'});return;}
+      if(!item.id)mergedItems.push(item);
     }
-
-    const { items, ...roundData } = parsed.data;
-    const db = getSupabaseClient(req);
-
-    const { data: currentRound } = await db
-      .from('planting_rounds')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (!currentRound) {
-      res.status(404).json({ error: 'ไม่พบรอบการปลูกที่ระบุ' });
-      return;
+    const plantingPlan=planRoundAllocation(state,mergedItems,currentRound);
+    let metadata:any={};
+    try{metadata=JSON.parse(currentRound.notes||'{}');}catch{metadata={note:currentRound.notes||''};}
+    if(!metadata||typeof metadata!=='object'||Array.isArray(metadata))metadata={note:currentRound.notes||''};
+    if(roundData.notes!==undefined){
+      try{const supplied=JSON.parse(roundData.notes||'{}');metadata.note=supplied&&typeof supplied==='object'?supplied.note||'':roundData.notes||'';}
+      catch{metadata.note=roundData.notes||'';}
     }
-
-    const baselineError = await checkLossBaselines(db, id, items);
-    if (baselineError) { res.status(400).json({ error: baselineError }); return; }
-
-    // Update notes with cropPlotIds if items are provided
-    let finalNotes = roundData.notes;
-    if (items && items.length > 0) {
-      let notesJson: any = {};
-      try {
-        notesJson = JSON.parse(roundData.notes || currentRound.notes || '{}');
-      } catch {
-        notesJson = { note: roundData.notes || currentRound.notes || '' };
-      }
-      const cropPlotIdsMap: Record<string, string[]> = notesJson.cropPlotIds || {};
-      for (const it of items) {
-        if (it.plot_ids && it.plot_ids.length > 0) {
-          cropPlotIdsMap[it.crop_id] = it.plot_ids;
-        }
-      }
-      if (Object.keys(cropPlotIdsMap).length > 0) {
-        notesJson.cropPlotIds = cropPlotIdsMap;
-        finalNotes = JSON.stringify(notesJson);
-      }
-    }
-
-    const { data: updatedRound, error: updateError } = await db
-      .from('planting_rounds')
-      .update({
-        ...roundData,
-        notes: finalNotes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (updateError) {
-      res.status(400).json({ error: updateError.message });
-      return;
-    }
-
-    // Upsert items
-    if (items) {
-      for (const item of items) {
-        if (item.id) {
-          const { error: itemError } = await db
-            .from('round_items')
-            .update({
-              ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
-              price_per_kg: item.price_per_kg,
-              max_qty_per_order_kg: item.max_qty_per_order_kg || null,
-            })
-            .eq('id', item.id).eq('round_id', id);
-          if (itemError) { res.status(400).json({ error: itemError.message }); return; }
-        } else {
-          await db
-            .from('round_items')
-            .insert({
-              round_id: id,
-              crop_id: item.crop_id,
-              ...(item.plant_count != null ? { plant_count: item.plant_count } : {}),
-              estimated_qty_kg: 0,
-              bookable_qty_kg: 0,
-              price_per_kg: item.price_per_kg,
-              max_qty_per_order_kg: item.max_qty_per_order_kg || null,
-            });
-        }
-      }
-    }
-
-    await recordAuditLog({
-      actorId: req.user!.id,
-      actorEmail: req.user!.email,
-      entityType: 'planting_rounds',
-      entityId: id,
-      action: 'update',
-      oldData: currentRound,
-      newData: updatedRound,
+    metadata.cropPlotIds=Object.fromEntries(plantingPlan.items.map(item=>[item.crop_id,item.plot_ids]));
+    metadata.cropPlotAllocations=plantingPlan.allocations;
+    metadata.cropGrowingDays={...metadata.cropGrowingDays,...Object.fromEntries((items||[]).filter(i=>i.growing_days!=null).map(i=>[i.crop_id,i.growing_days]))};
+    const {data,error}=await supabaseAdmin.rpc('save_planting_round',{
+      p_actor_id:req.user!.id,p_round_id:id,p_round:{...roundData,notes:JSON.stringify(metadata)},
+      p_items:plantingPlan.items.map(item=>({...item,plant_count:currentRound.round_items.find((old:any)=>old.id===item.id)?.plant_count==null&&!(items||[]).some(i=>i.id===item.id&&i.plant_count!=null)?null:item.plant_count})),
+      p_state_token:state.token,
     });
-
-    res.json(updatedRound);
-  } catch (err: any) {
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการแก้ไขรอบการปลูก' });
-  }
+    if(error){res.status(allocationErrorStatus(error)).json({error:error.message});return;}
+    res.json(data);
+  }catch(err:any){res.status(err.status||500).json({error:err.status?err.message:'เกิดข้อผิดพลาดในการแก้ไขรอบการปลูก'});}
 });
-
 // PATCH /api/admin/rounds/:id/status - Update round status manually
 router.patch('/:id/status', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {

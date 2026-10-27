@@ -45,6 +45,10 @@ test('confirmation expiry and atomic order amendments',async t=>{
 
   for(const name of ['041_order_confirmation_deadlines.sql','042_amend_order_items.sql','041_order_confirmation_deadlines.sql','042_amend_order_items.sql'])await db.exec(migration(name));
   await db.exec(migration('043_audit_account_and_order_guards.sql'));
+  await db.exec(`ALTER TABLE plots ADD COLUMN zone_name TEXT,ADD COLUMN slot_capacity INTEGER,ADD COLUMN crop_id UUID,ADD COLUMN crop_ids UUID[],ADD COLUMN is_active BOOLEAN DEFAULT true;
+    ALTER TABLE round_items ADD COLUMN created_at TIMESTAMPTZ DEFAULT now(),ADD COLUMN plot_ids UUID[];`);
+  await db.exec(migration('046_atomic_planting_rounds.sql'));
+  await db.exec(migration('046_atomic_planting_rounds.sql'));
   async function setup(){const crop=randomUUID(),a=randomUUID(),b=randomUUID(),ia=randomUUID(),ib=randomUUID();
     await db.query("INSERT INTO crops(id,name,slots_per_kg,growing_days) VALUES($1,'Oak',5,30)",[crop]);
     for(const [id,day] of [[a,1],[b,8]])await db.query("INSERT INTO planting_rounds(id,status,current_step,expected_harvest_date,booking_opens_at) VALUES($1,'booking_open',5,$2::DATE+$3::INTEGER,now()-interval '1 day')",[id,today,day]);

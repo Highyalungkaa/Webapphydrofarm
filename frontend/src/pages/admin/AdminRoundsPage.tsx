@@ -54,6 +54,7 @@ export const AdminRoundsPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const createFormRef = React.useRef<HTMLFormElement>(null);
+  const createRequest = React.useRef({key:'',id:''});
 
   useEffect(() => {
     if (formError) createFormRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -428,7 +429,10 @@ export const AdminRoundsPage: React.FC = () => {
         })),
       };
 
-      const createdRound = await api.post<PlantingRound>('/admin/rounds', payload);
+      const requestKey=JSON.stringify(payload);
+      if(createRequest.current.key!==requestKey)createRequest.current={key:requestKey,id:crypto.randomUUID()};
+      const createdRound = await api.post<PlantingRound>('/admin/rounds', {...payload,request_id:createRequest.current.id});
+      createRequest.current={key:'',id:''};
       setIsModalOpen(false);
 
       // Redirect immediately to the round management page as requested!
