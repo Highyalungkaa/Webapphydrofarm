@@ -13,7 +13,7 @@ import { Badge } from '../../components/common/Badge.js';
 import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 import { CropPhoto } from '../../components/common/CropPhoto.js';
 import { parseBookingQuantity, formatKg } from '../../lib/bookingQuantity.js';
-import { Calendar, Clock, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
+import { Calendar, ArrowLeft, Plus, Minus, ShoppingBag, AlertCircle, Sprout } from 'lucide-react';
 
 const getCustomerFarmNote = (notes?: string | null): string => {
   if (!notes) return '';
@@ -180,21 +180,13 @@ export const RoundDetailPage: React.FC = () => {
         </div>
 
         {/* Schedule grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+        <div className="text-xs sm:text-sm">
           <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
             <div className="flex items-center gap-2 font-semibold text-emerald-950">
               <Calendar className="w-4 h-4 text-emerald-600" />
               <span>วันที่เก็บ</span>
             </div>
             <p className="text-slate-700 font-medium">{round.is_pooled?harvestRange(round.harvest_start_date,round.harvest_end_date):formatDate(round.fulfillment_date)}</p>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100 space-y-1.5">
-            <div className="flex items-center gap-2 font-semibold text-amber-950">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <span>เริ่มเปิดรับจอง</span>
-            </div>
-            <p className="text-slate-700 font-medium">{formatDateTimeDMY(round.booking_opens_at)}</p>
           </div>
 
         </div>
