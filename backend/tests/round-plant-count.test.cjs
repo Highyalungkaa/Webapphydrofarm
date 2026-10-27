@@ -15,7 +15,7 @@ const loadTs = (relative, dependencies) => {
   return exports;
 };
 
-async function createRound(count, capacity = 100) {
+async function createRound(count, capacity = 100, options = {}) {
   const handlers = new Map();
   const router = {};
   for (const method of ['use', 'get', 'post', 'put', 'patch', 'delete']) router[method] = (url, ...callbacks) => handlers.set(`${method} ${url}`, callbacks.at(-1));
@@ -24,8 +24,9 @@ async function createRound(count, capacity = 100) {
     from(table) {
       let inserted;
       const result = () => {
-        if (table === 'crops') return { data: [{ id: cropId, slots_per_kg: 4.5 }], error: null };
-        if (table === 'plots') return { data: [{ id: plotId, crop_ids: [cropId], slot_capacity: capacity, is_active: true }], error: null };
+        if (table === 'crops') return { data: options.crops || [{ id: cropId, slots_per_kg: 4.5 }], error: null };
+        if (table === 'plots') return { data: options.plots || [{ id: plotId, crop_ids: [cropId], slot_capacity: capacity, is_active: true }], error: null };
+        if (table === 'planting_rounds' && !inserted) return {data:options.rounds||[],error:null};
         if (table === 'round_items') return { data: savedItems, error: null };
         return { data: { ...inserted, id: 'round' }, error: null };
       };
@@ -47,11 +48,13 @@ async function createRound(count, capacity = 100) {
     if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };
     if (name.endsWith('/plantingQuantities.js')) return quantities;
     if (name.endsWith('/plotCrops.js')) return plotCrops;
+    if (name.endsWith('/plantAllocation.js')) return loadTs('../src/services/plantAllocation.ts',require);
+    if (name.endsWith('/plotPlantingAllocations.js')) return loadTs('../src/services/plotPlantingAllocations.ts',dep=>dep.endsWith('/plantAllocation.js')?loadTs('../src/services/plantAllocation.ts',require):dep.endsWith('/plotCrops.js')?plotCrops:require(dep));
     return require(name);
   });
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
   await handlers.get('post /')({
-    body: { name: 'Count-based round', items: [{ crop_id: cropId, plant_count: count, growing_days: 45, estimated_qty_kg: 999, bookable_qty_kg: 999, price_per_kg: 100, plot_ids: [plotId] }] },
+    body: { name: 'Count-based round', items: options.items || [{ crop_id: cropId, plant_count: count, growing_days: 45, estimated_qty_kg: 999, bookable_qty_kg: 999, price_per_kg: 100, plot_ids: [plotId] }] },
     user: { id: 'admin', email: 'admin@example.com' },
   }, res);
   return { res, savedItems };
@@ -76,4 +79,14 @@ test('a small plant count needs no kilogram estimate to create a round', async (
   assert.equal(res.statusCode, 201);
   assert.equal(savedItems[0].plant_count, 2);
   assert.equal(savedItems[0].estimated_qty_kg, 0);
+});
+
+test('creating a shared round persists all crop placements and sends extra oak to the second plot',async()=>{
+ const other='33333333-3333-4333-8333-333333333333',second='44444444-4444-4444-8444-444444444444';
+ const options={crops:[{id:cropId,slots_per_kg:5},{id:other,slots_per_kg:5}],plots:[{id:plotId,crop_ids:[cropId,other],slot_capacity:500,is_active:true},{id:second,crop_ids:[cropId],slot_capacity:420,is_active:true}],items:[{crop_id:cropId,plant_count:200,growing_days:45,price_per_kg:100,plot_ids:[plotId,second]},{crop_id:other,plant_count:400,growing_days:45,price_per_kg:100,plot_ids:[plotId]}]};
+ const {res}=await createRound(200,500,options);assert.equal(res.statusCode,201);
+ const allocations=JSON.parse(res.body.notes).cropPlotAllocations;
+ assert.equal(allocations[cropId][plotId],100);assert.equal(allocations[cropId][second],100);assert.equal(allocations[other][plotId],400);
+ const occupied={id:'old',status:'growing',current_step:2,notes:JSON.stringify({cropPlotIds:{[cropId]:[second]}}),round_items:[{crop_id:cropId,plant_count:420}]};
+ const rejected=await createRound(200,500,{...options,rounds:[occupied]});assert.equal(rejected.res.statusCode,400);assert.equal(rejected.savedItems,undefined);
 });

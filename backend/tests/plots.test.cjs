@@ -47,7 +47,7 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [] } = {}) {
   };
   const helpers = loadTs('../src/services/plotCrops.ts', require);
   const timeline = loadTs('../src/services/plotRoundTimeline.ts', require);
-  const allocations = loadTs('../src/services/plotPlantingAllocations.ts', name => name.endsWith('/plotCrops.js') ? helpers : require(name));
+  const allocations = loadTs('../src/services/plotPlantingAllocations.ts', name => name.endsWith('/plantAllocation.js') ? loadTs('../src/services/plantAllocation.ts',require) : name.endsWith('/plotCrops.js') ? helpers : require(name));
   loadTs('../src/routes/admin/plots.ts', (name) => {
     if (name === 'express') return { Router: () => router };
     if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };

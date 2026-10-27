@@ -98,62 +98,11 @@ export const AdminRoundsPage: React.FC = () => {
     );
   }, [rounds]);
 
-  // Calculate used slots per plot from active ongoing rounds
-  const plotOccupancyMap = React.useMemo(() => {
-    const map: Record<
-      string,
-      {
-        occupiedSlots: number;
-        occupyingRounds: Array<{ roundId: string; roundName: string; cropName: string; usedSlots: number; step: number }>;
-      }
-    > = {};
-
-    activePlots.forEach((p) => {
-      map[p.id] = { occupiedSlots: 0, occupyingRounds: [] };
-    });
-
-    activeOngoingRounds.forEach((r) => {
-      let rCropPlotIds: Record<string, string[]> = {};
-      try {
-        const parsed = JSON.parse(r.notes || '{}');
-        if (parsed && typeof parsed.cropPlotIds === 'object') {
-          rCropPlotIds = parsed.cropPlotIds;
-        }
-      } catch {}
-
-      (r.round_items || []).forEach((item: any) => {
-        const crop = crops.find((c) => c.id === item.crop_id) || item.crops;
-        let slotsNeeded = Number(item.plant_count || 0);
-
-        // Plots assigned to this item
-        const itemPlotIds: string[] = rCropPlotIds[item.crop_id] || (Array.isArray(item.plot_ids) ? item.plot_ids : []);
-        const itemPlots = itemPlotIds.length > 0
-          ? activePlots.filter((p) => itemPlotIds.includes(p.id))
-          : activePlots.filter((p) => plotSupportsCrop(p, item.crop_id));
-
-        itemPlots.forEach((plot) => {
-          if (slotsNeeded <= 0) return;
-          const occ = map[plot.id];
-          if (!occ) return;
-          const cap = Number(plot.slot_capacity || 0);
-          const currentOcc = occ.occupiedSlots;
-          const remainingInPlot = Math.max(0, cap - currentOcc);
-          const usedInThisPlot = Math.min(slotsNeeded, remainingInPlot);
-          occ.occupiedSlots += usedInThisPlot;
-          occ.occupyingRounds.push({
-            roundId: r.id,
-            roundName: r.name,
-            cropName: crop?.name || 'ผัก',
-            usedSlots: usedInThisPlot,
-            step: r.current_step || 1,
-          });
-          slotsNeeded -= usedInThisPlot;
-        });
-      });
-    });
-
-    return map;
-  }, [rounds, activePlots, crops, activeOngoingRounds]);
+  // Use the saved placement returned by plot management, including earlier rounds.
+  const plotOccupancyMap=React.useMemo(()=>Object.fromEntries(activePlots.map(plot=>[plot.id,{
+    occupiedSlots:Number(plot.used_slots||0),
+    occupyingRounds:(plot.occupying_rounds||[]).map(r=>({roundId:r.id,roundName:r.name,cropName:r.crop_name,usedSlots:r.used_slots,step:r.current_step||1})),
+  }])),[activePlots]);
 
   const farmTotalSlots = activePlots.reduce((s, p) => s + Number(p.slot_capacity || 0), 0);
   const farmOccupiedSlots = Object.values(plotOccupancyMap).reduce((s, o) => s + o.occupiedSlots, 0);
@@ -199,7 +148,7 @@ export const AdminRoundsPage: React.FC = () => {
     return [...segments.values()];
   };
   const itemOccupiedSlots = (index: number, plotId: string) =>
-    plotSlotAllocation.beforeItem[index]?.[plotId] ?? plotOccupancyMap[plotId]?.occupiedSlots ?? 0;
+    plotSlotAllocation.occupiedByOthers[index]?.[plotId] ?? plotOccupancyMap[plotId]?.occupiedSlots ?? 0;
 
   const handleAddItem = () => {
     setFormError(null);

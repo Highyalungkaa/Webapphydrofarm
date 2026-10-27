@@ -10,7 +10,7 @@ function loadHelper(relative) {
   const exports = {};
   const file = path.resolve(__dirname,relative);
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-    exports,require(name){return name.endsWith('/plotCrops.js')?loadHelper('../src/services/plotCrops.ts'):require(name);},
+    exports,require(name){if(name.endsWith('/plantAllocation.js'))return loadHelper('../src/services/plantAllocation.ts');return name.endsWith('/plotCrops.js')?loadHelper('../src/services/plotCrops.ts'):require(name);},
   });
   return exports;
 }

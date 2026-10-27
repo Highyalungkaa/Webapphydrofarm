@@ -47,7 +47,7 @@ function setup(initialRound = {}) {
       if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };
       if (name.endsWith('/auth.js')) return {};
       if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };
-      if (name.endsWith('/plotCrops.js')) return {};
+      if (name.endsWith('/plotCrops.js')||name.endsWith('/plantAllocation.js')||name.endsWith('/plotPlantingAllocations.js')) return {};
       if (name.endsWith('/plantingQuantities.js')) return {};
       return require(name);
     },

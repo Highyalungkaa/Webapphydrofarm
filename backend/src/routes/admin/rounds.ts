@@ -1,3 +1,5 @@
+import {getPlotPlantingAllocations} from '../../services/plotPlantingAllocations.js';
+import {allocatePlotSlots} from '../../services/plantAllocation.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
@@ -360,6 +362,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     const { items, ...inputRoundData } = parsed.data;
     const db = getSupabaseClient(req);
 
+    let cropPlotAllocations:Record<string,Record<string,number>>={};
     if (items?.length) {
       const missingDaysIndex = items.findIndex((item) => item.growing_days == null);
       if (missingDaysIndex !== -1) {
@@ -399,7 +402,6 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
       const selectedPlotMap = new Map((selectedPlots || []).map((plot) => [plot.id, plot]));
-      const remainingSlots = new Map((selectedPlots || []).map((plot) => [plot.id, Number(plot.slot_capacity)]));
       for (const item of items) {
         if (!item.plot_ids?.every((plotId) => {
           const plot = selectedPlotMap.get(plotId);
@@ -408,20 +410,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
           res.status(400).json({ error: 'เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น' });
           return;
         }
-        const crop = activeCropRows?.find((crop) => crop.id === item.crop_id);
-        let needed = item.plant_count || 0;
-        for (const plot of selectedPlots || []) {
-          if (!item.plot_ids.includes(plot.id)) continue;
-          const available = remainingSlots.get(plot.id) || 0;
-          const allocated = Math.min(available, needed);
-          remainingSlots.set(plot.id, available - allocated);
-          needed -= allocated;
-        }
-        if (needed > 0) {
-          res.status(400).json({ error: 'พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิดที่ใช้แปลงร่วมกัน กรุณาปรับจำนวนปลูกหรือเพิ่มแปลง' });
-          return;
-        }
       }
+      const [allPlotsResult,existingRoundsResult]=await Promise.all([
+        db.from('plots').select('id,crop_id,crop_ids,slot_capacity').order('zone_name',{ascending:true}).order('name',{ascending:true}),
+        db.from('planting_rounds').select('id,name,status,current_step,completed_date,sold_out_date,notes,round_items(id,crop_id,plant_count,estimated_qty_kg,bookable_qty_kg,crops(name,slots_per_kg))').order('created_at',{ascending:true}),
+      ]);
+      if(allPlotsResult.error||existingRoundsResult.error){res.status(500).json({error:'ไม่สามารถตรวจสอบพื้นที่แปลงที่ใช้งานอยู่ได้ กรุณาลองใหม่'});return;}
+      const existing=getPlotPlantingAllocations(allPlotsResult.data||[],existingRoundsResult.data||[]);
+      const occupied:Record<string,number>={};for(const a of existing.allocations)occupied[a.plot_id]=(occupied[a.plot_id]||0)+a.plant_count;
+      const plan=allocatePlotSlots(selectedPlots||[],items.map(item=>({...item,selected_plot_ids:item.plot_ids||[]})),{},occupied);
+      if(plan.unallocatedByItem.some(n=>n>0)){
+        res.status(400).json({error:'พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิด กรุณาปรับจำนวนต้นหรือเลือกแปลงเพิ่ม'});return;
+      }
+      cropPlotAllocations=Object.fromEntries(items.map((item,index)=>[item.crop_id,plan.allocatedByItem[index]]));
     }
 
     const todayStr = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -466,6 +467,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
             note: inputRoundData.notes?.trim() || '',
             cropGrowingDays: cropGrowingDaysMap,
             cropPlotIds: cropPlotIdsMap,
+            cropPlotAllocations,
           });
         }
         return inputRoundData.notes?.trim() || null;
