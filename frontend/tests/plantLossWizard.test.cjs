@@ -31,10 +31,11 @@ test('legacy unassigned crops cannot appear in an unrelated plot',()=>{
   assert.equal(getLossItemsForPlot(items,'__unassigned__').length,0);
   assert.equal(getLossPlotChoices([items[3]]).length,0);
 });
-test('final step accepts real calendar dates within the planting period',()=>{
-  assert.equal(isValidLossDate('2026-10-21','2026-10-01','2026-10-21'),true);
-  assert.equal(isValidLossDate('2026-10-01','2026-10-01','2026-10-21'),true);
-  for(const date of ['','2026-10-22','2026-09-30','2026-02-30','2026-2-03']) {
-    assert.equal(isValidLossDate(date,'2026-10-01','2026-10-21'),false);
+test('final step permits historical discovery dates without a planting-start boundary',()=>{
+  assert.equal(isValidLossDate('2026-10-21','','2026-10-21'),true);
+  assert.equal(isValidLossDate('2026-10-01','','2026-10-21'),true);
+  assert.equal(isValidLossDate('2026-09-30','','2026-10-21'),true);
+  for(const date of ['','2026-10-22','2026-02-30','2026-2-03']) {
+    assert.equal(isValidLossDate(date,'','2026-10-21'),false);
   }
 });

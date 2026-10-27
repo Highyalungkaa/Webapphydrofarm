@@ -31,7 +31,7 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
       substitute_total_cost NUMERIC,substitute_cost_per_kg NUMERIC,discount_amount NUMERIC DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now());
     CREATE TABLE public.audit_logs(actor_id UUID,actor_email TEXT,entity_type TEXT,entity_id TEXT,action TEXT,old_data JSONB,new_data JSONB);`);
   for(const name of ['011_manual_booking_close_time.sql','012_fix_order_fulfillment_source_enum.sql','022_require_admin_order_confirmation.sql',
-    '031_plant_loss_history.sql','032_close_round_with_unsold.sql','033_admin_chat_orders.sql',...(previousWeights?['034_weighed_orders_and_extra_stock.sql']:[]),'035_manual_orders_and_purchase_limits.sql','035_manual_orders_and_purchase_limits.sql','036_round_order_limits.sql','036_round_order_limits.sql','037_per_crop_order_limits.sql','037_per_crop_order_limits.sql','038_projected_crop_weight.sql']){try{await db.exec(migration(name));}catch(e){throw new Error(name+': '+e.message+' '+(e.internalQuery||'').slice(3000,5400));}}
+    '031_plant_loss_history.sql','032_close_round_with_unsold.sql','033_admin_chat_orders.sql',...(previousWeights?['034_weighed_orders_and_extra_stock.sql']:[]),'035_manual_orders_and_purchase_limits.sql','035_manual_orders_and_purchase_limits.sql','036_round_order_limits.sql','036_round_order_limits.sql','037_per_crop_order_limits.sql','037_per_crop_order_limits.sql','038_projected_crop_weight.sql','039_allow_backdated_plant_losses.sql','039_allow_backdated_plant_losses.sql']){try{await db.exec(migration(name));}catch(e){throw new Error(name+': '+e.message+' '+(e.internalQuery||'').slice(3000,5400));}}
   // The payment completion trigger is also installed in production (migration 030).
   const payment=migration('030_protect_orders_and_payment_completion.sql');
   await db.exec(payment.slice(payment.indexOf('CREATE OR REPLACE FUNCTION public.require_payment_before_completion()'),payment.indexOf('DROP TRIGGER IF EXISTS require_payment_before_completion ON public.equipment_orders;')));
@@ -133,6 +133,13 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
     await assert.rejects(limits(ids,true,0.4),/0.5/);
     await assert.rejects(db.query('SELECT public.set_round_purchase_limits($1,$2,true,$3)',[actor,ids.round,'[]']),/ทุกชนิด/);
     assert.equal(Number((await db.query('SELECT max_qty_per_order_kg FROM public.round_items WHERE id=$1',[ids.item])).rows[0].max_qty_per_order_kg),1);
+  });
+  await t.test('loss discovery can precede the recorded planting date but cannot be in the future',async()=>{
+    const ids=await setup();
+    await db.query("SELECT public.record_plant_loss($1,$2,$3,$4,$5::DATE-60,10,'Backdated discovery',NULL,NULL,NULL,NULL)",[ids.round,ids.item,actor,randomUUID(),today]);
+    assert.equal((await db.query('SELECT lost_plant_count FROM public.round_items WHERE id=$1',[ids.item])).rows[0].lost_plant_count,10);
+    await assert.rejects(db.query("SELECT public.record_plant_loss($1,$2,$3,$4,$5::DATE+1,10,'Future discovery',NULL,NULL,NULL,NULL)",[ids.round,ids.item,actor,randomUUID(),today]),/ไม่เกินวันนี้/);
+    assert.equal((await db.query('SELECT count(*) AS n FROM public.plant_losses WHERE round_id=$1',[ids.round])).rows[0].n,1);
   });
   await t.test('plant damage records only plant counts and leaves weight fields uncalculated',async()=>{
     const ids=await setup();await db.query("SELECT public.record_plant_loss($1,$2,$3,$4,$5,50,'Damage',NULL,NULL,NULL,NULL)",[ids.round,ids.item,actor,randomUUID(),today]);
