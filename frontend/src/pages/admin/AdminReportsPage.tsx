@@ -275,11 +275,11 @@ const SubstituteBar: React.FC<{ crop: SubstituteReport; maxQty: number }> = ({ c
 
 const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const data = crops.slice(0, 8);
-  const width = 760;
+  const width = Math.max(760, data.length * 112 + 70);
   const height = 300;
   const left = 52;
   const right = 18;
-  const top = 18;
+  const top = 40;
   const bottom = 52;
   const plotHeight = height - top - bottom;
   const plotWidth = width - left - right;
@@ -306,10 +306,13 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
       const soldX = center + gap / 2;
       const bookedHeight = Math.max(crop.bookedKg > 0 ? 2 : 0, crop.bookedKg / axisMax * plotHeight);
       const soldHeight = Math.max(crop.soldKg > 0 ? 2 : 0, crop.soldKg / axisMax * plotHeight);
+      const bookedLabelY = y(crop.bookedKg) - 8 - (Math.abs(y(crop.bookedKg) - y(crop.soldKg)) < 16 ? 16 : 0);
       return <g key={crop.name}>
         <title>{crop.name}: จอง {kg(crop.bookedKg)}, ขายสำเร็จ {kg(crop.soldKg)}</title>
         <rect x={bookedX} y={y(crop.bookedKg)} width={barWidth} height={bookedHeight} rx="6" fill="#10b981" />
         <rect x={soldX} y={y(crop.soldKg)} width={barWidth} height={soldHeight} rx="6" fill="#0ea5e9" />
+        <text x={bookedX + barWidth / 2} y={bookedLabelY} textAnchor="middle" fill="#047857" fontSize="11" fontWeight="700">{numberFormat.format(crop.bookedKg)}</text>
+        <text x={soldX + barWidth / 2} y={y(crop.soldKg) - 8} textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">{numberFormat.format(crop.soldKg)}</text>
         <text x={center} y={height - 24} textAnchor="middle" fill="#475569" fontSize="10" fontWeight="600">{crop.name.length > 10 ? `${crop.name.slice(0, 9)}…` : crop.name}</text>
       </g>;
     })}
