@@ -2,12 +2,18 @@ import {scopeOrderToRound} from './pooledBooking.js';
 import {orderMetrics,deliveredItemKg,receiptAmount,receiptByItem,itemGrossAmount} from './orderReport.js';
 import { orderCustomerKey } from './orderCustomer.js';
 import type { Order, OrderItem, PlantingRound, RoundItem } from '../types/index.js';
+import {deliveryCompleteness,recordedPlantCount,validateExportPeriod} from './reportExportData.js';
+import type {ReportExportData} from './reportExportData.js';
+import {appendOperationalSheets} from './exportOperationalSheets.js';
 
 type ExportOptions = {
   orders: Order[];
   rounds: PlantingRound[];
   selectedRoundId: string;
   exportedAt: Date;
+  operations?:ReportExportData;
+  periodStart?:string;
+  periodEnd?:string;
 };
 
 type SheetColumn = { header: string; key: string; width: number; format?: string };
@@ -50,7 +56,8 @@ const dateOnly = (value?: string | null): Date | null => {
   return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : bangkokDate(value);
 };
 
-export async function exportVegetableReport({ orders, rounds, selectedRoundId, exportedAt }: ExportOptions): Promise<void> {
+export async function exportVegetableReport({ orders, rounds, selectedRoundId, exportedAt,operations,periodStart='',periodEnd='' }: ExportOptions): Promise<void> {
+  validateExportPeriod(periodStart,periodEnd);
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'HydroFarm';
@@ -77,8 +84,13 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
 
   const addSheet = (name: string, subtitle: string, columns: SheetColumn[]) => {
     const sheet = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 5 }] });
-    sheet.columns = columns.map(({ header, key, width }) => ({ header, key, width }));
-    sheet.spliceRows(1, 0, [name], [`ขอบเขต: ${selectedName}`], [subtitle], ['สร้างเมื่อ (เวลาไทย)', generated], []);
+    sheet.columns = columns.map(({ key, width }) => ({ key, width }));
+    sheet.getCell(1,1).value=name;
+    sheet.getCell(2,1).value=`ขอบเขต: ${selectedName}`;
+    sheet.getCell(3,1).value=subtitle;
+    sheet.getCell(4,1).value='สร้างเมื่อ (เวลาไทย)';
+    sheet.getCell(4,2).value=generated;
+    columns.forEach((column,index)=>{sheet.getCell(6,index+1).value=column.header;});
     sheet.mergeCells(1, 1, 1, columns.length);
     sheet.mergeCells(2, 1, 2, columns.length);
     sheet.mergeCells(3, 1, 3, columns.length);
@@ -86,11 +98,12 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     sheet.getCell(1, 1).font = { name: 'Aptos', size: 17, bold: true, color: { argb: 'FFFFFFFF' } };
     sheet.getCell(1, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF103E31' } };
     sheet.getRow(2).height = 22;
-    sheet.getRow(3).height = 26;
+    sheet.getRow(3).height = 42;
+    sheet.getCell(3,1).alignment={wrapText:true,vertical:'middle'};
     sheet.getCell(2, 1).font = { bold: true, color: { argb: 'FF166534' } };
     sheet.getCell(3, 1).font = { color: { argb: 'FF64748B' } };
     const heading = sheet.getRow(6);
-    heading.height = 25;
+    heading.height = 42;
     heading.eachCell((cell) => {
       cell.font = { name: 'Aptos', bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF176548' } };
@@ -110,7 +123,9 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
           if (row % 2 === 0) sheet.getRow(row).eachCell((cell) => {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F8F4' } };
           });
-          sheet.getRow(row).alignment = { vertical: 'middle' };
+          sheet.getRow(row).alignment = { vertical: 'middle',wrapText:true };
+          const lines=Math.max(1,...columns.map((column,index)=>{const cell=sheet.getCell(row,index+1);if(cell.value instanceof Date||typeof cell.value==='number')return 1;return String(cell.text||'').split('\n').reduce((count,line)=>count+Math.max(1,Math.ceil(line.length/Math.max(10,column.width*0.85))),0);}));
+          sheet.getRow(row).height=Math.min(409,Math.max(30,lines*15+6));
         }
       },
     };
@@ -132,7 +147,8 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     ['รอบปลูกในรายงาน', scopedRounds.length, 'รอบ', 'จำนวนรอบที่อยู่ในขอบเขตที่เลือก'],
     ['คำสั่งจอง', activeOrders.length, 'ออเดอร์', 'ทุกสถานะ ยกเว้นยกเลิก'],
     ['ลูกค้าที่สั่งจอง', new Set(activeOrders.map(orderCustomerKey)).size, 'คน', 'นับลูกค้าไม่ซ้ำกันจากคำสั่งจองที่ไม่ยกเลิก'],
-    ['จำนวนต้นที่ปลูก', sum(scopedRounds.flatMap(r=>r.round_items||[]),i=>number(i.plant_count)), 'ต้น', 'จำนวนต้นที่บันทึกตอนสร้างรอบปลูก'],
+    ['จำนวนต้นที่ปลูก', sum(scopedRounds.flatMap(r=>r.round_items||[]),i=>number(recordedPlantCount(i))), 'ต้น', 'จำนวนต้นที่บันทึกไว้ ไม่ประมาณจากน้ำหนักเมื่อไม่มีข้อมูลต้น'],
+    ['ต้นเสียหายระหว่างปลูก',sum(scopedRounds.flatMap(r=>r.round_items||[]),i=>number(i.lost_plant_count)),'ต้น','ยอดเสียหายสุทธิที่บันทึกในรอบ ไม่รวมรายการที่ยกเลิกการบันทึก'],
     ['ปริมาณที่จอง', bookedKg, 'กก.', 'รวมจำนวนผักในคำสั่งจองที่ไม่ยกเลิก'],
     ['ส่งมอบจริง', soldKg, 'กก.', 'น้ำหนักฟาร์มที่ชั่งจริงบวกผักทดแทนในออเดอร์สำเร็จ เฉพาะรายการที่บันทึกน้ำหนักแล้ว'],
     ['อัตราสำเร็จต่อยอดจอง', openedKg > 0 ? soldKg / openedKg : 0, '%', 'น้ำหนักส่งจริงที่บันทึก ÷ น้ำหนักจอง'],
@@ -144,6 +160,11 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     ['ผักทดแทน', substitutionKg, 'กก.', 'ปริมาณผักที่ระบุว่าได้จากแหล่งอื่น'],
     ['ต้นทุนผักทดแทน', substitutionCost, 'บาท', 'ต้นทุนซื้อผักทดแทนที่บันทึกในรายการออเดอร์'],
   ];
+  if(operations){const ids=new Set(scopedRounds.map(r=>r.id));const unsold=operations.unsoldItems.filter(i=>ids.has(i.round_id));
+    summaryRows.push(['ต้นขายไม่ออก',sum(unsold,i=>number(i.unsold_plant_count)),'ต้น','จำนวนต้นตามบันทึกปิดรอบ'],
+      ['น้ำหนักขายไม่ออกชั่งจริงที่บันทึก',sum(unsold.filter(i=>i.unsold_actual_kg!=null),i=>number(i.unsold_actual_kg)),'กก.','รวมเฉพาะน้ำหนักชั่งจริงที่มีบันทึก ไม่รวมน้ำหนักประมาณเดิม'],
+      ['รายการขายไม่ออกที่ไม่มีน้ำหนักชั่ง',unsold.filter(i=>number(i.unsold_plant_count)>0&&i.unsold_actual_kg==null).length,'รายการ','ไม่นำค่าประมาณมาแทนข้อมูลชั่งจริง']);
+  }
   summaryRows.forEach(([metric, value, unit, definition]) => {
     const row = summary.sheet.addRow({ metric, value, unit, definition });
     row.getCell(2).numFmt = unit === '%' ? '0.0%' : unit === 'บาท' || unit === 'กก.' ? '#,##0.00' : countFormat;
@@ -164,12 +185,16 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'เงินรับจริง (บาท)', key: 'received', width: 22, format: moneyFormat },
     { header: 'ผักทดแทน (กก.)', key: 'substituteKg', width: 20, format: kgFormat },
     { header: 'ต้นทุนทดแทน (บาท)', key: 'substituteCost', width: 23, format: moneyFormat },
+    ...['วันที่ปักเม็ด','วันใส่ปุ๋ย','วันเริ่มปลูก','วันปลูกจริง','วันที่พร้อมเก็บและขาย','วันที่สิ้นสุดรอบ'].map((header,index)=>({header,key:'stage'+index,width:23,format:dayFormat})),
+    {header:'เหตุผลสิ้นสุดรอบ',key:'closure',width:26},
+    {header:'ต้นเสียหาย',key:'lost',width:18,format:countFormat},
+    {header:'ต้นคงเหลือหลังเสียหาย',key:'remaining',width:26,format:countFormat},
   ]);
   scopedRounds.forEach((round) => {
     const allRelated=scopedOrders.map(order=>scopeOrderToRound(order,round.id)).filter((order):order is Order=>order!==null);
     const related = allRelated.filter(order=>order.status!=='cancelled');
     const completed = related.filter((order) => order.status === 'completed');
-    const opened = sum(round.round_items || [], (item) => number(item.plant_count));
+    const opened = sum(round.round_items || [], (item) => number(recordedPlantCount(item)));
     const sold = sum(completed.flatMap(itemsOf), delivered);
     const items = related.flatMap(itemsOf);
     roundSheet.sheet.addRow({
@@ -179,6 +204,9 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
       bookedAmount: sum(related, (order) => number(order.total_amount)),
       soldAmount: sum(completed, (order) => number(order.total_amount)),received:sum(allRelated,receiptAmount),
       substituteKg: sum(items, substituteQty), substituteCost: sum(items, substituteCost),
+      ...Object.fromEntries([round.seed_date,round.fertilizing_date,round.planting_start_date,round.transplant_date,round.harvest_sale_date,round.completed_date].map((date,index)=>['stage'+index,dateOnly(date)])),
+      closure:round.closure_reason==='unsold'?'ผักขายไม่ออกและสิ้นสุดรอบ':round.status==='completed'?'สิ้นสุดรอบปกติ':round.status==='cancelled'?'ยกเลิกรอบ':'-',
+      lost:sum(round.round_items||[],i=>number(i.lost_plant_count)),remaining:sum(round.round_items||[],i=>Math.max(0,number(recordedPlantCount(i))-number(i.lost_plant_count))),
     });
   });
   roundSheet.finish();
@@ -194,6 +222,12 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'เงินรับจริง (บาท)', key: 'received', width: 22, format: moneyFormat },
     { header: 'ผักทดแทน (กก.)', key: 'substituteKg', width: 21, format: kgFormat },
     { header: 'ต้นทุนทดแทน (บาท)', key: 'substituteCost', width: 24, format: moneyFormat },
+    {header:'ต้นเสียหาย',key:'lost',width:17,format:countFormat},
+    {header:'ต้นคงเหลือหลังเสียหาย',key:'remaining',width:26,format:countFormat},
+    {header:'ต้น/กก. ที่บันทึกในรอบ',key:'rate',width:25,format:kgFormat},
+    {header:'ผลผลิตประมาณก่อนเสียหาย (กก.)',key:'forecast',width:32,format:kgFormat},
+    {header:'ผลผลิตประมาณหลังเสียหาย (กก.)',key:'remainingForecast',width:32,format:kgFormat},
+    {header:'ความครบถ้วนข้อมูลการปลูก',key:'plantData',width:32},
   ]);
   scopedRounds.forEach((round) => {
     (round.round_items || []).forEach((roundItem: RoundItem) => {
@@ -203,10 +237,15 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
       const discounts = sum(matching, discount);
       cropSheet.sheet.addRow({
         roundId: round.id, roundName: round.name, crop: roundItem.crops?.name || roundItem.crop_name || 'ไม่ระบุชนิดผัก',
-        opened: number(roundItem.plant_count), booked: sum(matching, (item) => number(item.qty_kg)),
+        opened: recordedPlantCount(roundItem), booked: sum(matching, (item) => number(item.qty_kg)),
         sold: sum(completed, delivered),received:sum(scopedOrders.flatMap(itemsOf).filter(item=>item.round_item_id===roundItem.id),item=>cashByItem.get(item.id)||0), gross: grossAmount, discount: discounts,
         net: grossAmount - discounts, substituteKg: sum(matching, substituteQty),
         substituteCost: sum(matching, substituteCost),
+        lost:number(roundItem.lost_plant_count),remaining:recordedPlantCount(roundItem)==null?null:Math.max(0,number(recordedPlantCount(roundItem))-number(roundItem.lost_plant_count)),
+        rate:roundItem.planting_plants_per_kg??null,
+        forecast:Number(roundItem.planting_plants_per_kg)>0&&recordedPlantCount(roundItem)!=null?Math.floor(number(recordedPlantCount(roundItem))/Number(roundItem.planting_plants_per_kg)):null,
+        remainingForecast:Number(roundItem.planting_plants_per_kg)>0&&recordedPlantCount(roundItem)!=null?Math.floor(Math.max(0,number(recordedPlantCount(roundItem))-number(roundItem.lost_plant_count))/Number(roundItem.planting_plants_per_kg)):null,
+        plantData:recordedPlantCount(roundItem)==null?'ยังไม่บันทึกจำนวนต้น':Number(roundItem.planting_plants_per_kg)>0?'มีจำนวนต้นและอัตราของรอบ':'ไม่มีอัตราต้น/กก. ของรอบ',
       });
     });
   });
@@ -229,6 +268,17 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'ส่งจริง (กก.)', key: 'delivered', width: 20, format: kgFormat },
     { header: 'เงินรับจริง (บาท)', key: 'received', width: 22, format: moneyFormat },
     { header: 'วันเวลารับเงิน', key: 'paidAt', width: 23, format: timeFormat },
+    {header:'ยอดค้างรับ (บาท)',key:'outstanding',width:22,format:moneyFormat},
+    {header:'วิธีชำระเงิน',key:'paymentMethod',width:20},
+    {header:'วันเวลาส่งมอบสำเร็จ',key:'completedAt',width:25,format:timeFormat},
+    {header:'ส่งเกิน/ขาดจากจอง (กก.)',key:'variance',width:28,format:kgFormat},
+    {header:'ข้อมูลน้ำหนักส่งจริง',key:'completeness',width:32},
+    {header:'เบอร์ติดต่อ',key:'phone',width:21},
+    {header:'ที่อยู่จัดส่ง',key:'address',width:45},
+    {header:'เขตจัดส่ง',key:'district',width:25},
+    {header:'กำหนดยืนยันออเดอร์',key:'expires',width:25,format:timeFormat},
+    {header:'วันเวลายกเลิก',key:'cancelledAt',width:25,format:timeFormat},
+    {header:'เหตุผลยกเลิก',key:'cancelReason',width:45},
   ]);
   [...scopedOrders].sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach((order) => {
     const items = itemsOf(order);
@@ -243,7 +293,11 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
       sourceReference: order.source_reference || '-',
       fulfillment: order.fulfillment_method === 'pickup' ? 'รับเองที่ฟาร์ม' : 'จัดส่งปกติ',
       itemCount: items.length, qty: sum(items, (item) => number(item.qty_kg)),
-      gross: sum(items, gross), discount: sum(items, discount), total: number(order.total_amount),delivered:sum(items,delivered),received:receiptAmount(order),paidAt:bangkokDate(order.paid_at),
+      gross: sum(items, gross), discount: sum(items, discount), total: number(order.total_amount),delivered:order.status==='completed'&&items.some(i=>i.own_qty_kg==null)?null:sum(items,delivered),received:receiptAmount(order),paidAt:bangkokDate(order.paid_at),
+      outstanding:orderMetrics([order]).outstandingAmount,paymentMethod:order.payment_method==='transfer'?'โอนเงิน':order.payment_method==='cash'?'เงินสด':'ยังไม่บันทึก',
+      completedAt:bangkokDate(order.completed_at),variance:order.status==='completed'&&items.every(i=>i.own_qty_kg!=null)?sum(items,delivered)-sum(items,i=>number(i.qty_kg)):null,
+      completeness:deliveryCompleteness(order),phone:order.contact_phone||order.profiles?.phone||'-',address:order.delivery_address||'-',district:order.districts?.name||'-',
+      expires:bangkokDate(order.confirmation_expires_at),cancelledAt:bangkokDate(order.cancelled_at),cancelReason:order.cancel_reason||'-',
     });
   });
   orderSheet.finish();
@@ -261,6 +315,9 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     { header: 'ชั่งจัดจริงผักฟาร์ม (กก.)', key: 'ownWeighed', width: 26, format: kgFormat },
     { header: 'ผักทดแทน (กก.)', key: 'fulfilled', width: 21, format: kgFormat },
     { header: 'แหล่งสินค้า', key: 'source', width: 18 },
+    {header:'ชื่อรอบต้นทาง',key:'sourceRound',width:30},
+    {header:'ส่งเกิน/ขาดจากจอง (กก.)',key:'variance',width:28,format:kgFormat},
+    {header:'ข้อมูลน้ำหนักส่งจริง',key:'completeness',width:32},
   ]);
   scopedOrders.forEach((order) => itemsOf(order).forEach((item) => itemSheet.sheet.addRow({
     orderId: order.id, roundId: item.round_items?.round_id||order.round_id, crop: cropName(item), status: orderStatus[order.status] || order.status,
@@ -270,25 +327,33 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     ownWeighed: item.own_qty_kg == null ? null : number(item.own_qty_kg),
     fulfilled: item.fulfillment_source === 'substitute' ? number(item.fulfilled_qty_kg) : 0,
     source: item.fulfillment_source === 'substitute' ? 'ผักทดแทน' : item.fulfillment_source === 'own' ? 'จากฟาร์ม' : '-',
+    sourceRound:roundById.get(item.round_items?.round_id||order.round_id)?.name||'-',
+    variance:order.status==='completed'&&item.own_qty_kg!=null?number(deliveredItemKg(order,item))-number(item.qty_kg):null,
+    completeness:deliveryCompleteness({...order,order_items:[item]}),
   })));
   itemSheet.finish();
 
-  const customerSheet = addSheet('ลูกค้า', 'หนึ่งแถวต่อลูกค้าที่มีคำสั่งจองไม่ยกเลิก เรียงตามจำนวนออเดอร์', [
+  const customerSheet = addSheet('ลูกค้า', 'หนึ่งแถวต่อลูกค้า ยอดจองไม่รวมยกเลิก เงินรับรวมออเดอร์ยกเลิกที่ยังมีเงินรับ เรียงตามจำนวนออเดอร์', [
     { header: 'รหัสลูกค้า', key: 'id', width: 38 }, { header: 'ชื่อลูกค้า', key: 'name', width: 27 },
     { header: 'เบอร์ติดต่อ', key: 'phone', width: 20 }, { header: 'จำนวนออเดอร์', key: 'orders', width: 20, format: countFormat },
     { header: 'ปริมาณจอง (กก.)', key: 'qty', width: 22, format: kgFormat },
     { header: 'มูลค่าจองสุทธิ (บาท)', key: 'amount', width: 26, format: moneyFormat },
     { header: 'ออเดอร์สำเร็จ', key: 'completed', width: 21, format: countFormat },
+    {header:'ส่งจริงที่ทราบน้ำหนัก (กก.)',key:'delivered',width:30,format:kgFormat},
+    {header:'เงินรับจริง (บาท)',key:'received',width:23,format:moneyFormat},
+    {header:'ยอดค้างรับ (บาท)',key:'outstanding',width:23,format:moneyFormat},
+    {header:'ออเดอร์ยกเลิก',key:'cancelled',width:21,format:countFormat},
+    {header:'ออเดอร์ไม่มารับ',key:'noShow',width:21,format:countFormat},
   ]);
-  const customers = new Map<string, { id: string; name: string; phone: string; orders: number; qty: number; amount: number; completed: number }>();
-  activeOrders.forEach((order) => {
+  const customers = new Map<string, { id: string; name: string; phone: string; orders: number; qty: number; amount: number; completed: number;delivered:number;received:number;outstanding:number;cancelled:number;noShow:number }>();
+  scopedOrders.forEach((order) => {
     const row = customers.get(orderCustomerKey(order)) || {
       id: orderCustomerKey(order), name: order.customer_name || order.profiles?.full_name || '-',
-      phone: order.contact_phone || order.profiles?.phone || '-', orders: 0, qty: 0, amount: 0, completed: 0,
+      phone: order.contact_phone || order.profiles?.phone || '-', orders: 0, qty: 0, amount: 0, completed: 0,delivered:0,received:0,outstanding:0,cancelled:0,noShow:0,
     };
-    row.orders += 1;
-    row.qty += sum(itemsOf(order), (item) => number(item.qty_kg));
-    row.amount += number(order.total_amount);
+    if(order.status!=='cancelled'){row.orders += 1;row.qty += sum(itemsOf(order), (item) => number(item.qty_kg));row.amount += number(order.total_amount);}
+    const totals=orderMetrics([order]);row.delivered+=totals.deliveredKg;row.received+=totals.receivedAmount;row.outstanding+=totals.outstandingAmount;
+    if(order.status==='cancelled')row.cancelled++;if(order.status==='no_show')row.noShow++;
     if (order.status === 'completed') row.completed += 1;
     customers.set(orderCustomerKey(order), row);
   });
@@ -308,13 +373,15 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     const qty = substituteQty(item);
     const cost = substituteCost(item);
     substituteSheet.sheet.addRow({
-      orderId: order.id, roundName: roundById.get(order.round_id)?.name || order.planting_rounds?.name || '-',
+      orderId: order.id, roundName: roundById.get(item.round_items?.round_id||order.round_id)?.name || '-',
       crop: cropName(item), booked: number(item.qty_kg), qty, cost,
       costPerKg: qty > 0 ? cost / qty : 0,
       supplier: item.substitute_supplier || '-', note: item.substitute_note || '-',
     });
   }));
   substituteSheet.finish();
+
+  if(operations)appendOperationalSheets({addSheet,data:operations,orders:scopedOrders,rounds:scopedRounds,periodStart,periodEnd,bangkokDate,dateOnly});
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

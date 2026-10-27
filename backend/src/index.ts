@@ -26,6 +26,7 @@ import adminAuditRouter from './routes/admin/audit.js';
 import adminCustomersRouter from './routes/admin/customers.js';
 import adminFarmRouter from './routes/admin/farm.js';
 import adminPlotsRouter from './routes/admin/plots.js';
+import adminReportsRouter from './routes/admin/reports.js';
 import equipmentRouter from './routes/equipment.js';
 import {reconcileOrderExpiry} from './middlewares/orderExpiry.js';
 
@@ -86,6 +87,7 @@ app.use('/api/admin/audit', adminAuditRouter);
 app.use('/api/admin/customers', adminCustomersRouter);
 app.use('/api/admin/farm', adminFarmRouter);
 app.use('/api/admin/plots', adminPlotsRouter);
+app.use('/api/admin/reports', adminReportsRouter);
 
 // 404 Route Handler
 app.use((_req: Request, res: Response) => {

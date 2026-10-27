@@ -5,6 +5,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
 import { Order, PlantingRound } from '../../types/index.js';
+import type {ReportExportData} from '../../lib/reportExportData.js';
+import {validateExportPeriod} from '../../lib/reportExportData.js';
 import {
   BarChart3,
   Users,
@@ -33,6 +35,8 @@ export const AdminReportsPage: React.FC = () => {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [selectedRoundId, setSelectedRoundId] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [periodStart,setPeriodStart]=useState('');
+  const [periodEnd,setPeriodEnd]=useState('');
 
   const loadAllOrders = async (): Promise<Order[]> => {
     const pageSize = 500;
@@ -144,8 +148,10 @@ export const AdminReportsPage: React.FC = () => {
     try {
       setExporting(true);
       setError('');
+      validateExportPeriod(periodStart,periodEnd);
       const { exportVegetableReport } = await import('../../lib/exportVegetableReport.js');
-      await exportVegetableReport({ orders, rounds, selectedRoundId, exportedAt: new Date() });
+      const data=await api.get<ReportExportData>('/admin/reports/export-data');
+      await exportVegetableReport({orders:data.orders,rounds:data.rounds,selectedRoundId,exportedAt:new Date(),operations:data,periodStart,periodEnd});
     } catch (err: any) {
       setError(err.message || 'ไม่สามารถส่งออกรายงาน Excel ได้');
     } finally {
@@ -178,6 +184,14 @@ export const AdminReportsPage: React.FC = () => {
           </button>
         </div>
       </header>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+        <div className="w-full text-xs font-bold text-slate-800">ช่วงวันที่สำหรับชีต “สรุปตามวันที่” ใน Excel</div>
+        <label className="text-xs font-semibold text-slate-600">ตั้งแต่<input aria-label="วันที่เริ่มสรุป Excel" type="date" value={periodStart} onChange={e=>setPeriodStart(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2"/></label>
+        <label className="text-xs font-semibold text-slate-600">ถึง<input aria-label="วันที่สิ้นสุดสรุป Excel" type="date" value={periodEnd} onChange={e=>setPeriodEnd(e.target.value)} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2"/></label>
+        <button type="button" onClick={()=>{setPeriodStart('');setPeriodEnd('');}} className="rounded-lg px-3 py-2 text-xs font-bold text-emerald-800">ทุกวันที่มีข้อมูล</button>
+        <p className="w-full text-xs leading-5 text-slate-500">เว้นว่างเพื่อสรุปทุกวัน แยกตามวันจอง วันส่งสำเร็จ และวันรับเงิน ส่วนชีตรายละเอียดและตัวเลขหน้านี้แสดงข้อมูลปัจจุบันของรอบที่เลือก</p>
+      </div>
 
       {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
 
