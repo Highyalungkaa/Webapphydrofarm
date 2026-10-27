@@ -138,7 +138,7 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
       .from('orders')
       .select(`
         *,
-        planting_rounds (
+        planting_rounds:planting_rounds!orders_round_id_fkey (
           id,
           name,
           expected_harvest_date,
@@ -189,7 +189,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
       .from('orders')
       .select(`
         *,
-        planting_rounds (
+        planting_rounds:planting_rounds!orders_round_id_fkey (
           id,
           name,
           expected_harvest_date,
@@ -222,7 +222,12 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
       .eq('id', id)
       .maybeSingle();
 
-    if (error || !order) {
+    if (error) {
+      console.error('Read customer order failed:', error.code, error.message);
+      res.status(500).json({ error: 'ไม่สามารถโหลดข้อมูลคำสั่งจองได้ กรุณาลองใหม่' });
+      return;
+    }
+    if (!order) {
       res.status(404).json({ error: 'ไม่พบข้อมูลคำสั่งจองที่ระบุ' });
       return;
     }
