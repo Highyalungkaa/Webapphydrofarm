@@ -27,6 +27,8 @@ test('discount totals retain cents, separate cancellations and scope pooled sour
  const cancelled=order({id:'cancelled',status:'cancelled'});
  const totals=orderMetrics([row,cancelled,order({id:'zero',order_items:[]})]);
  assert.equal(totals.discountAmount,5.3);assert.equal(totals.activeDiscountAmount,0.3);assert.equal(totals.cancelledDiscountAmount,5);assert.equal(totals.discountedOrderCount,2);
+ assert.equal(totals.activeDiscountedOrderCount,1);
+ assert.equal(orderMetrics([cancelled]).activeDiscountedOrderCount,0);assert.equal(orderMetrics([cancelled]).activeDiscountAmount,0);
  const a=orderMetrics([scopeOrderToRound(row,'r1')]),b=orderMetrics([scopeOrderToRound(row,'r2')]);
  assert.equal(a.discountAmount,0.1);assert.equal(b.discountAmount,0.2);assert.equal(Math.round((a.discountAmount+b.discountAmount)*100),30);
  assert.equal(orderMetrics([]).discountAmount,0);
@@ -46,9 +48,19 @@ test('Excel selected-round summary matches screen metrics and uses the actual so
  const summary=book.getWorksheet('สรุปภาพรวม')||book.worksheets[0];
  const metrics=new Map();summary.eachRow(row=>{metrics.set(row.getCell(1).value,row.getCell(2).value);});
  assert.equal(metrics.get('ส่งมอบจริง'),5.1);assert.equal(metrics.get('เงินรับจริง'),300);
- assert.equal(metrics.get('ส่วนลดรวมทุกออเดอร์'),0);assert.equal(metrics.get('ส่วนลดออเดอร์ยกเลิก'),0);
+ assert.equal(metrics.get('ส่วนลดรวม'),0);assert.equal(metrics.get('ออเดอร์ที่ได้รับส่วนลด'),0);assert.equal(metrics.has('ส่วนลดออเดอร์ยกเลิก'),false);
  const items=book.getWorksheet('รายการผัก');assert.equal(items.getRow(7).getCell(2).value,'r2');assert.equal(items.rowCount,7);
  const round=book.getWorksheet('รายรอบ');assert.equal(round.getRow(7).getCell(1).value,'r2');assert.equal(round.rowCount,7);
+});
+
+test('Excel discount summary excludes cancelled discounts and zero-discount orders',async()=>{
+ const {exportVegetableReport}=load('exportVegetableReport');
+ const active=order(),cancelled=order({id:'cancel',status:'cancelled',order_items:[{...order().order_items[0],discount_amount:33}]}),zero=order({id:'zero',order_items:[{...order().order_items[0],discount_amount:0}]});
+ await exportVegetableReport({orders:[active,cancelled,zero],rounds:[],selectedRoundId:'',exportedAt:new Date()});
+ const ExcelJS=require('../node_modules/exceljs'),book=new ExcelJS.Workbook();await book.xlsx.load(await download.arrayBuffer());
+ const metrics=new Map();book.worksheets[0].eachRow(row=>metrics.set(row.getCell(1).value,row.getCell(2).value));
+ assert.equal(metrics.get('ส่วนลดรวม'),5);assert.equal(metrics.get('ออเดอร์ที่ได้รับส่วนลด'),1);
+ assert.equal(metrics.has('ส่วนลดรวมทุกออเดอร์'),false);assert.equal(metrics.has('ส่วนลดออเดอร์ยกเลิก'),false);
 });
 
 test('complete Excel preserves loss reversals, unknown weights, historical allocation and event-specific Thai dates',async()=>{

@@ -211,11 +211,10 @@ export const AdminReportsPage: React.FC = () => {
         {report.unrecordedDeliveryItems>0&&<p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">มีรายการผักในส่งมอบจริง {report.unrecordedDeliveryItems} รายการที่ยังไม่มีน้ำหนักชั่งจริง ยอดส่งจริงไม่นำยอดจองมาแทน และยังไม่รวมรายการเหล่านี้</p>}
         {report.cancelledReceivedAmount>0&&<p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-950">มีเงินที่บันทึกรับแล้วในออเดอร์ยกเลิก ฿{numberFormat.format(report.cancelledReceivedAmount)} ยังคงนับเป็นเงินรับตามบันทึก ไม่ถือว่าคืนเงินแล้วโดยอัตโนมัติ</p>}
         <section aria-label="สรุปส่วนลด" className="space-y-3">
-          <div><h2 className="font-extrabold text-slate-900">ส่วนลดของออเดอร์</h2><p className="mt-1 text-xs text-slate-500">รวมตามรอบปลูกที่เลือก ไม่หักส่วนลดซ้ำจากยอดสุทธิหรือเงินรับจริง</p></div>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-            <MetricCard label="ส่วนลดรวมทุกออเดอร์" value={`฿${numberFormat.format(report.discountAmount)}`} detail={`มีส่วนลด ${report.discountedOrderCount} ออเดอร์ รวมออเดอร์ที่ยกเลิก`} icon={Tag} tone="purple" />
-            <MetricCard label="ส่วนลดไม่รวมออเดอร์ยกเลิก" value={`฿${numberFormat.format(report.activeDiscountAmount)}`} detail="รวมส่วนลดในออเดอร์ที่กำลังดำเนินการ สำเร็จ และไม่มารับ" icon={Tag} tone="emerald" />
-            <MetricCard label="ส่วนลดออเดอร์ยกเลิก" value={`฿${numberFormat.format(report.cancelledDiscountAmount)}`} detail="เก็บไว้ตรวจประวัติ ไม่ถือเป็นส่วนลดจากการขายสำเร็จ" icon={Tag} tone="amber" />
+          <div><h2 className="font-extrabold text-slate-900">ส่วนลดของออเดอร์</h2><p className="mt-1 text-xs text-slate-500">เฉพาะออเดอร์ที่มีส่วนลดและไม่ถูกยกเลิก ตามรอบปลูกที่เลือก</p></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <MetricCard label="ส่วนลดรวม" value={`฿${numberFormat.format(report.activeDiscountAmount)}`} detail="ยอดส่วนลดที่บันทึก ไม่นับออเดอร์ยกเลิก" icon={Tag} tone="emerald" />
+            <MetricCard label="ออเดอร์ที่ได้รับส่วนลด" value={`${report.activeDiscountedOrderCount}`} detail="นับเฉพาะออเดอร์ที่มีส่วนลดมากกว่า 0 บาทและไม่ถูกยกเลิก" icon={ShoppingBag} tone="purple" />
           </div>
         </section>
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">

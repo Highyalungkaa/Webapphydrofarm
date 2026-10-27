@@ -22,10 +22,10 @@ export function receiptByItem(order:Order):Map<string,number>{
 }
 export function orderMetrics(orders:Order[]){
   let bookedKg=0,deliveredKg=0,bookedCents=0,receivedCents=0,outstandingCents=0,unrecordedDeliveryItems=0,cancelledReceiptCents=0;
-  let discountCents=0,cancelledDiscountCents=0,discountedOrderCount=0;
+  let discountCents=0,cancelledDiscountCents=0,discountedOrderCount=0,activeDiscountedOrderCount=0;
   for(const order of orders){
     const discount=cents(orderDiscountAmount(order));discountCents+=discount;
-    if(discount>0)discountedOrderCount++;
+    if(discount>0){discountedOrderCount++;if(order.status!=='cancelled')activeDiscountedOrderCount++;}
     if(order.status==='cancelled')cancelledDiscountCents+=discount;
     const received=cents(receiptAmount(order));receivedCents+=received;
     if(order.status==='cancelled'){cancelledReceiptCents+=received;continue;}
@@ -34,5 +34,5 @@ export function orderMetrics(orders:Order[]){
   }
   return{bookedKg:Math.round(bookedKg*100)/100,deliveredKg:Math.round(deliveredKg*100)/100,bookedAmount:bookedCents/100,
     receivedAmount:receivedCents/100,outstandingAmount:outstandingCents/100,unrecordedDeliveryItems,cancelledReceivedAmount:cancelledReceiptCents/100,
-    discountAmount:discountCents/100,activeDiscountAmount:(discountCents-cancelledDiscountCents)/100,cancelledDiscountAmount:cancelledDiscountCents/100,discountedOrderCount};
+    discountAmount:discountCents/100,activeDiscountAmount:(discountCents-cancelledDiscountCents)/100,cancelledDiscountAmount:cancelledDiscountCents/100,discountedOrderCount,activeDiscountedOrderCount};
 }
