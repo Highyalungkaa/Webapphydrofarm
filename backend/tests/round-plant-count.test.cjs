@@ -42,7 +42,7 @@ async function createRound(count, capacity = 100, options = {}) {
   const quantities = loadTs('../src/services/plantingQuantities.ts', require);
   const plotCrops = loadTs('../src/services/plotCrops.ts', require);
   loadTs('../src/routes/admin/rounds.ts', (name) => {
-    if (name === 'express') return { Router: () => router };
+    if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if (name === 'express') return { Router: () => router };
     if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };
     if (name.endsWith('/auth.js')) return {};
     if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };

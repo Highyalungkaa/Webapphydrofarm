@@ -1,7 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
+import { buildPooledCatalog } from '../services/pooledCatalog.js';
 
 const router = Router();
+
+router.get('/catalog', async (_req: Request,res: Response): Promise<void> => {
+  try {
+    const {data,error}=await supabaseAdmin.from('booking_sources').select('*');
+    if(error) throw error;
+    res.json(buildPooledCatalog(data||[]));
+  } catch(error:any) { res.status(503).json({error:'ไม่สามารถโหลดสต๊อกผักได้ กรุณาลองใหม่: '+error.message}); }
+});
 
 // Helper to compute booked and remaining quantities for round items
 async function enrichRoundItems(roundId: string, limited = false) {
@@ -13,7 +22,8 @@ async function enrichRoundItems(roundId: string, limited = false) {
         id,
         name,
         image_url,
-        is_active
+        is_active,
+        slots_per_kg
       )
     `)
     .eq('round_id', roundId);
@@ -48,6 +58,9 @@ async function enrichRoundItems(roundId: string, limited = false) {
 
   return items.map((item: any) => {
     const booked_qty_kg = bookedMap.get(item.id) || 0;
+    const rate=Number(item.planting_plants_per_kg??item.crops?.slots_per_kg);
+    const estimated=rate>0&&item.plant_count!=null?Math.floor(Math.max(0,Number(item.plant_count)-Number(item.lost_plant_count||0))/rate):Number(item.estimated_qty_kg||0);
+    const available=Math.max(0,Math.round((estimated-booked_qty_kg)*100)/100);
     return {
       id:item.id,round_id:item.round_id,crop_id:item.crop_id,price_per_kg:item.price_per_kg,crops:item.crops,
       crop_name:item.crops?.name || 'ผัก',booked_qty_kg,
@@ -55,7 +68,7 @@ async function enrichRoundItems(roundId: string, limited = false) {
       estimated_qty_kg:item.planting_plants_per_kg!=null?item.estimated_qty_kg:null,
       max_qty_per_order_kg:limited ? item.max_qty_per_order_kg : null,
       order_limit_remaining:item.order_limit_remaining,
-      available_qty_kg:null,is_sold_out:false,
+      available_qty_kg:available,is_sold_out:available<0.5,
     };
   });
 }
@@ -81,9 +94,9 @@ router.get('/open', async (_req: Request, res: Response): Promise<void> => {
         return {
           ...round,
           items,
-          total_bookable_kg: null,
-          total_available_kg: null,
-          is_all_sold_out: false,
+          total_bookable_kg: items.reduce((n,i)=>n+Number(i.estimated_qty_kg||0),0),
+          total_available_kg: items.reduce((n,i)=>n+i.available_qty_kg,0),
+          is_all_sold_out: items.every(i=>i.is_sold_out),
         };
       })
     );
@@ -120,9 +133,9 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
     res.json({
       ...round,
       items,
-      total_bookable_kg: null,
-      total_available_kg: null,
-      is_all_sold_out: false,
+      total_bookable_kg: items.reduce((n,i)=>n+Number(i.estimated_qty_kg||0),0),
+      total_available_kg: items.reduce((n,i)=>n+i.available_qty_kg,0),
+      is_all_sold_out: items.every(i=>i.is_sold_out),
     });
   } catch (err: any) {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลรอบ' });

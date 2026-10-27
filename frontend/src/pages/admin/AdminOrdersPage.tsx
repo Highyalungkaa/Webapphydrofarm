@@ -1,3 +1,4 @@
+import {harvestRange} from '../../lib/pooledBooking.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -276,8 +277,8 @@ export const AdminOrdersPage: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold text-slate-400">รอบปลูก / วันส่งมอบ</p>
-                      <p className="truncate font-semibold text-slate-800">{order.planting_rounds?.name || '-'}</p>
-                      <p className="text-slate-500">{formatDateDMY(order.planting_rounds?.fulfillment_date)}</p>
+                      <p className="truncate font-semibold text-slate-800">{order.is_pooled?'คำสั่งจองผักรวม':order.planting_rounds?.name || '-'}</p>
+                      <p className="text-slate-500">{order.is_pooled?harvestRange(order.harvest_start_date,order.harvest_end_date):formatDateDMY(order.planting_rounds?.fulfillment_date)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-semibold text-slate-400">รับสินค้า</p>
@@ -343,10 +344,10 @@ export const AdminOrdersPage: React.FC = () => {
 
                       <td className="py-3 px-4 text-slate-700">
                         <div className="font-medium truncate max-w-[150px]">
-                          {order.planting_rounds?.name || '-'}
+                          {order.is_pooled?'คำสั่งจองผักรวม':order.planting_rounds?.name || '-'}
                         </div>
                         <span className="text-[11px] text-slate-400">
-                          ส่ง: {formatDateDMY(order.planting_rounds?.fulfillment_date)}
+                          ส่ง: {order.is_pooled?harvestRange(order.harvest_start_date,order.harvest_end_date):formatDateDMY(order.planting_rounds?.fulfillment_date)}
                         </span>
                       </td>
 
@@ -480,7 +481,7 @@ export const AdminOrdersPage: React.FC = () => {
               {(selectedOrder.order_items || []).map(item => {
                 const ownText=ownWeightInputs[item.id]??'',own=Number(ownText||0),sub=Number(substituteInputs[item.id]?.qtyKg||0),ordered=Number(item.qty_kg);
                 const missing=Math.max(0,Math.round((ordered-own-sub)*100)/100),over=sub>ordered+0.000001;
-                return <div key={item.id} className="space-y-2 rounded-xl border border-emerald-100 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><strong className="text-sm text-slate-800">{item.round_items?.crops?.name||'ผัก'}</strong><p className="mt-1 text-xs text-slate-500">ลูกค้าจอง {ordered.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p></div><label className="block w-40 text-xs font-bold text-slate-600">ชั่งผักฟาร์มได้ (กก.)<input type="number" min="0" max="99999999" step="0.01" placeholder="ยังไม่ได้ชั่ง" value={ownText} onChange={e=>setOwnWeightInputs(p=>({...p,[item.id]:e.target.value}))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"/></label></div>
+                return <div key={item.id} className="space-y-2 rounded-xl border border-emerald-100 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><strong className="text-sm text-slate-800">{item.round_items?.crops?.name||'ผัก'}</strong>{selectedOrder?.is_pooled&&<p className="mt-1 text-xs font-semibold text-sky-700">จาก {item.round_items?.planting_rounds?.name||'รอบต้นทาง'}</p>}<p className="mt-1 text-xs text-slate-500">ลูกค้าจอง {ordered.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p></div><label className="block w-40 text-xs font-bold text-slate-600">ชั่งผักฟาร์มได้ (กก.)<input type="number" min="0" max="99999999" step="0.01" placeholder="ยังไม่ได้ชั่ง" value={ownText} onChange={e=>setOwnWeightInputs(p=>({...p,[item.id]:e.target.value}))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm"/></label></div>
                   <p className="text-xs text-slate-600">ผักฟาร์ม {own.toLocaleString('th-TH',{maximumFractionDigits:2})} + ผักทดแทน {sub.toLocaleString('th-TH',{maximumFractionDigits:2})} = {(own+sub).toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p>
                   {over?<p role="alert" className="text-xs font-bold text-rose-700">ผักทดแทนเกินยอดจอง กรุณาตรวจสอบ</p>:ownText===''?<p className="text-xs text-slate-500">ยังไม่บันทึกน้ำหนักชั่งจริง (กรอก 0 เมื่อใช้ผักทดแทนทั้งหมด)</p>:missing>0?<div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><span>ยังขาด {missing.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</span><button type="button" onClick={()=>{setShowSubstituteInputs(true);setSubstituteInputs(p=>({...p,[item.id]:{qtyKg:String(Math.round((ordered-own)*100)/100),totalCost:p[item.id]?.totalCost||''}}));}} className="font-bold underline">กรอกผักทดแทนส่วนที่ขาด</button></div>:<p className="text-xs font-bold text-emerald-800">จัดครบตามยอดจองแล้ว{own+sub>ordered+0.000001?` · ชั่งได้เกิน ${(own+sub-ordered).toFixed(2)} กก.`:''}</p>}
                 </div>;

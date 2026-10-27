@@ -31,7 +31,7 @@ function routeFor(file, method, route, existing = {}) {
     async rpc() { databaseCalls++; return { data: null, error: null }; },
   };
   const deps = (name) => {
-    if (name === 'express') return { Router: () => router };
+    if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if (name === 'express') return { Router: () => router };
     if (name.endsWith('/supabase.js')) return { supabaseAdmin };
     if (name.endsWith('/auth.js')) return { requireAuth() {}, requireAdmin() {} };
     if (name.endsWith('/rateLimiter.js')) return { orderCreationLimiter() {} };

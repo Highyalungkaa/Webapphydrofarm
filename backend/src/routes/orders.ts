@@ -6,6 +6,24 @@ import { orderCreationLimiter } from '../middlewares/rateLimiter.js';
 
 const router = Router();
 
+const pooledOrderSchema=z.object({
+  request_id:z.string().uuid(),
+  items:z.array(z.object({crop_id:z.string().uuid(),qty_kg:z.number().min(0.5).max(99999999).refine(n=>Math.abs(n*100-Math.round(n*100))<0.000001)})).min(1).max(100),
+  fulfillment_method:z.enum(['pickup','delivery']),delivery_address:z.string().max(4000).nullable().optional(),
+  contact_phone:z.string().trim().min(9).max(30),note:z.string().max(4000).nullable().optional(),
+  accepted_substitution_terms:z.literal(true),
+});
+router.post('/pooled',requireAuth,orderCreationLimiter,async(req:AuthenticatedRequest,res:Response):Promise<void>=>{
+  const parsed=pooledOrderSchema.safeParse(req.body);
+  if(!parsed.success){res.status(400).json({error:'กรุณาตรวจสอบรายการผัก จำนวน และข้อมูลติดต่อให้ครบถ้วน'});return;}
+  const {request_id,...payload}=parsed.data;
+  try {
+    const {data,error}=await supabaseAdmin.rpc('create_pooled_order',{p_customer_id:req.user!.id,p_request_id:request_id,p_payload:payload});
+    if(error){res.status(400).json({error:error.message});return;}
+    res.status(201).json({message:'บันทึกการจองสำเร็จ',data});
+  }catch(error:any){res.status(500).json({error:'ไม่สามารถบันทึกการจองได้ กรุณาลองใหม่'});}
+});
+
 const createOrderSchema = z.object({
   round_id: z.string().uuid('รหัสรอบการปลูกไม่ถูกต้อง'),
   items: z.array(
@@ -140,6 +158,7 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
           discount_amount,
           round_items (
             id,
+            round_id,
             crops (
               id,
               name
@@ -192,6 +211,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           fulfillment_source,
           round_items (
             id,
+            round_id,
             crops (
               id,
               name

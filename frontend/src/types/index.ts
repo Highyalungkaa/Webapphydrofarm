@@ -81,6 +81,9 @@ export interface Crop {
 }
 
 export interface RoundItem {
+  price_tiers?: PriceTier[];
+  harvest_start_date?: string | null;
+  harvest_end_date?: string | null;
   id: string;
   round_id: string;
   crop_id: string;
@@ -113,6 +116,9 @@ export interface RoundItem {
 }
 
 export interface PlantingRound {
+  is_pooled?: boolean;
+  harvest_start_date?: string | null;
+  harvest_end_date?: string | null;
   order_limit_remaining?: number | null;
   purchase_limit_enabled?: boolean;
   id: string;
@@ -164,6 +170,8 @@ export interface OrderItem {
   substitute_note?: string | null;
   round_items?: {
     id: string;
+    round_id?: string;
+    planting_rounds?: { id:string; name:string };
     crop_id?: string;
     crops?: {
       id: string;
@@ -173,6 +181,9 @@ export interface OrderItem {
 }
 
 export interface Order {
+  is_pooled?: boolean;
+  harvest_start_date?: string | null;
+  harvest_end_date?: string | null;
   id: string;
   round_id: string;
   customer_id: string | null;
@@ -224,12 +235,20 @@ export interface CustomerProfile {
 }
 
 export interface CartItem {
+  price_tiers?: PriceTier[];
   round_item_id: string;
   crop_name: string;
   price_per_kg: number;
   qty_kg: number;
   max_qty_per_order_kg?: number | null;
   available_qty_kg: number | null;
+}
+
+export interface PriceTier {
+  available_qty_kg: number;
+  price_per_kg: number;
+  round_item_id?: string;
+  harvest_date?: string;
 }
 
 export interface EquipmentProduct {

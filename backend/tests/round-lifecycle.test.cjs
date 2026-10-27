@@ -43,7 +43,7 @@ function setup(initialRound = {}) {
   vm.runInNewContext(code, {
     exports, console,
     require(name) {
-      if (name === 'express') return { Router: () => router };
+      if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if (name === 'express') return { Router: () => router };
       if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };
       if (name.endsWith('/auth.js')) return {};
       if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };

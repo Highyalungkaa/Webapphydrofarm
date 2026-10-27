@@ -1,3 +1,4 @@
+import {scopeOrderToRound} from '../../lib/pooledBooking.js';
 import { orderCustomerKey } from '../../lib/orderCustomer.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
@@ -63,7 +64,7 @@ export const AdminReportsPage: React.FC = () => {
   useEffect(() => { void loadReport(); }, []);
 
   const report = useMemo(() => {
-    const scopedOrders = selectedRoundId ? orders.filter((order) => order.round_id === selectedRoundId) : orders;
+    const scopedOrders = selectedRoundId ? orders.map(order=>scopeOrderToRound(order,selectedRoundId)).filter((order):order is Order=>order!==null) : orders;
     const scopedRounds = selectedRoundId ? rounds.filter((round) => round.id === selectedRoundId) : rounds;
     const countableOrders = scopedOrders.filter((order) => order.status !== 'cancelled');
     const soldOrders = scopedOrders.filter((order) => order.status === 'completed');

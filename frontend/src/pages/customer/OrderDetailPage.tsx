@@ -1,3 +1,4 @@
+import {harvestRange,customerCropLines} from '../../lib/pooledBooking.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -120,7 +121,7 @@ export const OrderDetailPage: React.FC = () => {
 
       <CustomerPageHeader
         eyebrow={`คำสั่งจอง #${order.id.slice(0, 8)}`}
-        title={order.planting_rounds?.name || 'รายละเอียดคำสั่งจองผัก'}
+        title={order.is_pooled?'รายละเอียดคำสั่งจองผัก':order.planting_rounds?.name || 'รายละเอียดคำสั่งจองผัก'}
         description="ติดตามสถานะ รายการผัก และกำหนดรับสินค้าของคำสั่งจองนี้"
         icon={<ShoppingBag className="h-7 w-7" />}
       >
@@ -157,7 +158,7 @@ export const OrderDetailPage: React.FC = () => {
               สรุปคำสั่งจอง
             </span>
             <h2 className="text-xl font-bold text-slate-900 mt-0.5">
-              {order.planting_rounds?.name || 'รอบการปลูก'}
+              {order.is_pooled?'คำสั่งจองผัก':order.planting_rounds?.name || 'รอบการปลูก'}
             </h2>
             <span className="text-xs text-slate-500">สั่งเมื่อ: {formatDate(order.created_at)}</span>
           </div>
@@ -196,7 +197,7 @@ export const OrderDetailPage: React.FC = () => {
             <div className="flex items-center gap-2 text-slate-700">
               <Calendar className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span>
-                วันส่งมอบ: <strong>{formatDateDMY(order.planting_rounds?.fulfillment_date)}</strong>
+                {order.is_pooled?'วันที่เก็บ:':'วันส่งมอบ:'} <strong>{order.is_pooled?harvestRange(order.harvest_start_date,order.harvest_end_date):formatDateDMY(order.planting_rounds?.fulfillment_date)}</strong>
               </span>
             </div>
 
@@ -231,7 +232,7 @@ export const OrderDetailPage: React.FC = () => {
             รายการผักในออเดอร์
           </h2>
           <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
-            {order.order_items?.map((item) => (
+            {order.is_pooled ? customerCropLines(order).map(item=><div key={item.id} className="flex items-center justify-between gap-3 p-4"><div><h4 className="text-sm font-bold text-slate-900">{item.name}</h4><p className="mt-1 text-xs text-slate-500">{formatKg(item.qty)} กก.</p></div><div className="text-right">{item.discount>0&&<p className="text-xs text-emerald-700">ส่วนลด −฿{item.discount.toLocaleString()}</p>}<strong className="text-sm text-slate-900">฿{(Math.round((item.gross-item.discount)*100)/100).toLocaleString()}</strong></div></div>) : order.order_items?.map((item) => (
               <div key={item.id} className="p-3.5 flex items-center justify-between text-xs sm:text-sm">
                 <div>
                   <h4 className="font-semibold text-slate-900">

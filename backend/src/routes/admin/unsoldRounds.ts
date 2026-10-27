@@ -1,3 +1,4 @@
+import {roundOrderFilter} from '../../services/roundOrders.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { supabaseAdmin } from '../../config/supabase.js';
@@ -28,10 +29,11 @@ function fail(res: Response, error: any) {
 router.get('/:id/unsold', async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!uuid.safeParse(req.params.id).success) { res.status(400).json({ error: 'รหัสรอบไม่ถูกต้อง' }); return; }
+    const orderFilter=await roundOrderFilter(supabaseAdmin,req.params.id as string);
     const [roundResult,itemResult,orderResult,closureResult,historyResult] = await Promise.all([
       supabaseAdmin.from('planting_rounds').select('*').eq('id',req.params.id).maybeSingle(),
       supabaseAdmin.from('round_items').select('*,crops(name,slots_per_kg)').eq('round_id',req.params.id),
-      supabaseAdmin.from('orders').select('id,status,payment_status,order_items(round_item_id,qty_kg,own_qty_kg,fulfilled_qty_kg,fulfillment_source)').eq('round_id',req.params.id),
+      supabaseAdmin.from('orders').select('id,status,payment_status,order_items(round_item_id,qty_kg,own_qty_kg,fulfilled_qty_kg,fulfillment_source)').or(orderFilter),
       supabaseAdmin.from('round_unsold_closures').select('*').eq('round_id',req.params.id).maybeSingle(),
       supabaseAdmin.from('round_unsold_items').select('*').eq('round_id',req.params.id),
     ]);

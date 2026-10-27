@@ -38,7 +38,7 @@ function setup({ publicRoute=false, missing=false, rpcError=null, legacy=false, 
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
     exports:{},console,
     require(name){
-      if(name==='express')return {Router:()=>router};
+      if(name.endsWith('/pooledCatalog.js'))return require('./load-service.cjs')('pooledCatalog');if(name==='express')return {Router:()=>router};
       if(name.endsWith('/supabase.js'))return {supabaseAdmin:db};
       if(name.endsWith('/auth.js'))return {requireAuth:auth,requireAdmin:admin};
       if(name.endsWith('/equipmentPayments.js'))return {};
@@ -78,11 +78,11 @@ test('RPC validation failures are shown as failures, and reversal requires a rea
   const res=await app.request('post /:id/losses',valid());assert.equal(res.statusCode,400);assert.match(res.body.error,/เกินคงเหลือ/);
   assert.equal((await app.request('post /:id/losses/:lossId/void',{round_item_id:ids.item,reason:''})).statusCode,400);
 });
-test('plant losses do not invent a kilogram stock limit or mark booking sold out',async()=>{
+test('customer stock subtracts damage and bookings and never becomes negative',async()=>{
   const res=await setup({publicRoute:true}).request('get /open');
-  assert.equal(res.statusCode,200);assert.equal(res.body[0].items[0].available_qty_kg,null);
-  assert.equal(res.body[0].items[0].max_qty_per_order_kg,null);assert.equal(res.body[0].total_available_kg,null);
-  assert.equal(res.body[0].is_all_sold_out,false);
+  assert.equal(res.statusCode,200);assert.equal(res.body[0].items[0].available_qty_kg,0);
+  assert.equal(res.body[0].items[0].max_qty_per_order_kg,null);assert.equal(res.body[0].total_available_kg,0);
+  assert.equal(res.body[0].is_all_sold_out,true);
 });
 test('legacy rounds expose occupied plots and restore only the missing crop assignment before recording',async()=>{
   const app=setup({legacy:true});
@@ -103,11 +103,11 @@ test('unoccupied plots are rejected server-side and concurrent note edits are no
 });
 
 test('customer sees per-crop limits only when explicitly enabled on the round',async()=>{
- const res=await setup({publicRoute:true,limited:true}).request('get /open');assert.equal(res.statusCode,200);assert.equal(res.body[0].purchase_limit_enabled,true);assert.equal(res.body[0].items[0].max_qty_per_order_kg,2.5);assert.equal(res.body[0].items[0].available_qty_kg,null);
+ const res=await setup({publicRoute:true,limited:true}).request('get /open');assert.equal(res.statusCode,200);assert.equal(res.body[0].purchase_limit_enabled,true);assert.equal(res.body[0].items[0].max_qty_per_order_kg,2.5);assert.equal(res.body[0].items[0].available_qty_kg,0);
 });
 
-test('direct customer round detail also allows ordering without a projected kilogram balance',async()=>{
- for(const limited of [false,true]){const res=await setup({publicRoute:true,limited}).request('get /:id');assert.equal(res.statusCode,200);assert.equal(res.body.is_all_sold_out,false);assert.equal(res.body.total_available_kg,null);assert.equal(res.body.items[0].available_qty_kg,null);assert.equal(res.body.items[0].max_qty_per_order_kg,limited?2.5:null);}
+test('legacy direct round details expose the same remaining stock',async()=>{
+ for(const limited of [false,true]){const res=await setup({publicRoute:true,limited}).request('get /:id');assert.equal(res.statusCode,200);assert.equal(res.body.is_all_sold_out,true);assert.equal(res.body.total_available_kg,0);assert.equal(res.body.items[0].available_qty_kg,0);assert.equal(res.body.items[0].max_qty_per_order_kg,limited?2.5:null);}
 });
 
-test('customer forecasts come from the stored planting rate without imposing kilogram availability',async()=>{for(const route of ['get /open','get /:id']){const res=await setup({publicRoute:true}).request(route);const item=(Array.isArray(res.body)?res.body[0]:res.body).items[0];assert.equal(item.plant_count,500);assert.equal(item.planting_plants_per_kg,5);assert.equal(item.estimated_qty_kg,100);assert.equal(item.available_qty_kg,null);}});
+test('original forecasts remain visible alongside the remaining booking stock',async()=>{for(const route of ['get /open','get /:id']){const res=await setup({publicRoute:true}).request(route);const item=(Array.isArray(res.body)?res.body[0]:res.body).items[0];assert.equal(item.plant_count,500);assert.equal(item.planting_plants_per_kg,5);assert.equal(item.estimated_qty_kg,100);assert.equal(item.available_qty_kg,0);}});

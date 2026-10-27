@@ -1,3 +1,4 @@
+import {roundOrderFilter,scopeRoundOrders} from '../../services/roundOrders.js';
 import {getPlotPlantingAllocations} from '../../services/plotPlantingAllocations.js';
 import {allocatePlotSlots} from '../../services/plantAllocation.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
@@ -272,7 +273,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     }
 
     // Get orders for this round
-    const { data: orders } = await db
+    const { data: sourceOrders,error:ordersError } = await db
       .from('orders')
       .select(`
         *,
@@ -289,13 +290,17 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           fulfilled_qty_kg,
           fulfillment_source,
           price_per_kg,
+          discount_amount,
           round_items (
             crops (name)
           )
         )
       `)
-      .eq('round_id', id)
+      .or(await roundOrderFilter(db,id))
       .order('created_at', { ascending: false });
+
+    if(ordersError)throw ordersError;
+    const orders=scopeRoundOrders(sourceOrders||[],(round.round_items||[]).map((i:any)=>i.id));
 
     // Calculate booked qty per round item
     const bookedMap: Record<string, number> = {};
@@ -854,7 +859,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const id = req.params.id as string;
     const db = getSupabaseClient(req);
 
-    const { data: orders } = await db.from('orders').select('id').eq('round_id', id);
+    const { data: orders } = await db.from('orders').select('id').or(await roundOrderFilter(db,id));
     if (orders && orders.length > 0) {
       res.status(400).json({ error: 'ไม่สามารถลบรอบการปลูกนี้ได้ เนื่องจากมีคำสั่งจองของลูกค้าแล้ว' });
       return;

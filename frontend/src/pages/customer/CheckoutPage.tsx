@@ -1,5 +1,6 @@
+import {cartLineTotal,priceLabel} from '../../lib/pooledBooking.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { useCart } from '../../context/CartContext.js';
@@ -12,6 +13,7 @@ export const CheckoutPage: React.FC = () => {
   const { user, profile, refreshProfile, signInWithGoogle } = useAuth();
   const { items, roundId, totalKg, totalAmount, clearCart } = useCart();
   const navigate = useNavigate();
+  const request = useRef<{fingerprint:string;id:string}|null>(null);
 
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('pickup');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
@@ -117,7 +119,11 @@ export const CheckoutPage: React.FC = () => {
         accepted_substitution_terms: acceptedTerms,
       };
 
-      const res = await api.post('/orders', payload);
+      const fingerprint=JSON.stringify(payload);
+      if(!request.current||request.current.fingerprint!==fingerprint)request.current={fingerprint,id:crypto.randomUUID()};
+      const res = await api.post(roundId==='catalog'?'/orders/pooled':'/orders',roundId==='catalog'?{
+        ...payload,request_id:request.current.id,items:items.map(i=>({crop_id:i.round_item_id,qty_kg:i.qty_kg}))
+      }:payload);
       clearCart();
       await refreshProfile();
 
@@ -186,11 +192,11 @@ export const CheckoutPage: React.FC = () => {
                 <div>
                   <span className="font-semibold text-slate-800">{i.crop_name}</span>
                   <div className="text-slate-500 text-xs">
-                    ฿{i.price_per_kg.toFixed(0)} × {formatKg(i.qty_kg)} กก.
+                    {priceLabel(i.price_per_kg,i.price_tiers)} / กก. · {formatKg(i.qty_kg)} กก.
                   </div>
                 </div>
                 <span className="font-bold text-slate-900">
-                  ฿{(i.qty_kg * i.price_per_kg).toLocaleString()}
+                  ฿{cartLineTotal(i).toLocaleString()}
                 </span>
               </div>
             ))}

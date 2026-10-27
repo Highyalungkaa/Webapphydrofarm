@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { supabaseAdmin } from '../../config/supabase.js';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '../../middlewares/auth.js';
 import { recordAuditLog } from '../../services/audit.js';
+import { roundOrderFilter } from '../../services/roundOrders.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -78,6 +79,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           substitute_note,
           round_items (
             id,
+            round_id,
+            planting_rounds(id,name),
             crops (
               id,
               name
@@ -89,7 +92,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       .order('id', { ascending: false });
 
     if (round_id && typeof round_id === 'string') {
-      query = query.eq('round_id', round_id);
+      query = query.or(await roundOrderFilter(supabaseAdmin,round_id));
     }
 
     if (status && typeof status === 'string') {
@@ -178,6 +181,8 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           substitute_note,
           round_items (
             id,
+            round_id,
+            planting_rounds(id,name),
             crop_id,
             crops (
               id,

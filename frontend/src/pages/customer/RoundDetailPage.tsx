@@ -1,3 +1,4 @@
+import {harvestRange,priceLabel} from '../../lib/pooledBooking.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import {OrderLimitNotice} from '../../components/common/OrderLimitNotice.js';
 import { PurchaseLimitBadge } from '../../components/common/PurchaseLimitBadge.js';
@@ -78,6 +79,7 @@ export const RoundDetailPage: React.FC = () => {
         round_item_id: item.id,
         crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
         price_per_kg: Number(item.price_per_kg),
+        price_tiers:item.price_tiers,
         max_qty_per_order_kg: item.max_qty_per_order_kg,
         available_qty_kg: item.available_qty_kg ?? null,
       },
@@ -104,6 +106,7 @@ export const RoundDetailPage: React.FC = () => {
       round_item_id: item.id,
       crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
       price_per_kg: Number(item.price_per_kg),
+        price_tiers:item.price_tiers,
       max_qty_per_order_kg: item.max_qty_per_order_kg,
       available_qty_kg: item.available_qty_kg ?? null,
     }, parsed.qty);
@@ -163,7 +166,7 @@ export const RoundDetailPage: React.FC = () => {
       </div>
 
       <OrderLimitNotice remaining={round.order_limit_remaining}/>
-      <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
+      <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.is_pooled?'เลือกผักที่ต้องการจอง':round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
         <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{round.status === 'booking_open' ? 'เปิดรับจอง' : 'ปิดรับจอง'}</span>
         {(round.purchase_limit_enabled||round.order_limit_remaining!=null) && <PurchaseLimitBadge/>}
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{round.items?.length || 0} ชนิดผัก</span>
@@ -172,7 +175,7 @@ export const RoundDetailPage: React.FC = () => {
       {/* Round schedule */}
       <div className="space-y-5 rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-7">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div><p className="text-[11px] font-extrabold uppercase tracking-[.15em] text-emerald-700">รายละเอียดรอบ</p><h2 className="mt-1 text-lg font-black text-slate-950">กำหนดการและการรับสินค้า</h2></div>
+          <div><p className="text-[11px] font-extrabold uppercase tracking-[.15em] text-emerald-700">ผักที่เปิดรับจอง</p><h2 className="mt-1 text-lg font-black text-slate-950">กำหนดเก็บผัก</h2></div>
           <Badge status={round.status} type="round" />
         </div>
 
@@ -181,9 +184,9 @@ export const RoundDetailPage: React.FC = () => {
           <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
             <div className="flex items-center gap-2 font-semibold text-emerald-950">
               <Calendar className="w-4 h-4 text-emerald-600" />
-              <span>กำหนดเก็บเกี่ยว & ส่งมอบ</span>
+              <span>วันที่เก็บ</span>
             </div>
-            <p className="text-slate-700 font-medium">{formatDate(round.fulfillment_date)}</p>
+            <p className="text-slate-700 font-medium">{round.is_pooled?harvestRange(round.harvest_start_date,round.harvest_end_date):formatDate(round.fulfillment_date)}</p>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-100 space-y-1.5">
@@ -233,7 +236,7 @@ export const RoundDetailPage: React.FC = () => {
             const available = item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg);
             const cropOrderLimitReached = item.order_limit_remaining === 0;
             const isBookingClosed = round.order_limit_remaining===0 || cropOrderLimitReached || round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
-            const isSoldOut = false;
+            const isSoldOut = item.is_sold_out || available < 0.5;
 
             return (
               <div
@@ -270,12 +273,12 @@ export const RoundDetailPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-baseline gap-1.5 mb-3">
-                    <span className="text-2xl font-black text-emerald-800">฿{price.toFixed(0)}</span>
+                    <span className="text-2xl font-black text-emerald-800">{priceLabel(price,item.price_tiers)}</span>
                     <span className="text-xs text-slate-500 font-normal">/ กิโลกรัม</span>
                   </div>
 
-                  <EstimatedYield item={item} compact/>
-                  {item.max_qty_per_order_kg && (
+                  {round.is_pooled?<div className="mb-3 space-y-1"><p className="font-extrabold text-emerald-800">คงเหลือ {formatKg(Number(item.available_qty_kg||0))} กก.</p><p className="text-xs text-slate-500">ผลผลิตประมาณ {formatKg(item.estimated_qty_kg)} กก.</p><p className="text-xs text-slate-500">เก็บ {harvestRange(item.harvest_start_date,item.harvest_end_date)}</p></div>:<EstimatedYield item={item} compact/>}
+                  {item.max_qty_per_order_kg != null && item.max_qty_per_order_kg < Number(item.available_qty_kg ?? Infinity) && (
                     <p className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block mb-3 border border-amber-200">
                       จำกัดสูงสุด {item.max_qty_per_order_kg} กก./ออเดอร์
                     </p>
@@ -316,7 +319,7 @@ export const RoundDetailPage: React.FC = () => {
                           inputMode="decimal"
                           min="0.5"
                           step="0.01"
-                          max={item.max_qty_per_order_kg ?? undefined}
+                          max={Math.min(item.max_qty_per_order_kg??Infinity,available)}
                           placeholder="เช่น 2.5"
                           value={qtyInputs[item.id] ?? (inCartQty > 0 ? String(inCartQty) : '')}
                           onChange={(event) => {

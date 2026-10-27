@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { CartItem } from '../types/index.js';
+import { cartLineTotal } from '../lib/pooledBooking.js';
 
 interface CartContextType {
   roundId: string | null;
@@ -67,7 +68,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Max per order check
-    if (itemData.max_qty_per_order_kg && qty > itemData.max_qty_per_order_kg) {
+    if (itemData.available_qty_kg != null && qty > itemData.available_qty_kg) {
+      return { success:false,message:`ผัก ${itemData.crop_name} คงเหลือ ${itemData.available_qty_kg} กก. กรุณาลดจำนวน` };
+    }
+    if (itemData.max_qty_per_order_kg != null && qty > itemData.max_qty_per_order_kg) {
       return {
         success: false,
         message: `ผัก ${itemData.crop_name} จำกัดการจองสูงสุดไม่เกิน ${itemData.max_qty_per_order_kg} กก. ต่อออเดอร์`,
@@ -99,7 +103,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const totalKg = items.reduce((sum, i) => sum + i.qty_kg, 0);
-  const totalAmount = items.reduce((sum, i) => sum + i.qty_kg * i.price_per_kg, 0);
+  const totalAmount = items.reduce((sum, i) => sum + Math.round(cartLineTotal(i)*100), 0)/100;
 
   return (
     <CartContext.Provider
