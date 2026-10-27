@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
-import { AlertTriangle, History, Search, X } from 'lucide-react';
+import { AlertTriangle, ChevronRight, History, Search, X } from 'lucide-react';
 import type {Order} from '../../types/index.js';
 import {Badge} from '../../components/common/Badge.js';
-import {OrderDiscountSummary} from '../../components/admin/OrderDiscountSummary.js';
-import {orderMetrics} from '../../lib/orderReport.js';
+import {OrderHistoryDialog} from '../../components/admin/OrderHistoryDialog.js';
+import {orderMetrics,orderDiscountAmount} from '../../lib/orderReport.js';
 
 interface CustomerItem {
   id: string;
@@ -30,8 +30,10 @@ export const AdminCustomersPage: React.FC = () => {
   const [historyLoading,setHistoryLoading]=useState(false);
   const [historyError,setHistoryError]=useState('');
   const historyDialog=useRef<HTMLDialogElement>(null);
+  const [selectedHistoryOrder,setSelectedHistoryOrder]=useState<Order|null>(null);
 
   useEffect(()=>{
+    setSelectedHistoryOrder(null);
     if(!historyCustomer)return;
     let active=true;
     const dialog=historyDialog.current;
@@ -166,12 +168,13 @@ export const AdminCustomersPage: React.FC = () => {
             <p className="rounded-xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-900">ทั้งหมด <strong>{historyOrders.length}</strong> ออเดอร์ · ส่วนลดรวมในประวัติ <strong>฿{orderMetrics(historyOrders).discountAmount.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><span className="mt-1 block text-xs">รวมส่วนลดที่บันทึกในออเดอร์ยกเลิกด้วย</span></p>
             {historyOrders.map(order=><article key={order.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-bold text-slate-900">ออเดอร์ #{order.id.slice(0,8)}</h3><p className="mt-1 text-xs text-slate-500">สั่งเมื่อ {formatDate(order.created_at)} · {order.planting_rounds?.name||'ไม่ระบุรอบ'}</p></div><Badge status={order.status} type="order"/></div>
-              <OrderDiscountSummary order={order}/>
-              {order.status==='cancelled'&&order.cancel_reason&&<p className="text-xs text-rose-700">เหตุผลที่ยกเลิก: {order.cancel_reason}</p>}
+              <div className="flex flex-wrap justify-between gap-2 text-sm"><span className="font-semibold text-orange-700">ส่วนลด ฿{orderDiscountAmount(order).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><span className="font-bold text-emerald-800">ยอดสุทธิ ฿{Number(order.total_amount).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+              <button type="button" onClick={()=>setSelectedHistoryOrder(order)} className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100">ดูรายละเอียดออเดอร์<ChevronRight className="h-4 w-4"/></button>
             </article>)}
           </>}
         </div>
       </dialog>}
+      {selectedHistoryOrder&&<OrderHistoryDialog order={selectedHistoryOrder} onClose={()=>setSelectedHistoryOrder(null)}/>}
     </div>
   );
 };

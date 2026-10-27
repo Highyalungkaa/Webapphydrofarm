@@ -1,5 +1,6 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
-import {OrderDiscountSummary} from '../../components/admin/OrderDiscountSummary.js';
+import {OrderHistoryDialog} from '../../components/admin/OrderHistoryDialog.js';
+import {orderDiscountAmount} from '../../lib/orderReport.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -38,6 +39,7 @@ const bangkokDateKey = (value?: string | null): string => {
 };
 
 const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
+  const [detailsOpen,setDetailsOpen]=useState(false);
   const isCompleted = order.status === 'completed';
   const isCancelled = order.status === 'cancelled';
   const StatusIcon = isCompleted ? CircleCheck : isCancelled ? Ban : UserRoundX;
@@ -49,7 +51,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
   };
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <><article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className={`flex items-start justify-between gap-3 border-b px-4 py-3 ${toneClasses[tone]}`}>
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/80"><StatusIcon className="h-5 w-5" /></span>
@@ -74,10 +76,11 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
         <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
           {(order.order_items || []).map((item) => <span key={item.id} className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">{item.round_items?.crops?.name || 'ผัก'} × {Number(item.qty_kg).toFixed(2)} กก.{item.own_qty_kg != null && ` · ชั่งผักฟาร์ม ${Number(item.own_qty_kg).toFixed(2)} กก.`}</span>)}
         </div>
-        <OrderDiscountSummary order={order}/>
+        <p className="text-xs font-bold text-orange-700">ส่วนลดออเดอร์นี้ ฿{orderDiscountAmount(order).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
+        <button type="button" onClick={()=>setDetailsOpen(true)} className="flex w-full items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100">ดูรายละเอียดออเดอร์<ChevronRight className="h-4 w-4"/></button>
         {isCancelled && order.cancel_reason && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800"><span className="font-bold">เหตุผล:</span> {order.cancel_reason}</p>}
       </div>
-    </article>
+    </article>{detailsOpen&&<OrderHistoryDialog order={order} onClose={()=>setDetailsOpen(false)}/>}</>
   );
 };
 
