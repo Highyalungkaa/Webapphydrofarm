@@ -1,4 +1,5 @@
 import { RoundWeightSummary } from '../../components/admin/RoundWeightSummary.js';
+import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import { PurchaseLimitPanel } from '../../components/admin/PurchaseLimitPanel.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
@@ -151,10 +152,11 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
           const { initial, lost, remaining } = getItemPlantCounts(item);
           return (
             <li key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 border-l-2 border-l-emerald-400 bg-slate-50/70 px-3 py-2.5">
-              <span className="min-w-0">
+              <div className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
                 {(item.loss_baseline_plant_count != null || item.plant_count != null) && <span className="block text-[10px] text-slate-500">เริ่มต้น {initial.toLocaleString('th-TH')} ต้น</span>}
-              </span>
+                <EstimatedYield item={item}/>
+              </div>
               {item.loss_baseline_plant_count == null && item.plant_count == null ? (
                 <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
               ) : (
@@ -343,6 +345,9 @@ export const AdminRoundDetailPage: React.FC = () => {
   const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
   const totalBooked = Number(round.total_booked_kg || 0);
+  const forecastItems=(round.round_items||[]).filter(item=>Number(item.planting_plants_per_kg)>0&&item.estimated_qty_kg!=null);
+  const totalEstimatedKg=forecastItems.reduce((sum,item)=>sum+Number(item.estimated_qty_kg),0);
+  const missingForecastCount=(round.round_items||[]).length-forecastItems.length;
   const orders = (round as any).orders || [];
   const totalRevenue = orders
     .filter((order: any) => order.status !== 'cancelled')
@@ -373,7 +378,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         </div>
 
         {/* Quick summary numbers */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 items-center gap-3 self-stretch xl:min-w-[700px] bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 items-center gap-3 self-stretch xl:min-w-[760px] bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div className="px-2 text-center">
             <span className="text-[10px] font-bold text-slate-500 block">จำนวนปลูกเริ่มต้น</span>
             <span className="text-base font-black text-slate-800">{plantCounts.initial.toLocaleString('th-TH')} ต้น</span>
@@ -381,6 +386,11 @@ export const AdminRoundDetailPage: React.FC = () => {
           <div className="px-2 text-center">
             <span className="text-[10px] font-bold text-teal-700 block">จำนวนต้นคงเหลือ</span>
             <span className="text-base font-black text-teal-800">{plantCounts.remaining.toLocaleString('th-TH')} ต้น</span>
+          </div>
+          <div className="px-2 text-center">
+            <span className="text-[10px] font-bold text-violet-700 block">น้ำหนักประมาณรอบนี้</span>
+            <span className="text-base font-black text-violet-800">{forecastItems.length?`${totalEstimatedKg.toLocaleString('th-TH')} กก.`:'ยังไม่มีข้อมูล'}</span>
+            <span className="block text-[9px] text-violet-600">{missingForecastCount>0?`ยังไม่มีประมาณการ ${missingForecastCount} ชนิด`:'ประมาณการก่อนเก็บเกี่ยว'}</span>
           </div>
           <div className="px-2 text-center">
             <span className="text-[10px] uppercase font-bold text-emerald-600 block">จองแล้ว</span>
