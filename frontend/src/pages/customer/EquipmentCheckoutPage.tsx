@@ -10,7 +10,7 @@ import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.j
 const money = (amount: number) => `฿${Number(amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const EquipmentCheckoutPage: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isLoading: authLoading } = useAuth();
   const { items, totalAmount, setQuantity, remove, clear,syncProducts } = useEquipmentCart();
   const navigate = useNavigate();
   const [address, setAddress] = useState('');
@@ -27,7 +27,15 @@ export const EquipmentCheckoutPage: React.FC = () => {
   const [error, setError] = useState('');
   const didPrefill = useRef(false);
   const orderRequest=useRef({key:'',id:crypto.randomUUID()});
-  useEffect(()=>{let active=true;api.get<EquipmentProduct[]>('/equipment/products').then(products=>{if(active){syncProducts(products);setProductsReady(true);}}).catch(()=>{if(active)setError('ตรวจสอบราคาและสต๊อกล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่ก่อนสั่งซื้อ');});return()=>{active=false;};},[]);
+  useEffect(() => {
+    setProductsReady(false);
+    if (authLoading || !user) return;
+    let active = true;
+    api.get<EquipmentProduct[]>('/equipment/products')
+      .then(products => { if (active) { syncProducts(products); setProductsReady(true); } })
+      .catch(() => { if (active) setError('ตรวจสอบราคาและสต๊อกล่าสุดไม่สำเร็จ กรุณาโหลดหน้าใหม่ก่อนสั่งซื้อ'); });
+    return () => { active = false; };
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
     if (profile && !didPrefill.current) {
