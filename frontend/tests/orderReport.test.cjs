@@ -19,6 +19,18 @@ test('cancelled paid orders retain their recorded receipt without adding booking
  const metrics=orderMetrics([order({status:'cancelled'})]);assert.equal(metrics.bookedKg,0);assert.equal(metrics.deliveredKg,0);assert.equal(metrics.receivedAmount,795);assert.equal(metrics.cancelledReceivedAmount,795);
  assert.equal(orderMetrics([order({total_amount:700})]).receivedAmount,795);
 });
+
+test('discount totals retain cents, separate cancellations and scope pooled source lines once',()=>{
+ const {orderDiscountAmount,orderGrossAmount}=load('orderReport');
+ const row=order({order_items:[{...order().order_items[0],discount_amount:0.1},{...order().order_items[1],discount_amount:0.2}]});
+ assert.equal(orderDiscountAmount(row),0.3);assert.equal(orderGrossAmount(row),800);
+ const cancelled=order({id:'cancelled',status:'cancelled'});
+ const totals=orderMetrics([row,cancelled,order({id:'zero',order_items:[]})]);
+ assert.equal(totals.discountAmount,5.3);assert.equal(totals.activeDiscountAmount,0.3);assert.equal(totals.cancelledDiscountAmount,5);assert.equal(totals.discountedOrderCount,2);
+ const a=orderMetrics([scopeOrderToRound(row,'r1')]),b=orderMetrics([scopeOrderToRound(row,'r2')]);
+ assert.equal(a.discountAmount,0.1);assert.equal(b.discountAmount,0.2);assert.equal(Math.round((a.discountAmount+b.discountAmount)*100),30);
+ assert.equal(orderMetrics([]).discountAmount,0);
+});
 test('cross-round receipts and deliveries scope to source items and cent allocations sum exactly',()=>{
  const original=order(),a=scopeOrderToRound(original,'r1'),b=scopeOrderToRound(original,'r2');
  assert.equal(orderMetrics([a]).deliveredKg,10.2);assert.equal(orderMetrics([b]).deliveredKg,5.1);assert.equal(a.received_amount,495);assert.equal(b.received_amount,300);
@@ -34,6 +46,7 @@ test('Excel selected-round summary matches screen metrics and uses the actual so
  const summary=book.getWorksheet('สรุปภาพรวม')||book.worksheets[0];
  const metrics=new Map();summary.eachRow(row=>{metrics.set(row.getCell(1).value,row.getCell(2).value);});
  assert.equal(metrics.get('ส่งมอบจริง'),5.1);assert.equal(metrics.get('เงินรับจริง'),300);
+ assert.equal(metrics.get('ส่วนลดรวมทุกออเดอร์'),0);assert.equal(metrics.get('ส่วนลดออเดอร์ยกเลิก'),0);
  const items=book.getWorksheet('รายการผัก');assert.equal(items.getRow(7).getCell(2).value,'r2');assert.equal(items.rowCount,7);
  const round=book.getWorksheet('รายรอบ');assert.equal(round.getRow(7).getCell(1).value,'r2');assert.equal(round.rowCount,7);
 });

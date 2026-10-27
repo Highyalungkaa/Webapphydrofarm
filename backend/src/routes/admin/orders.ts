@@ -55,7 +55,8 @@ const updateOrderSchema = z.object({
 // GET /api/admin/orders - List all orders with multi-parameter filtering
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { round_id, status, fulfillment_method, payment_status, search, offset, limit } = req.query;
+    const { round_id, customer_id, status, fulfillment_method, payment_status, search, offset, limit } = req.query;
+    if(customer_id!==undefined&&!z.string().uuid().safeParse(customer_id).success){res.status(400).json({error:'รหัสลูกค้าไม่ถูกต้อง'});return;}
     const pageOffset = offset === undefined ? null : Number(offset);
     const pageLimit = limit === undefined ? null : Number(limit);
     if ((pageOffset !== null && (!Number.isInteger(pageOffset) || pageOffset < 0)) ||
@@ -118,6 +119,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     if (status && typeof status === 'string') {
       query = query.eq('status', status);
     }
+    if(typeof customer_id==='string')query=query.eq('customer_id',customer_id);
 
     if (fulfillment_method && typeof fulfillment_method === 'string') {
       query = query.eq('fulfillment_method', fulfillment_method);

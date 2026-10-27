@@ -5,7 +5,7 @@ const orderId='11111111-1111-4111-8111-111111111111';
 const customerId='22222222-2222-4222-8222-222222222222';
 
 function setup(file,{databaseError=null,missing=false,viewerId=customerId,isAdmin=false}={}){
- const routes=new Map(),queries=[];
+ const routes=new Map(),queries=[],filters=[];
  const router={};
  for(const method of ['use','get','post','patch'])router[method]=(route,...handlers)=>routes.set(method+' '+route,handlers.at(-1));
  const order={id:orderId,customer_id:customerId,planting_rounds:{id:'round',name:'Source round'},order_items:[]};
@@ -15,7 +15,7 @@ function setup(file,{databaseError=null,missing=false,viewerId=customerId,isAdmi
    const error=databaseError||(!select.includes('planting_rounds!orders_round_id_fkey')?{code:'PGRST201',message:'Ambiguous relationship'}:null);
    return {error,data:error?null:single?(missing?null:order):(missing?[]:[order])};
   };
-  const q={select(value){select=value;queries.push(value);return q;},eq(){return q;},order(){return q;},range(){return q;},or(){return q;},
+  const q={select(value){select=value;queries.push(value);return q;},eq(key,value){filters.push([key,value]);return q;},order(){return q;},range(){return q;},or(){return q;},
    maybeSingle:async()=>result(true),then:(resolve,reject)=>Promise.resolve(result(false)).then(resolve,reject)};
   return q;
  }};
@@ -31,9 +31,9 @@ function setup(file,{databaseError=null,missing=false,viewerId=customerId,isAdmi
    return require(name);
   }
  });
- return{queries,async get(route){
+ return{queries,filters,async get(route,query={}){
   const res={statusCode:200,status(code){this.statusCode=code;return this;},json(value){this.body=value;}};
-  await routes.get('get '+route)({params:{id:orderId},query:{},user:{id:viewerId,isAdmin}},res);
+  await routes.get('get '+route)({params:{id:orderId},query,user:{id:viewerId,isAdmin}},res);
   return res;
  }};
 }
@@ -59,4 +59,12 @@ test('a successful order read still rejects another customer and permits an admi
  const viewerId='33333333-3333-4333-8333-333333333333';
  assert.equal((await setup('../src/routes/orders.ts',{viewerId}).get('/:id')).statusCode,403);
  assert.equal((await setup('../src/routes/orders.ts',{viewerId,isAdmin:true}).get('/:id')).statusCode,200);
+});
+
+test('admin customer history filters by exact customer id and includes saved item discounts',async()=>{
+ const app=setup('../src/routes/admin/orders.ts');
+ const response=await app.get('/',{customer_id:customerId,offset:'0',limit:'500'});
+ assert.equal(response.statusCode,200);assert.deepEqual(app.filters,[['customer_id',customerId]]);assert.match(app.queries[0],/discount_amount/);
+ const invalid=setup('../src/routes/admin/orders.ts');assert.equal((await invalid.get('/',{customer_id:'not-a-customer-id'})).statusCode,400);assert.equal(invalid.queries.length,0);
+ assert.equal((await invalid.get('/',{customer_id:[customerId]})).statusCode,400);
 });

@@ -1,4 +1,5 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
+import {OrderDiscountSummary} from '../../components/admin/OrderDiscountSummary.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -73,6 +74,7 @@ const ArchivedOrderCard: React.FC<{ order: Order }> = ({ order }) => {
         <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
           {(order.order_items || []).map((item) => <span key={item.id} className="rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">{item.round_items?.crops?.name || 'ผัก'} × {Number(item.qty_kg).toFixed(2)} กก.{item.own_qty_kg != null && ` · ชั่งผักฟาร์ม ${Number(item.own_qty_kg).toFixed(2)} กก.`}</span>)}
         </div>
+        <OrderDiscountSummary order={order}/>
         {isCancelled && order.cancel_reason && <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800"><span className="font-bold">เหตุผล:</span> {order.cancel_reason}</p>}
       </div>
     </article>

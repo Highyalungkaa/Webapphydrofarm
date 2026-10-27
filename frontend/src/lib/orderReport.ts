@@ -2,6 +2,8 @@ import type {Order,OrderItem} from '../types/index.js';
 const cents=(n:number)=>Math.round(n*100);
 export const itemGrossAmount=(item:OrderItem)=>Math.round(Math.round(Number(item.qty_kg)*100)*Math.round(Number(item.price_per_kg)*100)/100)/100;
 export const itemNetAmount=(item:OrderItem)=>Math.max(0,cents(itemGrossAmount(item))-cents(Number(item.discount_amount||0)))/100;
+export const orderDiscountAmount=(order:Order)=>(order.order_items||[]).reduce((sum,item)=>sum+cents(Number(item.discount_amount||0)),0)/100;
+export const orderGrossAmount=(order:Order)=>(order.order_items||[]).reduce((sum,item)=>sum+cents(itemGrossAmount(item)),0)/100;
 export const receiptAmount=(order:Order)=>order.payment_status==='paid'?Number(order.received_amount??order.total_amount):0;
 export function deliveredItemKg(order:Order,item:OrderItem):number|null{
   if(order.status!=='completed')return 0;
@@ -20,12 +22,17 @@ export function receiptByItem(order:Order):Map<string,number>{
 }
 export function orderMetrics(orders:Order[]){
   let bookedKg=0,deliveredKg=0,bookedCents=0,receivedCents=0,outstandingCents=0,unrecordedDeliveryItems=0,cancelledReceiptCents=0;
+  let discountCents=0,cancelledDiscountCents=0,discountedOrderCount=0;
   for(const order of orders){
+    const discount=cents(orderDiscountAmount(order));discountCents+=discount;
+    if(discount>0)discountedOrderCount++;
+    if(order.status==='cancelled')cancelledDiscountCents+=discount;
     const received=cents(receiptAmount(order));receivedCents+=received;
     if(order.status==='cancelled'){cancelledReceiptCents+=received;continue;}
     bookedCents+=cents(Number(order.total_amount));if(order.status!=='no_show')outstandingCents+=Math.max(0,cents(Number(order.total_amount))-received);
     for(const item of order.order_items||[]){bookedKg+=Number(item.qty_kg);const delivered=deliveredItemKg(order,item);if(delivered===null)unrecordedDeliveryItems++;else deliveredKg+=delivered;}
   }
   return{bookedKg:Math.round(bookedKg*100)/100,deliveredKg:Math.round(deliveredKg*100)/100,bookedAmount:bookedCents/100,
-    receivedAmount:receivedCents/100,outstandingAmount:outstandingCents/100,unrecordedDeliveryItems,cancelledReceivedAmount:cancelledReceiptCents/100};
+    receivedAmount:receivedCents/100,outstandingAmount:outstandingCents/100,unrecordedDeliveryItems,cancelledReceivedAmount:cancelledReceiptCents/100,
+    discountAmount:discountCents/100,activeDiscountAmount:(discountCents-cancelledDiscountCents)/100,cancelledDiscountAmount:cancelledDiscountCents/100,discountedOrderCount};
 }
