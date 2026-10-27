@@ -274,7 +274,7 @@ export const RoundDetailPage: React.FC = () => {
                     <span className="text-xs text-slate-500 font-normal">/ กิโลกรัม</span>
                   </div>
 
-                  <EstimatedYield item={item}/>
+                  <EstimatedYield item={item} compact/>
                   {item.max_qty_per_order_kg && (
                     <p className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block mb-3 border border-amber-200">
                       จำกัดสูงสุด {item.max_qty_per_order_kg} กก./ออเดอร์
