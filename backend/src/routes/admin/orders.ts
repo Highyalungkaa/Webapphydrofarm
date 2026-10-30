@@ -74,10 +74,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           name,
           fulfillment_date
         ),
-        districts (
-          id,
-          name
-        ),
         profiles (
           id,
           full_name,
@@ -177,10 +173,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           delivery_start_time,
           delivery_end_time,
           status
-        ),
-        districts (
-          id,
-          name
         ),
         profiles (
           id,

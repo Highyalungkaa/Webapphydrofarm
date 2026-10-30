@@ -9,7 +9,6 @@ const updateProfileSchema = z.object({
   full_name: z.string().trim().min(1, 'กรุณาระบุชื่อ-นามสกุล').max(150, 'ชื่อยาวเกินไป'),
   phone: z.string().min(9, 'เบอร์โทรศัพท์ต้องมีอย่างน้อย 9 หลัก').max(20, 'เบอร์โทรศัพท์ยาวเกินไป'),
   address_detail: z.string().optional().nullable(),
-  district_id: z.string().uuid('รหัสอำเภอ/ตำบลไม่ถูกต้อง').optional().nullable(),
 });
 
 // GET /api/profile - Get current user profile
@@ -18,7 +17,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response): P
     const userId = req.user!.id;
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
-      .select('*, districts(id, name)')
+      .select('*')
       .eq('id', userId)
       .maybeSingle();
 
@@ -36,7 +35,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response): P
           email: req.user!.email,
           full_name: req.user!.email.split('@')[0],
         })
-        .select('*, districts(id, name)')
+        .select('*')
         .single();
 
       if (insertError) {
@@ -65,7 +64,7 @@ router.put('/', requireAuth, async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    const { full_name, phone, address_detail, district_id } = parseResult.data;
+    const { full_name, phone, address_detail } = parseResult.data;
 
     const { data: updated, error } = await supabaseAdmin
       .from('profiles')
@@ -73,11 +72,10 @@ router.put('/', requireAuth, async (req: AuthenticatedRequest, res: Response): P
         full_name,
         phone,
         address_detail: address_detail || null,
-        district_id: district_id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
-      .select('*, districts(id, name)')
+      .select('*')
       .single();
 
     if (error) {

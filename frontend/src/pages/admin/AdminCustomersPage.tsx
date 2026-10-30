@@ -15,10 +15,6 @@ interface CustomerItem {
   address_detail?: string;
   no_show_count: number;
   created_at: string;
-  districts?: {
-    id: string;
-    name: string;
-  };
 }
 
 export const AdminCustomersPage: React.FC = () => {
@@ -75,7 +71,7 @@ export const AdminCustomersPage: React.FC = () => {
   const formatDate = formatDateDMY;
   const query = searchQuery.trim().toLocaleLowerCase('th');
   const filteredCustomers = customers.filter((customer) =>
-    !query || [customer.full_name, customer.email, customer.phone, customer.address_detail, customer.districts?.name]
+    !query || [customer.full_name, customer.email, customer.phone, customer.address_detail]
       .some((value) => value?.toLocaleLowerCase('th').includes(query))
   );
 
@@ -135,7 +131,7 @@ export const AdminCustomersPage: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-slate-700">{c.phone || '-'}</td>
                     <td className="py-3.5 px-4 text-slate-600 max-w-[200px] truncate" title={c.address_detail || ''}>
-                      {c.address_detail || c.districts?.name || '-'}
+                      {c.address_detail || '-'}
                     </td>
                     <td className="py-3.5 px-4">
                       {c.no_show_count > 0 ? (

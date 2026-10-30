@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 
 // Routes
-import districtsRouter from './routes/districts.js';
 import profileRouter from './routes/profile.js';
 import roundsRouter from './routes/rounds.js';
 import ordersRouter from './routes/orders.js';
@@ -19,7 +18,6 @@ import stockRouter from './routes/admin/stock.js';
 import purchaseLimitsRouter from './routes/admin/purchaseLimits.js';
 import adminOrdersRouter from './routes/admin/orders.js';
 import chatOrdersRouter from './routes/admin/chatOrders.js';
-import adminDistrictsRouter from './routes/admin/districts.js';
 import adminSettingsRouter from './routes/admin/settings.js';
 import adminAdminsRouter from './routes/admin/admins.js';
 import adminAuditRouter from './routes/admin/audit.js';
@@ -64,7 +62,6 @@ app.get('/health', (_req, res) => {
 });
 
 // Customer & Public API Routes
-app.use('/api/districts', districtsRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/rounds', roundsRouter);
 app.use('/api/orders', ordersRouter);
@@ -80,7 +77,6 @@ app.use('/api/admin/rounds', stockRouter);
 app.use('/api/admin/rounds', purchaseLimitsRouter);
 app.use('/api/admin/orders', chatOrdersRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
-app.use('/api/admin/districts', adminDistrictsRouter);
 app.use('/api/admin/settings', adminSettingsRouter);
 app.use('/api/admin/admins', adminAdminsRouter);
 app.use('/api/admin/audit', adminAuditRouter);

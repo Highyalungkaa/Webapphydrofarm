@@ -113,7 +113,6 @@ export const CheckoutPage: React.FC = () => {
         })),
         fulfillment_method: fulfillmentMethod,
         delivery_address: fulfillmentMethod === 'delivery' ? (trimmedAddress || profile?.address_detail || null) : null,
-        district_id: null,
         contact_phone: contactPhone.trim(),
         note: note.trim() || null,
         accepted_substitution_terms: acceptedTerms,

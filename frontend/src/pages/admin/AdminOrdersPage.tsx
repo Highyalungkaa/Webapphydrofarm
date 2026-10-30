@@ -365,7 +365,7 @@ export const AdminOrdersPage: React.FC = () => {
                             className="block text-[11px] text-slate-500 truncate max-w-[150px] mt-0.5"
                             title={order.delivery_address || ''}
                           >
-                            {order.delivery_address || order.districts?.name || 'จัดส่งถึงที่อยู่'}
+                            {order.delivery_address || 'จัดส่งถึงที่อยู่'}
                           </span>
                         )}
                       </td>
@@ -454,7 +454,7 @@ export const AdminOrdersPage: React.FC = () => {
                 {selectedOrder.fulfillment_method === 'delivery' && (
                   <p className="text-slate-600 mt-1 whitespace-pre-line leading-relaxed">
                     <span className="font-semibold text-slate-700">ที่อยู่จัดส่ง:</span>{' '}
-                    {selectedOrder.delivery_address || selectedOrder.districts?.name || '-'}
+                    {selectedOrder.delivery_address || '-'}
                   </p>
                 )}
                 {selectedOrder.note && (

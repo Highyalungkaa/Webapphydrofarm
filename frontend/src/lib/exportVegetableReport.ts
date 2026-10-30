@@ -277,7 +277,6 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
     {header:'ข้อมูลน้ำหนักส่งจริง',key:'completeness',width:32},
     {header:'เบอร์ติดต่อ',key:'phone',width:21},
     {header:'ที่อยู่จัดส่ง',key:'address',width:45},
-    {header:'เขตจัดส่ง',key:'district',width:25},
     {header:'กำหนดยืนยันออเดอร์',key:'expires',width:25,format:timeFormat},
     {header:'วันเวลายกเลิก',key:'cancelledAt',width:25,format:timeFormat},
     {header:'เหตุผลยกเลิก',key:'cancelReason',width:45},
@@ -298,7 +297,7 @@ export async function exportVegetableReport({ orders, rounds, selectedRoundId, e
       gross: sum(items, gross), discount: sum(items, discount), total: number(order.total_amount),delivered:order.status==='completed'&&items.some(i=>i.own_qty_kg==null)?null:sum(items,delivered),received:receiptAmount(order),paidAt:bangkokDate(order.paid_at),
       outstanding:orderMetrics([order]).outstandingAmount,paymentMethod:order.payment_method==='transfer'?'โอนเงิน':order.payment_method==='cash'?'เงินสด':'ยังไม่บันทึก',
       completedAt:bangkokDate(order.completed_at),variance:order.status==='completed'&&items.every(i=>i.own_qty_kg!=null)?sum(items,delivered)-sum(items,i=>number(i.qty_kg)):null,
-      completeness:deliveryCompleteness(order),phone:order.contact_phone||order.profiles?.phone||'-',address:order.delivery_address||'-',district:order.districts?.name||'-',
+      completeness:deliveryCompleteness(order),phone:order.contact_phone||order.profiles?.phone||'-',address:order.delivery_address||'-',
       expires:bangkokDate(order.confirmation_expires_at),cancelledAt:bangkokDate(order.cancelled_at),cancelReason:order.cancel_reason||'-',
     });
   });

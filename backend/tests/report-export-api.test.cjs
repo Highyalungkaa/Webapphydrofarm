@@ -11,6 +11,7 @@ test('complete exports require admin authentication and reconciliation, and page
  assert.deepEqual(app.middleware,[app.auth,app.admin,app.expiry]);const res=await app.get();assert.equal(res.statusCode,200);
  for(const key of ['orders','rounds','losses','audits'])assert.equal(res.body[key].length,1205);
  assert.match(app.requests.find(r=>r.table==='orders').fields,/planting_rounds!orders_round_id_fkey/);
+ assert.doesNotMatch(app.requests.find(r=>r.table==='orders').fields,/districts/);
  assert.doesNotMatch(app.requests.find(r=>r.table==='plant_losses').fields,/image_path/);
 });
 test('a failed history source aborts the whole export rather than exporting partial data as zero',async()=>{

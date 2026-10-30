@@ -51,12 +51,6 @@ export interface Plot {
   occupying_rounds?: PlotOccupyingRound[];
 }
 
-export interface District {
-  id: string;
-  name: string;
-  is_active: boolean;
-}
-
 export interface Crop {
   id: string;
   name: string;
@@ -187,7 +181,6 @@ export interface Order {
   created_by?: string | null;
   fulfillment_method: FulfillmentMethod;
   delivery_address?: string | null;
-  district_id?: string | null;
   contact_phone: string;
   note?: string | null;
   status: OrderStatus;
@@ -204,7 +197,6 @@ export interface Order {
   created_at: string;
   updated_at: string;
   planting_rounds?: PlantingRound;
-  districts?: District;
   profiles?: {
     id: string;
     full_name: string;
@@ -221,10 +213,8 @@ export interface CustomerProfile {
   full_name: string;
   phone?: string | null;
   address_detail?: string | null;
-  district_id?: string | null;
   no_show_count: number;
   is_admin?: boolean;
-  districts?: District | null;
 }
 
 export interface CartItem {

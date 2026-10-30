@@ -22,7 +22,7 @@ router.get('/export-data',async(_req:AuthenticatedRequest,res:Response)=>{
     const [orders,rounds,plots,losses,closures,unsoldItems,audits]=await Promise.all([
       readAllRows(()=>supabaseAdmin.from('orders').select(`*,
         planting_rounds:planting_rounds!orders_round_id_fkey(id,name,fulfillment_date),
-        profiles(id,full_name,phone),districts(id,name),
+        profiles(id,full_name,phone),
         order_items(*,round_items(id,round_id,crop_id,crops(id,name)))`).order('id')),
       readAllRows(()=>supabaseAdmin.from('planting_rounds').select('*,round_items(*,crops(id,name))').order('id')),
       readAllRows(()=>supabaseAdmin.from('plots').select('id,name,zone_name').order('id')),

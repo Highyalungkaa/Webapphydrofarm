@@ -44,7 +44,6 @@ const createOrderSchema = z.object({
     errorMap: () => ({ message: 'กรุณาเลือกวิธีรับของ (มารับเอง หรือ จัดส่ง)' }),
   }),
   delivery_address: z.string().optional().nullable(),
-  district_id: z.string().uuid('รหัสอำเภอ/ตำบลไม่ถูกต้อง').optional().nullable(),
   contact_phone: z.string().min(9, 'กรุณาระบุเบอร์โทรศัพท์ติดต่ออย่างน้อย 9 หลัก'),
   note: z.string().optional().nullable(),
   accepted_substitution_terms: z.boolean().refine((val) => val === true, {
@@ -68,7 +67,6 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
       items,
       fulfillment_method,
       delivery_address,
-      district_id,
       contact_phone,
       note,
       accepted_substitution_terms,
@@ -93,7 +91,6 @@ router.post('/', requireAuth, orderCreationLimiter, async (req: AuthenticatedReq
       p_items: items,
       p_fulfillment_method: fulfillment_method,
       p_delivery_address: finalDeliveryAddress || null,
-      p_district_id: district_id || null,
       p_contact_phone: contact_phone,
       p_note: note || null,
       p_accepted_terms: accepted_substitution_terms,
@@ -147,10 +144,6 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
           delivery_end_time,
           status
         ),
-        districts (
-          id,
-          name
-        ),
         order_items (
           id,
           round_item_id,
@@ -198,10 +191,6 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           delivery_start_time,
           delivery_end_time,
           status
-        ),
-        districts (
-          id,
-          name
         ),
         order_items (
           id,

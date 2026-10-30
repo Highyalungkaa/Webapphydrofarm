@@ -12,7 +12,7 @@ function setup(file,{databaseError=null,missing=false,viewerId=customerId,isAdmi
  const db={from(){
   let select='';
   const result=single=>{
-   const error=databaseError||(!select.includes('planting_rounds!orders_round_id_fkey')?{code:'PGRST201',message:'Ambiguous relationship'}:null);
+   const error=databaseError||(select.includes('districts')?{code:'PGRST200',message:'District relation removed'}:null)||(!select.includes('planting_rounds!orders_round_id_fkey')?{code:'PGRST201',message:'Ambiguous relationship'}:null);
    return {error,data:error?null:single?(missing?null:order):(missing?[]:[order])};
   };
   const q={select(value){select=value;queries.push(value);return q;},eq(key,value){filters.push([key,value]);return q;},order(){return q;},range(){return q;},or(){return q;},

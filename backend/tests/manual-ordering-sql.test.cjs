@@ -38,6 +38,22 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
   const actor=randomUUID(),customer=randomUUID();
   await db.query('INSERT INTO auth.users VALUES($1,$2),($3,$4)',[actor,'admin@example.com',customer,'member@example.com']);
   await db.query('INSERT INTO public.admin_users VALUES($1)',['admin@example.com']);await db.query("INSERT INTO public.profiles(id,full_name) VALUES($1,'Member')",[customer]);
+  await db.exec('CREATE TABLE districts(id UUID PRIMARY KEY,name TEXT); ALTER TABLE profiles ADD COLUMN district_id UUID REFERENCES districts; ALTER TABLE orders ADD CONSTRAINT orders_district_id_fkey FOREIGN KEY(district_id) REFERENCES districts;');
+  await t.test('district removal refuses referenced data and preserves profiles, addresses and function permissions',async()=>{
+    const district=randomUUID();
+    await db.query("INSERT INTO districts VALUES($1,'Old area')",[district]);
+    await db.query("UPDATE profiles SET district_id=$1,address_detail='Saved delivery address' WHERE id=$2",[district,customer]);
+    await assert.rejects(db.exec(migration('048_remove_legacy_districts.sql')),/ผูกกับเขตจัดส่ง/);
+    await db.exec('ROLLBACK');
+    assert.equal((await db.query('SELECT count(*) AS n FROM districts')).rows[0].n,1);
+    await db.exec('UPDATE profiles SET district_id=NULL');
+    const before=(await db.query("SELECT proacl::TEXT AS acl FROM pg_proc WHERE oid='public.create_order(uuid,uuid,jsonb,fulfillment_method,text,uuid,character varying,text,boolean)'::REGPROCEDURE")).rows[0].acl;
+    await db.exec(migration('048_remove_legacy_districts.sql'));
+    await db.exec(migration('048_remove_legacy_districts.sql'));
+    assert.equal((await db.query("SELECT to_regclass('public.districts') AS name")).rows[0].name,null);
+    assert.equal((await db.query('SELECT address_detail FROM profiles WHERE id=$1',[customer])).rows[0].address_detail,'Saved delivery address');
+    assert.equal((await db.query("SELECT proacl::TEXT AS acl FROM pg_proc WHERE oid='public.create_order(uuid,uuid,jsonb,fulfillment_method,text,uuid,character varying,text,boolean)'::REGPROCEDURE")).rows[0].acl,before);
+  });
   const today=(await db.query("SELECT (now() AT TIME ZONE 'Asia/Bangkok')::DATE::TEXT AS d")).rows[0].d;
   async function setup(){const round=randomUUID(),item=randomUUID(),crop=randomUUID();
     await db.query("INSERT INTO public.crops VALUES($1,'Oak',5)",[crop]);
@@ -60,6 +76,17 @@ for(const previousWeights of [false,true])test('manual ordering with '+(previous
 
   async function orderLimit(ids,n){return db.query('SELECT public.set_round_order_limit($1,$2,$3)',[actor,ids.round,n]);}
   async function remaining(ids){return(await db.query('SELECT order_limit_remaining FROM public.planting_rounds WHERE id=$1',[ids.round])).rows[0].order_limit_remaining;}
+  await t.test('delivery orders keep explicit and profile addresses without the retired district parameter',async()=>{
+    const ids=await setup();
+    for(const address of [null,'Customer checkout address']){
+      const result=(await db.query("SELECT public.create_order(p_round_id=>$1,p_customer_id=>$2,p_items=>$3,p_fulfillment_method=>'delivery',p_delivery_address=>$4,p_contact_phone=>'0812345678',p_accepted_terms=>true) AS result",[ids.round,customer,JSON.stringify([{round_item_id:ids.item,qty_kg:1}]),address])).rows[0].result;
+      const before=(await db.query('SELECT * FROM orders WHERE id=$1',[result.order_id])).rows[0];
+      assert.equal(before.delivery_address,address||'Saved delivery address');
+      assert.equal(before.contact_phone,'0812345678');
+      await db.exec(migration('048_remove_legacy_districts.sql'));
+      assert.deepEqual((await db.query('SELECT * FROM orders WHERE id=$1',[result.order_id])).rows[0],before);
+    }
+  });
   await t.test('remaining order quota covers customer and chat orders and rejects a third without partial inserts',async()=>{
     const ids=await setup();await book(ids);await orderLimit(ids,2);
     await book(ids);assert.equal(await remaining(ids),1);await book(ids,5,true);assert.equal(await remaining(ids),0);

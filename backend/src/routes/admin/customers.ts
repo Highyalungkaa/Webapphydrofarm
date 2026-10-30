@@ -17,11 +17,7 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response): Promise<void>
         phone,
         address_detail,
         no_show_count,
-        created_at,
-        districts (
-          id,
-          name
-        )
+        created_at
       `)
       .order('no_show_count', { ascending: false });
 
