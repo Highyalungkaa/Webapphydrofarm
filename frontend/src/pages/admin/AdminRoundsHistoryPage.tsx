@@ -121,6 +121,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('order_id') || '');
   const [selectedDate, setSelectedDate] = useState('');
+  const [discountFilter, setDiscountFilter] = useState<'all' | 'discounted' | 'regular'>('all');
   const [activeSection, setActiveSection] = useState<'rounds' | 'orders' | 'bookings'>(searchParams.get('section') === 'orders' || searchParams.has('order_id') ? 'orders' : 'rounds');
 
   useEffect(() => {
@@ -169,6 +170,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   const totalKgSold = filteredRounds.reduce((sum, r) => sum + Number(r.total_booked_kg || 0), 0);
   const filteredOrders = archivedOrders.filter((order) => {
     if (selectedDate && bangkokDateKey(order.status === 'cancelled' ? order.cancelled_at || order.updated_at : order.updated_at) !== selectedDate) return false;
+    if (discountFilter === 'discounted' && orderDiscountAmount(order) <= 0) return false;
+    if (discountFilter === 'regular' && orderDiscountAmount(order) > 0) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return order.id.toLowerCase().includes(query)
@@ -294,6 +297,14 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             ล้างคำค้น
           </button>
         )}
+        {activeSection === 'orders' && <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-44">
+          <span className="mb-1.5 block">ส่วนลด</span>
+          <select value={discountFilter} onChange={(e) => setDiscountFilter(e.target.value as 'all' | 'discounted' | 'regular')} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
+            <option value="all">ทุกคำสั่งจอง</option>
+            <option value="discounted">มีส่วนลด</option>
+            <option value="regular">ไม่มีส่วนลด</option>
+          </select>
+        </label>}
         <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-52">
           <span className="mb-1.5 block">{activeSection === 'rounds' ? 'วันที่สิ้นสุดรอบ' : activeSection === 'bookings' ? 'วันที่ปิดรับจอง' : 'วันที่ปิดรายการ'}</span>
           <span className="relative block">
@@ -468,7 +479,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           })
         )}
       </div> : activeSection === 'orders' ? <div className="space-y-5">
-        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate ? 'ไม่พบออเดอร์ตามตัวกรอง' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่สำเร็จ ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
+        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate || discountFilter !== 'all' ? 'ไม่พบออเดอร์ตามตัวกรอง' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่สำเร็จ ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
           {completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length > 0 && <section className="space-y-3">
             <div className="flex items-center gap-2"><CircleCheck className="h-5 w-5 text-emerald-600" /><h2 className="font-extrabold text-slate-900">สำเร็จแล้ว</h2><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length}</span></div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
