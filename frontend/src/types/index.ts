@@ -51,17 +51,6 @@ export interface Plot {
   occupying_rounds?: PlotOccupyingRound[];
 }
 
-export interface FarmMetrics {
-  farm_total_slots: number;
-  total_allocated_slots: number;
-  available_slots: number;
-  usage_percent: number;
-  total_plots: number;
-  active_plots: number;
-  inactive_plots: number;
-  zones: string[];
-}
-
 export interface District {
   id: string;
   name: string;

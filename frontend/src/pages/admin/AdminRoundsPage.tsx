@@ -838,7 +838,7 @@ export const AdminRoundsPage: React.FC = () => {
                               สรุปพื้นที่แปลงปลูก (คำนวณจากรอบเดิมที่กำลังดำเนินการ)
                             </h4>
                             <p className="text-[10px] text-slate-500">
-                              ความจุฟาร์มรวม: {activePlots.length} แปลง ({farmTotalSlots.toLocaleString()} ต้น) • รอบเดิมใช้ไป: {farmOccupiedSlots.toLocaleString()} ต้น •
+                              ความจุรวมของแปลงที่ใช้งาน: {activePlots.length} แปลง ({farmTotalSlots.toLocaleString()} ต้น) • รอบเดิมใช้ไป: {farmOccupiedSlots.toLocaleString()} ต้น •
                               <strong className={farmAvailableSlots > 0 ? 'text-emerald-700 ml-1' : 'text-rose-600 ml-1'}>
                                 {farmAvailableSlots > 0 ? `พื้นที่ว่างในฟาร์มเหลือ: ${farmAvailableSlots.toLocaleString()} ต้น` : 'แปลงในฟาร์มเต็มแล้ว (เหลือ 0 ต้น)'}
                               </strong>

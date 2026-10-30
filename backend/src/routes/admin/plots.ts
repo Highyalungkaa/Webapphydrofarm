@@ -14,7 +14,7 @@ router.use(requireAuth, requireAdmin);
 const plotSchema = z.object({
   name: z.string().trim().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
   zone_name: z.string().trim().min(1, 'กรุณาระบุชื่อโซน').max(100),
-  slot_capacity: z.number().int().min(1, 'จำนวนต้น ต้องมากกว่า 0'),
+  slot_capacity: z.number().int().min(1, 'จำนวนต้นต้องมากกว่า 0').max(2147483647, 'จำนวนต้นเกินขนาดที่ระบบรองรับ'),
   crop_ids: z.array(z.string().uuid('รหัสชนิดผักไม่ถูกต้อง')).optional(),
   crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง').optional().nullable(),
   is_active: z.boolean().default(true),
@@ -57,18 +57,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Get farm settings for reference
-    const { data: settingsData } = await db
-      .from('app_settings')
-      .select('key, value')
-      .in('key', ['farm_total_slots']);
-
-    const settingsMap: Record<string, any> = {};
-    for (const item of settingsData || []) {
-      settingsMap[item.key] = item.value;
-    }
-
-    const farmTotalSlots = Number(settingsMap['farm_total_slots']) || 5000;
     const totalAllocatedSlots = (plots || []).reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
 
     // Normalize plots to ensure is_active is boolean
@@ -124,16 +112,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     res.json({
       plots: plotsWithUsage,
       unassigned_round_items: unassignedItems,
-      farm_total_slots: farmTotalSlots,
       total_allocated_slots: totalAllocatedSlots,
-      available_slots: Math.max(0, farmTotalSlots - totalAllocatedSlots),
     });
   } catch (err: any) {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการดึงข้อมูลแปลงปลูก' });
   }
 });
 
-// POST /api/admin/plots - Create new plot with slot capacity check
+// POST /api/admin/plots - Create new plot with its own capacity
 router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const parsed = plotSchema.safeParse(req.body);
@@ -154,29 +140,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       }
     }
 
-    // 1. Get farm_total_slots
-    const { data: settingRow } = await db
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'farm_total_slots')
-      .maybeSingle();
-
-    const farmTotalSlots = Number(settingRow?.value) || 5000;
-
-    // 2. Sum existing slot capacities
-    const { data: existingPlots } = await db.from('plots').select('slot_capacity');
-    const currentAllocated = (existingPlots || []).reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-    const availableSlots = farmTotalSlots - currentAllocated;
-
-    // 3. Capacity check
-    if (slot_capacity > availableSlots) {
-      res.status(400).json({
-        error: `จำนวนต้นของแปลงนี้ (${slot_capacity.toLocaleString()} ต้น) เกินโควตาที่จัดสรรได้ (ความจุฟาร์มทั้งหมด: ${farmTotalSlots.toLocaleString()} ต้น, จัดสรรไปแล้ว: ${currentAllocated.toLocaleString()} ต้น, เหลือสร้างได้อีกเพียง: ${Math.max(0, availableSlots).toLocaleString()} ต้น)`,
-      });
-      return;
-    }
-
-    // 4. Insert plot
+    // Each plot owns its capacity. The database still protects active plant allocations.
     const { data, error } = await db
       .from('plots')
       .insert({
@@ -199,7 +163,10 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       .single();
 
     if (error) {
-      res.status(400).json({ error: 'ไม่สามารถสร้างแปลงปลูกได้: ' + error.message });
+      const oldFarmLimit = error.message?.includes('เกินความจุฟาร์ม');
+      res.status(oldFarmLimit ? 503 : 400).json({ error: oldFarmLimit
+        ? 'ฐานข้อมูลยังจำกัดความจุฟาร์มรวมอยู่ กรุณารัน migration 047 ก่อนเพิ่มความจุแปลง'
+        : 'ไม่สามารถสร้างแปลงปลูกได้: ' + error.message });
       return;
     }
 
@@ -221,7 +188,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
   }
 });
 
-// PUT /api/admin/plots/:id - Update plot with slot capacity check
+// PUT /api/admin/plots/:id - Update plot capacity
 router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
@@ -233,31 +200,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
 
     const { name, zone_name, slot_capacity, crop_id, crop_ids, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
-
-    // 1. Get farm_total_slots
-    const { data: settingRow } = await db
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'farm_total_slots')
-      .maybeSingle();
-
-    const farmTotalSlots = Number(settingRow?.value) || 5000;
-
-    // 2. Sum existing slot capacities excluding this plot
-    const { data: allPlots } = await db.from('plots').select('id, slot_capacity');
-    const otherAllocated = (allPlots || [])
-      .filter(p => p.id !== id)
-      .reduce((sum, p) => sum + Number(p.slot_capacity || 0), 0);
-
-    const availableForThis = farmTotalSlots - otherAllocated;
-
-    // 3. Capacity check
-    if (slot_capacity > availableForThis) {
-      res.status(400).json({
-        error: `จำนวนต้น (${slot_capacity.toLocaleString()} ต้น) เกินโควตาความจุฟาร์ม (ความจุฟาร์ม: ${farmTotalSlots.toLocaleString()} ต้น, แปลงอื่นๆ ใช้ไป: ${otherAllocated.toLocaleString()} ต้น, แปลงนี้เพิ่มได้สูงสุด: ${Math.max(0, availableForThis).toLocaleString()} ต้น)`,
-      });
-      return;
-    }
 
     const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
 
@@ -275,7 +217,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       }
     }
 
-    // 4. Update plot
+    // The database rejects shrinking below plants assigned to an active round.
     const { data, error } = await db
       .from('plots')
       .update({
@@ -300,7 +242,10 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       .single();
 
     if (error) {
-      res.status(400).json({ error: 'ไม่สามารถแก้ไขแปลงปลูกได้: ' + error.message });
+      const oldFarmLimit = error.message?.includes('เกินความจุฟาร์ม');
+      res.status(oldFarmLimit ? 503 : 400).json({ error: oldFarmLimit
+        ? 'ฐานข้อมูลยังจำกัดความจุฟาร์มรวมอยู่ กรุณารัน migration 047 ก่อนเพิ่มความจุแปลง'
+        : 'ไม่สามารถแก้ไขแปลงปลูกได้: ' + error.message });
       return;
     }
 

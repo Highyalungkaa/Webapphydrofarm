@@ -8,7 +8,6 @@ import {
   Plus,
   AlertCircle,
   X,
-  Settings,
   SlidersHorizontal,
   Sprout,
   LayoutGrid,
@@ -20,9 +19,6 @@ export const AdminPlotsPage: React.FC = () => {
   const [allPlots, setAllPlots] = useState<Plot[]>([]);
   const [unassignedRoundItems, setUnassignedRoundItems] = useState<Array<{ round_id: string; round_name: string; crop_name: string }>>([]);
   const [crops, setCrops] = useState<Crop[]>([]);
-  const [farmTotalSlots, setFarmTotalSlots] = useState<number>(5000);
-  const [totalAllocatedSlots, setTotalAllocatedSlots] = useState<number>(0);
-  const [availableSlots, setAvailableSlots] = useState<number>(5000);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -54,7 +50,7 @@ export const AdminPlotsPage: React.FC = () => {
       setLoading(true);
       setLoadError(null);
       const [plotsRes, cropsData] = await Promise.all([
-        api.get<{ plots: Plot[]; farm_total_slots: number; total_allocated_slots: number; available_slots: number; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>(
+        api.get<{ plots: Plot[]; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>(
           '/admin/plots'
         ),
         api.get<Crop[]>('/admin/crops'),
@@ -62,9 +58,6 @@ export const AdminPlotsPage: React.FC = () => {
 
       setAllPlots(plotsRes.plots || []);
       setUnassignedRoundItems(plotsRes.unassigned_round_items || []);
-      setFarmTotalSlots(plotsRes.farm_total_slots || 5000);
-      setTotalAllocatedSlots(plotsRes.total_allocated_slots || 0);
-      setAvailableSlots(plotsRes.available_slots || 0);
       setCrops(cropsData || []);
     } catch (err: any) {
       setLoadError(err.message || 'ไม่สามารถโหลดข้อมูลการใช้แปลงปลูกได้');
@@ -90,7 +83,7 @@ export const AdminPlotsPage: React.FC = () => {
     setEditingPlotId(null);
     setName(`แปลงที่ ${allPlots.length + 1}`);
     setZoneName(existingZones.length > 0 ? existingZones[0] : 'โซน A (โรงเรือน 1)');
-    setSlotCapacity(Math.min(200, Math.max(1, availableSlots)));
+    setSlotCapacity(200);
     setCropIds([]);
     setIsActive(true);
     setNotes('');
@@ -130,20 +123,6 @@ export const AdminPlotsPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    // Calculate max allowed capacity for this plot
-    let currentAllowed = availableSlots;
-    if (editingPlotId) {
-      const currentPlot = plots.find((p) => p.id === editingPlotId);
-      currentAllowed += currentPlot ? currentPlot.slot_capacity : 0;
-    }
-
-    if (slotCapacity > currentAllowed) {
-      setError(
-        `จำนวนต้น (${slotCapacity.toLocaleString()} ต้น) เกินโควตาความจุฟาร์มคงเหลือที่จัดสรรได้ (เหลือสูงสุด ${currentAllowed.toLocaleString()} ต้น)`
-      );
-      return;
-    }
-
     try {
       setSaving(true);
       const payload = {
@@ -181,8 +160,11 @@ export const AdminPlotsPage: React.FC = () => {
     }
   };
 
-  const percentUsed = farmTotalSlots > 0 ? Math.min(100, Math.round((totalAllocatedSlots / farmTotalSlots) * 100)) : 0;
+  const totalPlotCapacity = allPlots.reduce((sum, plot) => sum + Number(plot.slot_capacity || 0), 0);
   const occupiedSlots = allPlots.reduce((sum, plot) => sum + Number(plot.used_slots || 0), 0);
+  const availableActiveSlots = allPlots
+    .filter((plot) => plot.is_active)
+    .reduce((sum, plot) => sum + Math.max(0, Number(plot.slot_capacity || 0) - Number(plot.used_slots || 0)), 0);
   const occupiedPlots = allPlots.filter((plot) => Number(plot.used_slots || 0) > 0).length;
 
   return (
@@ -192,17 +174,10 @@ export const AdminPlotsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">การจัดการแปลงปลูก (Plots Management)</h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            สร้างแปลงปลูกตามโซนและเลือกผักได้หลายชนิดต่อแปลง พร้อมตรวจสอบจำนวนต้นที่รองรับ กับขนาดฟาร์มทั้งหมด
+            สร้างแปลงปลูกตามโซน กำหนดจำนวนต้นที่แต่ละแปลงรองรับ และเลือกผักได้หลายชนิดต่อแปลง
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Link
-            to="/admin/farm"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs sm:text-sm transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            <span>ตั้งค่าความจุฟาร์ม</span>
-          </Link>
           <button
             onClick={openCreateModal}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors"
@@ -220,50 +195,19 @@ export const AdminPlotsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Farm Capacity Quota Bar */}
-      <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs sm:text-sm">
-          <div>
-            <span className="font-extrabold text-slate-900 text-sm">
-              จำนวนต้นสูงสุดที่ฟาร์มรองรับ:
-            </span>{' '}
-            <span className="text-slate-600">
-              จัดสรรแล้ว <strong className="text-emerald-700">{totalAllocatedSlots.toLocaleString()}</strong> จาก{' '}
-              <strong>{farmTotalSlots.toLocaleString()}</strong> ต้น
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">คงเหลือสร้างแปลงได้อีก:</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-900">
-              {availableSlots.toLocaleString()} ต้น
-            </span>
-            <span className="font-bold text-slate-700">({percentUsed}%)</span>
-          </div>
-        </div>
-
-        <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-          <div
-            className={`h-full rounded-full transition-all ${
-              percentUsed >= 100
-                ? 'bg-rose-500'
-                : percentUsed >= 80
-                ? 'bg-amber-500'
-                : 'bg-emerald-500'
-            }`}
-            style={{ width: `${percentUsed}%` }}
-          ></div>
-        </div>
-      </div>
-
       {!loading && !loadError && allPlots.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-bold text-emerald-800">ความจุรวมของแปลงทั้งหมด</p>
+            <p className="mt-1 text-xl font-black text-emerald-950">{totalPlotCapacity.toLocaleString()} <span className="text-xs font-semibold">ต้น</span></p>
+          </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
             <p className="text-xs font-bold text-emerald-800">จำนวนต้นที่กำลังปลูก</p>
             <p className="mt-1 text-xl font-black text-emerald-950">{occupiedSlots.toLocaleString()} <span className="text-xs font-semibold">ต้น</span></p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs font-bold text-slate-600">จำนวนต้นที่ยังปลูกเพิ่มได้</p>
-            <p className="mt-1 text-xl font-black text-slate-900">{Math.max(0, totalAllocatedSlots - occupiedSlots).toLocaleString()} <span className="text-xs font-semibold">ต้น</span></p>
+            <p className="text-xs font-bold text-slate-600">พื้นที่ว่างในแปลงที่ใช้งาน</p>
+            <p className="mt-1 text-xl font-black text-slate-900">{availableActiveSlots.toLocaleString()} <span className="text-xs font-semibold">ต้น</span></p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-xs font-bold text-slate-600">แปลงที่มีรอบใช้งาน</p>
@@ -441,7 +385,7 @@ export const AdminPlotsPage: React.FC = () => {
                   className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-extrabold text-emerald-800 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 <span className="text-[11px] text-emerald-800 block">
-                  💡 จำนวนต้นที่ยังจัดสรรให้แปลงใหม่ได้: <strong>{availableSlots.toLocaleString()} ต้น</strong> (ความจุฟาร์มรวม {farmTotalSlots.toLocaleString()} ต้น)
+                  💡 กำหนดจำนวนต้นที่แปลงนี้รองรับได้ ระบบจะตรวจพื้นที่ว่างของแปลงเมื่อสร้างรอบปลูก
                 </span>
               </div>
 

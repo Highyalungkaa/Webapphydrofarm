@@ -24,6 +24,7 @@ test('atomic planting transactions, snapshot conflicts and retry behavior',async
     CREATE TABLE audit_logs(actor_id UUID,actor_email TEXT,entity_type TEXT,entity_id TEXT,action TEXT,old_data JSONB,new_data JSONB);`);
   await db.exec(load('045_audit_round_and_plot_capacity.sql'));
   await db.exec(load('046_atomic_planting_rounds.sql'));await db.exec(load('046_atomic_planting_rounds.sql'));
+  await db.exec(load('047_remove_farm_wide_capacity.sql'));
   const actor=randomUUID(),otherActor=randomUUID(),customer=randomUUID(),crop=randomUUID(),second=randomUUID(),plot=randomUUID();
   await db.query("INSERT INTO auth.users VALUES($1,'admin@example.com'),($2,'other@example.com'),($3,'customer@example.com')",[actor,otherActor,customer]);
   await db.exec("INSERT INTO admin_users VALUES('admin@example.com'),('other@example.com')");

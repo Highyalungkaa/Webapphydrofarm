@@ -34,7 +34,6 @@ const AdminAdminsPage = React.lazy(() => import('./pages/admin/AdminAdminsPage.j
 const AdminSettingsPage = React.lazy(() => import('./pages/admin/AdminSettingsPage.js').then((module) => ({ default: module.AdminSettingsPage })));
 const AdminAuditPage = React.lazy(() => import('./pages/admin/AdminAuditPage.js').then((module) => ({ default: module.AdminAuditPage })));
 const AdminCustomersPage = React.lazy(() => import('./pages/admin/AdminCustomersPage.js').then((module) => ({ default: module.AdminCustomersPage })));
-const AdminFarmPage = React.lazy(() => import('./pages/admin/AdminFarmPage.js').then((module) => ({ default: module.AdminFarmPage })));
 const AdminPlotsPage = React.lazy(() => import('./pages/admin/AdminPlotsPage.js').then((module) => ({ default: module.AdminPlotsPage })));
 const AdminBookingsPage = React.lazy(() => import('./pages/admin/AdminBookingsPage.js').then((module) => ({ default: module.AdminBookingsPage })));
 const AdminReportsPage = React.lazy(() => import('./pages/admin/AdminReportsPage.js').then((module) => ({ default: module.AdminReportsPage })));
@@ -118,7 +117,7 @@ export const App: React.FC = () => {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminDashboardPage />} />
               <Route path="plots" element={<AdminPlotsPage />} />
-              <Route path="farm" element={<AdminFarmPage />} />
+              <Route path="farm" element={<Navigate to="/admin/plots" replace />} />
               <Route path="rounds" element={<AdminRoundsPage />} />
               <Route path="rounds/history" element={<AdminRoundsHistoryPage />} />
               <Route path="rounds/:id" element={<AdminRoundDetailPage />} />

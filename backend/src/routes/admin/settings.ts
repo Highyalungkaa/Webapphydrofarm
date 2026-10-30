@@ -43,6 +43,10 @@ router.put('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       res.status(400).json({ error: 'ข้อมูลการตั้งค่าไม่ถูกต้อง' });
       return;
     }
+    if (Object.prototype.hasOwnProperty.call(settings, 'farm_total_slots')) {
+      res.status(410).json({ error: 'ยกเลิกการตั้งความจุฟาร์มรวมแล้ว กรุณากำหนดจำนวนต้นที่แต่ละแปลงปลูก' });
+      return;
+    }
     for(const key of ['delivery_min_total_kg','cancellation_deadline_hours_before_harvest','no_show_limit','large_order_threshold_kg']){
       const value=settings[key];if(value===undefined)continue;
       if(typeof value!=='number'||!Number.isFinite(value)||value<0||(key==='large_order_threshold_kg'&&value===0)

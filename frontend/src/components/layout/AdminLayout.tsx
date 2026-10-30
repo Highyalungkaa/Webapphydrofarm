@@ -16,7 +16,6 @@ import {
   X,
   LogOut,
   LayoutGrid,
-  Sprout,
   BookmarkCheck,
   BarChart3,
 } from 'lucide-react';
@@ -75,7 +74,6 @@ export const AdminLayout: React.FC = () => {
     { to: '/admin/rounds/history', label: 'ประวัติต่างๆ', icon: History },
     { to: '/admin/crops', label: 'แคตตาล็อกผัก', icon: Leaf, dividerBefore: true },
     { to: '/admin/plots', label: 'จัดการแปลงปลูก', icon: LayoutGrid },
-    { to: '/admin/farm', label: 'ตั้งค่าความจุฟาร์ม', icon: Sprout },
     { to: '/admin/customers', label: 'รายชื่อลูกค้า', icon: Users, dividerBefore: true },
     { to: '/admin/admins', label: 'ผู้ดูแลระบบ', icon: ShieldAlert },
     { to: '/admin/settings', label: 'ตั้งค่าระบบ', icon: Settings, dividerBefore: true },

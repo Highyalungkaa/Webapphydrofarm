@@ -27,6 +27,8 @@ test('crop create and edit persist the chosen growing days and reject blank name
 });
 test('farm metrics use existing schema columns and do not turn a failed plots read into zero plots',async()=>{
  const app=setup('../src/routes/admin/farm.ts');const res=await app.request('get','/');assert.equal(res.statusCode,200);assert.equal(res.body.total_plots,1);assert.equal(res.body.total_allocated_slots,100);
+ assert.equal(res.body.farm_total_slots,undefined);
+ assert.equal((await app.request('put','/',{farm_total_slots:5000})).statusCode,410);
  const failed=setup('../src/routes/admin/farm.ts',{errorTable:'plots'});assert.equal((await failed.request('get','/')).statusCode,500);
 });
 test('authorization matches literal emails, including underscore, percent and case',async()=>{
@@ -37,6 +39,7 @@ test('authorization matches literal emails, including underscore, percent and ca
 });
 test('system settings reject arrays, negative cancellation windows and invalid no-show limits before writes',async()=>{
  for(const body of [[],{cancellation_deadline_hours_before_harvest:-1},{no_show_limit:1.5},{delivery_min_total_kg:-2},{large_order_threshold_kg:0}]){const app=setup('../src/routes/admin/settings.ts');assert.equal((await app.request('put','/',body)).statusCode,400);assert.equal(app.mutations.length,0);}
+ const retired=setup('../src/routes/admin/settings.ts');assert.equal((await retired.request('put','/',{farm_total_slots:9999})).statusCode,410);assert.equal(retired.mutations.length,0);
 });
 test('public rounds hide drafts and report failed stock reads instead of claiming there are no vegetables',async()=>{
  const draft=setup('../src/routes/rounds.ts',{existing:{id:actor,status:'draft'}});assert.equal((await draft.request('get','/:id')).statusCode,404);

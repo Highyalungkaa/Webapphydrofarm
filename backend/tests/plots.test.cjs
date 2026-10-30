@@ -8,7 +8,7 @@ const ts = require('typescript');
 const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333'];
 const body = { name: 'Mixed plot', zone_name: 'A', slot_capacity: 100, is_active: true };
 
-function setup({ oldPlot, inactive = [], plots = [], rounds = [] } = {}) {
+function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } = {}) {
   const routes = new Map();
   const router = {};
   let saved;
@@ -22,7 +22,7 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [] } = {}) {
         if (table === 'crops') return { data: ids.filter((id) => selectedIds.includes(id)).map((id) => ({ id, is_active: !inactive.includes(id) })), error: null };
         if (table === 'app_settings') return { data: [{ key: 'farm_total_slots', value: 1000 }], error: null };
         if (table === 'planting_rounds') return { data: rounds, error: null };
-        if (mutation) return { data: saved, error: null };
+        if (mutation) return { data: writeError ? null : saved, error: writeError ? { message: writeError } : null };
         return { data: oldPlot ? [oldPlot] : plots, error: null };
       };
       const query = {
@@ -75,6 +75,19 @@ test('create saves every selected crop once in one plot', async () => {
   assert.equal((await app.request('post', { crop_ids: [...ids, ids[0]] })).statusCode, 201);
   assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify(ids));
   assert.equal(app.saved().crop_id, ids[0]);
+});
+
+test('plot capacity is independent of the retired farm ceiling', async () => {
+  const app = setup();
+  assert.equal((await app.request('post', { slot_capacity: 5001 })).statusCode, 201);
+  assert.equal(app.saved().slot_capacity, 5001);
+});
+
+test('an unapplied database migration reports the old ceiling clearly', async () => {
+  const app = setup({ writeError: 'จำนวนต้นที่จัดสรรให้แปลงรวม 5001 ต้น เกินความจุฟาร์ม 5000 ต้น' });
+  const result = await app.request('post', { slot_capacity: 5001 });
+  assert.equal(result.statusCode, 503);
+  assert.match(result.body.error, /migration 047/);
 });
 
 test('unknown or newly inactive crops are rejected', async () => {

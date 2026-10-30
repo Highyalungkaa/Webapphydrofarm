@@ -72,11 +72,27 @@ test('round closure and plot/farm capacity guards execute against stored source 
   await assert.rejects(db.exec("UPDATE app_settings SET value='99'::JSONB WHERE key='farm_total_slots'"),/เกินความจุ/);
   await assert.rejects(db.query('INSERT INTO plots(id,slot_capacity) VALUES($1,1)',[randomUUID()]),/เกินความจุ/);
  });
+ await t.test('removing the duplicate farm ceiling preserves occupied-plot protection',async()=>{
+  await db.exec(migration('047_remove_farm_wide_capacity.sql'));await db.exec(migration('047_remove_farm_wide_capacity.sql'));
+  await db.exec("UPDATE app_settings SET value='1'::JSONB WHERE key='farm_total_slots'");
+  const secondPlot=randomUUID();
+  await db.query('INSERT INTO plots(id,slot_capacity) VALUES($1,5001)',[secondPlot]);
+  assert.equal((await db.query('SELECT slot_capacity FROM plots WHERE id=$1',[secondPlot])).rows[0].slot_capacity,5001);
+  await assert.rejects(db.query('UPDATE plots SET slot_capacity=99 WHERE id=$1',[plot]),/ลดความจุ/);
+  await db.query('DELETE FROM plots WHERE id=$1',[secondPlot]);
+ });
  await t.test('terminal settled orders allow closure, then the plot may be removed if there is no history FK',async()=>{
   await db.query("UPDATE orders SET status='completed',payment_status='paid' WHERE id=$1",[order]);
   await db.query("UPDATE planting_rounds SET status='completed' WHERE id=ANY($1::UUID[])",[[round,source]]);
   await db.query('DELETE FROM plots WHERE id=$1',[plot]);assert.equal((await db.query('SELECT count(*) AS n FROM plots')).rows[0].n,0);
  });
+});
+
+test('farm ceiling migration refuses to run without occupied-plot protection',async()=>{
+ const db=new PGlite();try{
+  await db.exec('CREATE TABLE plots(id UUID PRIMARY KEY,slot_capacity INTEGER);CREATE TABLE app_settings(key TEXT PRIMARY KEY,value JSONB);');
+  await assert.rejects(db.exec(migration('047_remove_farm_wide_capacity.sql')),/migration 045/);
+ }finally{await db.close();}
 });
 
 test('equipment stock, retries, shipping and cancellation are transactional in PostgreSQL',async t=>{
