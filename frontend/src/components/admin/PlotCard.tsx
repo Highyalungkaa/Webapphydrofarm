@@ -18,7 +18,7 @@ export const PlotCard: React.FC<Props> = ({ plot, crops, onEdit, onToggle, onDel
   const free = Math.max(0, capacity - used);
   const percent = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
   const cropIds = getPlotCropIds(plot);
-  const state = !plot.is_active ? 'ปิดใช้งาน' : used === 0 ? 'ว่างพร้อมปลูก' : free === 0 ? 'เต็มแปลง' : 'กำลังปลูก';
+  const state = !plot.is_active ? 'เลิกใช้งานแล้ว' : used === 0 ? 'ว่างพร้อมปลูก' : free === 0 ? 'เต็มแปลง' : 'กำลังปลูก';
   const statusStyle = !plot.is_active ? 'bg-slate-100 text-slate-500' : free === 0
     ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800';
 
@@ -61,8 +61,8 @@ export const PlotCard: React.FC<Props> = ({ plot, crops, onEdit, onToggle, onDel
       <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 sm:px-5">
         <button type="button" onClick={() => onEdit(plot)} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:text-emerald-800"><Edit2 className="h-3.5 w-3.5" />แก้ไขแปลง</button>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => onToggle(plot)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-medium text-slate-500 hover:bg-white hover:text-slate-800"><Power className="h-3.5 w-3.5" />{plot.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}</button>
-          <button type="button" onClick={() => onDelete(plot)} aria-label={`ลบแปลง ${plot.name}`} title="ลบแปลง" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+          <button type="button" onClick={() => onToggle(plot)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-medium text-slate-500 hover:bg-white hover:text-slate-800"><Power className="h-3.5 w-3.5" />{plot.is_active ? 'เลิกใช้งาน' : 'เปิดใช้งานอีกครั้ง'}</button>
+          <button type="button" onClick={() => onDelete(plot)} aria-label={`ลบหรือเลิกใช้งานแปลง ${plot.name}`} title="ลบหรือเลิกใช้งานแปลง" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
         </div>
       </footer>
     </article>

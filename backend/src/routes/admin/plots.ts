@@ -7,6 +7,7 @@ import { recordAuditLog } from '../../services/audit.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
 import { getPlotRoundTimeline } from '../../services/plotRoundTimeline.js';
 import { getPlotPlantingAllocations } from '../../services/plotPlantingAllocations.js';
+import { roundReferencesPlot } from '../../services/plotHistory.js';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -30,7 +31,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     let query = db
       .from('plots')
       .select(`
-        *,
+        *, plant_losses(count),
         crops (
           id,
           name,
@@ -81,7 +82,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         id, name, status, current_step, completed_date, sold_out_date, notes,
         seed_date, fertilizing_date, planting_start_date, transplant_date, planted_at, growing_days,
         round_items (
-          id, crop_id, plant_count, estimated_qty_kg, bookable_qty_kg,
+          id, crop_id, plot_ids, plant_count, estimated_qty_kg, bookable_qty_kg,
           crops (name, slots_per_kg, growing_days)
         )
       `)
@@ -106,6 +107,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     const plotsWithUsage = normalizedPlots.map((plot) => ({
       ...plot,
+      has_history: Number(plot.plant_losses?.[0]?.count || 0) > 0 || (rounds || []).some(round => roundReferencesPlot(plot, round)),
       ...usage.get(plot.id),
     }));
 
@@ -274,12 +276,31 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const id = req.params.id as string;
     const db = getSupabaseClient(req);
 
-    const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
-
+    const { data: oldPlot, error: lookupError } = await db.from('plots').select('*,plant_losses(count)').eq('id', id).single();
+    if (lookupError && lookupError.code !== 'PGRST116') {
+      res.status(500).json({ error: 'ตรวจสอบข้อมูลแปลงไม่สำเร็จ กรุณาลองใหม่' }); return;
+    }
+    if (!oldPlot) { res.status(404).json({ error: 'ไม่พบแปลงปลูกนี้ กรุณาโหลดรายการใหม่' }); return; }
+    const historyMessage = 'แปลงนี้มีประวัติการปลูกหรือบันทึกผักเสียหาย กรุณาเลือกเลิกใช้งานแปลงเพื่อเก็บประวัติไว้ ไม่ต้องลบประวัติผักเสียหาย';
+    if (Number(oldPlot.plant_losses?.[0]?.count || 0) > 0) {
+      res.status(409).json({ error: historyMessage }); return;
+    }
+    // Check all historical rounds, including references stored in JSON/UUID arrays.
+    for (let start = 0; ; start += 500) {
+      const { data: rounds, error: historyError } = await db.from('planting_rounds')
+        .select('id,notes,round_items(crop_id,plot_ids)').order('id').range(start, start + 499);
+      if (historyError) { res.status(500).json({ error: 'ตรวจสอบประวัติแปลงไม่สำเร็จ กรุณาลองใหม่' }); return; }
+      if ((rounds || []).some(round => roundReferencesPlot(oldPlot, round))) {
+        res.status(409).json({ error: historyMessage }); return;
+      }
+      if ((rounds || []).length < 500) break;
+    }
     const { error } = await db.from('plots').delete().eq('id', id);
 
     if (error) {
-      res.status(400).json({ error: 'ไม่สามารถลบแปลงปลูกได้: ' + error.message });
+      res.status(error.code === '23503' ? 409 : 400).json({ error: error.code === '23503' ? historyMessage
+        : error.message?.includes('กรุณาสิ้นสุดรอบ') ? 'แปลงนี้ยังใช้ในรอบปลูก กรุณาจัดการรอบที่แสดงบนการ์ดแปลงก่อนลบ'
+        : 'ลบแปลงไม่สำเร็จ กรุณาโหลดรายการใหม่แล้วลองอีกครั้ง' });
       return;
     }
 

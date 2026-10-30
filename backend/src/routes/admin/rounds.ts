@@ -743,7 +743,8 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const id = req.params.id as string;
     const db = getSupabaseClient(req);
 
-    const { data: orders } = await db.from('orders').select('id').or(await roundOrderFilter(db,id));
+    const { data: orders, error: ordersError } = await db.from('orders').select('id').or(await roundOrderFilter(db,id));
+    if (ordersError) { res.status(500).json({ error: 'ตรวจสอบคำสั่งจองไม่สำเร็จ กรุณาลองใหม่' }); return; }
     if (orders && orders.length > 0) {
       res.status(400).json({ error: 'ไม่สามารถลบรอบการปลูกนี้ได้ เนื่องจากมีคำสั่งจองของลูกค้าแล้ว' });
       return;
@@ -753,7 +754,9 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const { error } = await db.from('planting_rounds').delete().eq('id', id);
 
     if (error) {
-      res.status(400).json({ error: error.message });
+      res.status(error.code === '23503' ? 409 : 400).json({ error: error.code === '23503'
+        ? 'รอบนี้มีประวัติการใช้งาน เช่น บันทึกผักเสียหายหรือคำสั่งจอง จึงลบถาวรไม่ได้ กรุณาจัดการรอบให้เสร็จและดูย้อนหลังในหน้าประวัติ โดยไม่ต้องลบประวัติเดิม'
+        : 'ลบรอบปลูกไม่สำเร็จ กรุณาโหลดรายการใหม่แล้วลองอีกครั้ง' });
       return;
     }
 

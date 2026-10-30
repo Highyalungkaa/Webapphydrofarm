@@ -35,6 +35,7 @@ export interface PlotOccupyingRound {
 }
 
 export interface Plot {
+  has_history?: boolean;
   id: string;
   name: string;
   zone_name: string;

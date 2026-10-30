@@ -24,7 +24,11 @@ export const AdminPlotsPage: React.FC = () => {
 
   // Filters
   const [zoneFilter, setZoneFilter] = useState('');
-  const [activeFilter, setActiveFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState('true');
+  const [removalPlot, setRemovalPlot] = useState<Plot | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removalError, setRemovalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -104,6 +108,7 @@ export const AdminPlotsPage: React.FC = () => {
   };
 
   const togglePlotActive = async (plot: Plot) => {
+    if (plot.is_active) { setRemovalPlot(plot); setRemovalError(null); return; }
     try {
       await api.put(`/admin/plots/${plot.id}`, {
         name: plot.name,
@@ -149,15 +154,22 @@ export const AdminPlotsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (plot: Plot) => {
-    if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${plot.name}" (${plot.slot_capacity} ต้น)?`)) return;
-
+  const handleDelete = (plot: Plot) => { setRemovalPlot(plot); setRemovalError(null); };
+  const removePlot = async (permanent: boolean) => {
+    if (!removalPlot || removing) return;
+    setRemoving(true); setRemovalError(null);
     try {
-      await api.delete(`/admin/plots/${plot.id}`);
+      if (permanent) await api.delete(`/admin/plots/${removalPlot.id}`);
+      else await api.put(`/admin/plots/${removalPlot.id}`, {
+        name: removalPlot.name, zone_name: removalPlot.zone_name,
+        slot_capacity: removalPlot.slot_capacity, crop_ids: getPlotCropIds(removalPlot),
+        is_active: false, notes: removalPlot.notes,
+      });
+      setRemovalPlot(null);
+      setNotice(permanent ? 'ลบแปลงที่ยังไม่เคยใช้งานแล้ว' : 'เลิกใช้งานแปลงแล้ว ประวัติยังอยู่ครบ ดูหรือเปิดใช้งานอีกครั้งได้จากตัวกรอง “เลิกใช้งานแล้ว”');
       await loadData();
-    } catch (err: any) {
-      alert(err.message || 'ไม่สามารถลบแปลงปลูกได้');
-    }
+    } catch (err: any) { setRemovalError(err.message || 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่'); }
+    finally { setRemoving(false); }
   };
 
   const totalPlotCapacity = allPlots.reduce((sum, plot) => sum + Number(plot.slot_capacity || 0), 0);
@@ -169,6 +181,7 @@ export const AdminPlotsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{notice}</p>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -258,7 +271,7 @@ export const AdminPlotsPage: React.FC = () => {
         >
           <option value="">-- สถานะทั้งหมด --</option>
           <option value="true">เปิดใช้งาน</option>
-          <option value="false">ปิดใช้งาน</option>
+          <option value="false">เลิกใช้งานแล้ว</option>
         </select>
 
         {(zoneFilter || activeFilter) && (
@@ -308,6 +321,23 @@ export const AdminPlotsPage: React.FC = () => {
           </div>
         )}
       </div>
+      {removalPlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onKeyDown={e => { if (e.key === 'Escape' && !removing) setRemovalPlot(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="remove-plot-title" className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="remove-plot-title" className="text-lg font-bold text-slate-900">จัดการแปลง {removalPlot.name}</h2>
+            <p className="text-sm leading-relaxed text-slate-600">เลิกใช้งานแปลงเพื่อไม่ให้เลือกใช้ในรอบปลูกใหม่ ประวัติรอบปลูกและผักเสียหายจะยังอยู่ และเปิดใช้งานอีกครั้งได้</p>
+            {isPlotInUse(removalPlot) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">แปลงนี้ยังมีรอบปลูกดำเนินอยู่ การเลิกใช้งานจะหยุดการเลือกใช้ในรอบใหม่ ส่วนรอบเดิมยังคงอยู่ กรุณาจัดการรอบเดิมให้เสร็จตามปกติ</p>}
+            {removalPlot.has_history && <p className="text-sm text-slate-600">แปลงนี้มีประวัติแล้ว จึงเก็บแปลงไว้สำหรับดูย้อนหลัง ไม่ต้องลบประวัติผักเสียหาย</p>}
+            {!removalPlot.has_history && !isPlotInUse(removalPlot) && <p className="text-sm text-slate-500">ถ้าสร้างแปลงผิดและยังไม่เคยใช้งาน สามารถเลือกลบถาวรได้ ระบบจะตรวจประวัติอีกครั้งก่อนลบ</p>}
+            {removalError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{removalError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button autoFocus disabled={removing} onClick={() => setRemovalPlot(null)} className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50">ยกเลิก</button>
+              {!removalPlot.has_history && !isPlotInUse(removalPlot) && <button disabled={removing} onClick={() => removePlot(true)} className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">ลบถาวร</button>}
+              {removalPlot.is_active && <button disabled={removing} onClick={() => removePlot(false)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{removing ? 'กำลังบันทึก...' : 'เลิกใช้งานแปลง'}</button>}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Create / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">

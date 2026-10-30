@@ -22,11 +22,11 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } =
         if (table === 'crops') return { data: ids.filter((id) => selectedIds.includes(id)).map((id) => ({ id, is_active: !inactive.includes(id) })), error: null };
         if (table === 'app_settings') return { data: [{ key: 'farm_total_slots', value: 1000 }], error: null };
         if (table === 'planting_rounds') return { data: rounds, error: null };
-        if (mutation) return { data: writeError ? null : saved, error: writeError ? { message: writeError } : null };
+        if (mutation) return { data: writeError ? null : saved, error: writeError ? (typeof writeError === 'string' ? { message: writeError } : writeError) : null };
         return { data: oldPlot ? [oldPlot] : plots, error: null };
       };
       const query = {
-        select() { return query; }, eq() { return query; }, order() { return query; },
+        select() { return query; }, range() { return query; }, delete() { mutation = true; saved = {deleted: true}; return query; }, eq() { return query; }, order() { return query; },
         in(_column, values) { selectedIds = values; return query; },
         insert(payload) { mutation = true; saved = { id: 'plot', ...payload }; return query; },
         update(payload) { mutation = true; saved = { ...oldPlot, ...payload }; return query; },
@@ -53,6 +53,7 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } =
     if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };
     if (name.endsWith('/auth.js')) return {};
     if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };
+    if (name.endsWith('/plotHistory.js')) return loadTs('../src/services/plotHistory.ts', n => n.endsWith('/plotCrops.js') ? helpers : require(n));
     if (name.endsWith('/plotCrops.js')) return helpers;
     if (name.endsWith('/plotRoundTimeline.js')) return timeline;
     if (name.endsWith('/plotPlantingAllocations.js')) return allocations;
@@ -135,4 +136,25 @@ test('plot listing includes milestone dates and crop-specific harvests for each 
   assert.equal(entries[1].calculated_harvest_date, '2026-12-03');
   assert.equal(entries[2].id, 'round-2');
   assert.equal(entries[2].calculated_harvest_date, null);
+});
+
+for (const [name,extra] of [
+  ['loss history',{oldPlot:{id:'plot',...body,plant_losses:[{count:1}]}}],
+  ['completed round',{oldPlot:{id:'plot',...body},rounds:[{status:'completed',notes:'{}',round_items:[{crop_id:ids[0],plot_ids:['plot']}]}]}],
+  ['JSON allocation',{oldPlot:{id:'plot',...body},rounds:[{status:'completed',notes:JSON.stringify({cropPlotAllocations:{[ids[0]]:{plot:100}}}),round_items:[{crop_id:ids[0]}]}]}],
+]) test('deleting a plot preserves '+name,async()=>{
+  const app=setup(extra);const res=await app.request('delete');assert.equal(res.statusCode,409);assert.match(res.body.error,/เลิกใช้งาน/);assert.equal(app.saved(),undefined);
+});
+test('an unused plot can be deleted, while a missing plot is reported honestly',async()=>{
+  const app=setup({oldPlot:{id:'plot',...body}});assert.equal((await app.request('delete')).statusCode,200);assert.equal(app.saved().deleted,true);
+  assert.equal((await setup().request('delete')).statusCode,404);
+});
+test('foreign-key rejection gives a user-facing next step without SQL details',async()=>{
+  const app=setup({oldPlot:{id:'plot',...body},writeError:{code:'23503',message:'plant_losses_plot_id_fkey'}});const res=await app.request('delete');
+  assert.equal(res.statusCode,409);assert.match(res.body.error,/เลิกใช้งาน/);assert.doesNotMatch(res.body.error,/fkey|constraint/);
+});
+test('retiring a plot retains its id and history and can be reversed',async()=>{
+  const app=setup({oldPlot:{id:'plot',...body,plant_losses:[{count:1}]}});
+  assert.equal((await app.request('put',{is_active:false})).statusCode,200);assert.equal(app.saved().id,'plot');assert.equal(app.saved().plant_losses[0].count,1);assert.equal(app.saved().is_active,false);
+  assert.equal((await app.request('put',{is_active:true})).statusCode,200);assert.equal(app.saved().is_active,true);
 });
