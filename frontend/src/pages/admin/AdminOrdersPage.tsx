@@ -1,3 +1,4 @@
+import {orderUpdateIssues,ownWeightForSave} from '../../lib/orderUpdateValidation.js';
 import {canSelectOrderStep,previousOrderStep,orderProgress} from '../../lib/orderProgress.js';
 import {harvestRange} from '../../lib/pooledBooking.js';
 import {EditOrderItems} from '../../components/admin/EditOrderItems.js';
@@ -110,6 +111,8 @@ export const AdminOrdersPage: React.FC = () => {
   const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
+    const issues=orderUpdateIssues(modalStatus,modalPaymentStatus,selectedOrder.order_items||[],ownWeightInputs,substituteInputs,discountInputs);
+    if(issues.length){alert(issues.join('\n'));return;}
     if (modalStatus === 'completed' && modalPaymentStatus !== 'paid'
       && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) {
       alert('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ');
@@ -122,7 +125,7 @@ export const AdminOrdersPage: React.FC = () => {
         expected_updated_at: selectedOrder.updated_at,
         allocation_items: (selectedOrder.order_items || []).map(item => ({
           id: item.id,
-          own_qty_kg: ownWeightInputs[item.id] === '' ? null : Number(ownWeightInputs[item.id]),
+          own_qty_kg: ownWeightForSave(ownWeightInputs[item.id],Number(substituteInputs[item.id]?.qtyKg||0),Number(item.qty_kg),modalStatus),
           substitute_qty_kg: Number(substituteInputs[item.id]?.qtyKg || 0),
           substitute_total_cost: Number(substituteInputs[item.id]?.totalCost || 0),
           discount_amount: Number(discountInputs[item.id] || 0),
@@ -142,6 +145,7 @@ export const AdminOrdersPage: React.FC = () => {
     }
   };
 
+  const updateIssues=selectedOrder?orderUpdateIssues(modalStatus,modalPaymentStatus,selectedOrder.order_items||[],ownWeightInputs,substituteInputs,discountInputs):[];
   const formatDate = formatDateTimeDMY;
   const modalNetTotal = selectedOrder?.order_items?.reduce((sum, item) => {
     const gross = Number(item.qty_kg) * Number(item.price_per_kg);
@@ -669,6 +673,7 @@ export const AdminOrdersPage: React.FC = () => {
                   <span className="font-bold">กำลังเปลี่ยนสถานะ:</span><Badge status={selectedOrder.status} type="order" /><span aria-hidden="true">→</span><Badge status={modalStatus} type="order" />
                 </div>
               )}
+              {updateIssues.length>0&&<div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-bold">กรุณาตรวจสอบก่อนบันทึก</p><ul className="mt-2 list-disc space-y-1 pl-5">{updateIssues.map(issue=><li key={issue}>{issue}</li>)}</ul></div>}
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -679,13 +684,8 @@ export const AdminOrdersPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdating || (modalStatus === 'completed' && modalPaymentStatus !== 'paid' && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) || (selectedOrder.order_items || []).some((item) => {
-                    const input = substituteInputs[item.id];
-                    const gross = Number(item.qty_kg) * Number(item.price_per_kg);
-                    const ownText=ownWeightInputs[item.id]??'',own=Number(ownText||0),sub=Number(input?.qtyKg||0),ordered=Number(item.qty_kg);
-                    return own<0 || (['ready','completed'].includes(modalStatus)&&(ownText===''||own+sub<ordered-0.000001)) || sub > ordered || (sub === 0 && Number(input?.totalCost || 0) > 0) || Number(discountInputs[item.id] || 0) > gross;
-                  })}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                  disabled={isUpdating || updateIssues.length>0}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isUpdating ? 'กำลังบันทึก...' : 'ยืนยันและบันทึก'}
                 </button>
