@@ -155,7 +155,7 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
               <div className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
                 {(item.loss_baseline_plant_count != null || item.plant_count != null) && <span className="block text-[10px] text-slate-500">เริ่มต้น {initial.toLocaleString('th-TH')} ต้น</span>}
-                <EstimatedYield item={item}/>
+                <EstimatedYield item={item} bookedKg={Number(item.booked_qty_kg||0)}/>
               </div>
               {item.loss_baseline_plant_count == null && item.plant_count == null ? (
                 <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>

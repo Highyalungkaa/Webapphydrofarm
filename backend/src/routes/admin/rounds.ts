@@ -359,7 +359,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     // Calculate booked qty per round item
     const bookedMap: Record<string, number> = {};
     for (const ord of orders || []) {
-      if (ord.status !== 'cancelled') {
+      if (!['cancelled','no_show'].includes(ord.status)) {
         for (const oi of ord.order_items || []) {
           bookedMap[oi.round_item_id] = (bookedMap[oi.round_item_id] || 0) + Number(oi.qty_kg);
         }

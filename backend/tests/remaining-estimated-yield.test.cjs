@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const exportsObject={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../../frontend/src/lib/estimatedYield.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:exportsObject});
-const {remainingEstimatedKg}=exportsObject;
+const {remainingEstimatedKg,unbookedEstimatedKg}=exportsObject;
 test('forecast drops from 25 kg to 10 kg after losing 120 of 200 plants and restores on reversal',()=>{
  const row={plant_count:200,lost_plant_count:0,planting_plants_per_kg:8,estimated_qty_kg:25};
  assert.equal(remainingEstimatedKg(row),25);row.lost_plant_count=120;assert.equal(remainingEstimatedKg(row),10);
@@ -10,4 +10,11 @@ test('forecast drops from 25 kg to 10 kg after losing 120 of 200 plants and rest
 test('forecast uses the saved planting rate and existing whole-kilogram rounding',()=>{
  assert.equal(remainingEstimatedKg({plant_count:203,lost_plant_count:120,planting_plants_per_kg:8,estimated_qty_kg:25}),10);
  assert.equal(remainingEstimatedKg({plant_count:200,lost_plant_count:120,estimated_qty_kg:25}),null);
+});
+
+test('remaining forecast subtracts bookings after plant losses and never becomes negative',()=>{
+ const item={plant_count:200,lost_plant_count:120,planting_plants_per_kg:8,estimated_qty_kg:25};
+ assert.equal(unbookedEstimatedKg(item,4),6);assert.equal(unbookedEstimatedKg(item,4.25),5.75);
+ assert.equal(unbookedEstimatedKg(item,12),0);assert.equal(unbookedEstimatedKg(item,0),10);
+ assert.equal(item.estimated_qty_kg,25);
 });

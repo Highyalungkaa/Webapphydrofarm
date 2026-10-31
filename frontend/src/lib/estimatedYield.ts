@@ -9,3 +9,7 @@ export function remainingEstimatedKg(item: Pick<RoundItem, 'plant_count' | 'lost
   const remaining = Math.max(0, Number(item.plant_count) - Math.max(0, Number(item.lost_plant_count || 0)));
   return Math.floor(remaining / rate);
 }
+export function unbookedEstimatedKg(item:Parameters<typeof remainingEstimatedKg>[0],bookedKg:number):number|null {
+  const estimated=remainingEstimatedKg(item);
+  return estimated==null?null:Math.max(0,Math.round((estimated-Math.max(0,bookedKg))*100)/100);
+}
