@@ -135,4 +135,15 @@ test('confirmation expiry and atomic order amendments',async t=>{
     assert.deepEqual(lines.map(i=>Number(i.qty_kg)),[0.3,0.7]);assert.equal((await read(o)).is_pooled,true);
   });
 
+  await t.test('admin allocation saves follow steps and can undo completion without changing payment',async()=>{
+    await db.exec(migration('054_order_status_steps.sql'));
+    const x=await setup(),o=await book(x),line=(await db.query('SELECT id FROM order_items WHERE order_id=$1',[o])).rows[0];
+    const save=(status,payment='unpaid')=>db.query('SELECT save_admin_order_allocation($1,$2,$3)',[actor,o,JSON.stringify({status,payment_status:payment,payment_method:payment==='paid'?'cash':null,allocation_items:[{id:line.id,own_qty_kg:5,substitute_qty_kg:0,substitute_total_cost:0,discount_amount:0}]})]);
+    await assert.rejects(save('ready'),/ทีละขั้น/);
+    assert.equal((await db.query('SELECT own_qty_kg FROM order_items WHERE id=$1',[line.id])).rows[0].own_qty_kg,null);
+    await save('confirmed');await save('ready');await save('completed','paid');
+    assert.ok((await read(o)).completed_at);
+    await save('ready','paid');assert.equal((await read(o)).status,'ready');assert.equal((await read(o)).payment_status,'paid');assert.equal((await read(o)).completed_at,null);
+  });
+
 });

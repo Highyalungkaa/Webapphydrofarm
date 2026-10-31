@@ -1,4 +1,6 @@
-import React,{useEffect,useId,useRef} from 'react';
+import React,{useEffect,useId,useRef,useState} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {api} from '../../lib/api.js';
 import {X} from 'lucide-react';
 import type {Order} from '../../types/index.js';
 import {Badge} from '../common/Badge.js';
@@ -6,9 +8,20 @@ import {formatDateTimeDMY} from '../../lib/dateFormat.js';
 import {OrderDiscountSummary} from './OrderDiscountSummary.js';
 
 export const OrderHistoryDialog:React.FC<{order:Order;onClose:()=>void}>=({order,onClose})=>{
+  const navigate=useNavigate();
+  const [reopening,setReopening]=useState(false),[reopenError,setReopenError]=useState('');
+  const undoCompletion=async()=>{
+    if(reopening || !window.confirm('ยืนยันย้อนออเดอร์จากสำเร็จแล้ว เป็นพร้อมรับ / ส่ง? สถานะการชำระเงินจะยังคงเดิม'))return;
+    setReopening(true);setReopenError('');
+    try{
+      await api.patch(`/admin/orders/${order.id}`,{status:'ready',expected_updated_at:order.updated_at});
+      ref.current?.close();onClose();navigate(`/admin/orders?order_id=${order.id}`);
+    }catch(error:any){setReopenError(error.message||'ย้อนสถานะไม่สำเร็จ');}
+    finally{setReopening(false);}
+  };
   const ref=useRef<HTMLDialogElement>(null);
   const titleId=useId();
-  const close=()=>{ref.current?.close();onClose();};
+  const close=()=>{if(reopening)return;ref.current?.close();onClose();};
   useEffect(()=>{
     const dialog=ref.current;
     if(dialog&&!dialog.open)dialog.showModal();
@@ -32,7 +45,9 @@ export const OrderHistoryDialog:React.FC<{order:Order;onClose:()=>void}>=({order
       <OrderDiscountSummary order={order} expanded/>
       {order.note&&<section className="rounded-xl border border-slate-200 bg-white p-4 text-sm"><h3 className="font-bold text-slate-700">หมายเหตุ</h3><p className="mt-1 whitespace-pre-wrap break-words text-slate-600">{order.note}</p></section>}
       {order.status==='cancelled'&&order.cancel_reason&&<p className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">เหตุผลที่ยกเลิก: {order.cancel_reason}</p>}
-      <button type="button" onClick={close} className="w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-900">กลับไปหน้ารายการ</button>
+      {reopenError&&<p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{reopenError}</p>}
+      {order.status==='completed'&&<button type="button" disabled={reopening} onClick={undoCompletion} className="rounded-lg px-2 py-1 text-xs text-slate-500 underline underline-offset-2 hover:bg-slate-100 disabled:opacity-50">{reopening?'กำลังย้อนสถานะ...':'ย้อนกลับเป็นพร้อมรับ / ส่ง'}</button>}
+      <button type="button" disabled={reopening} onClick={close} className="w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-900">กลับไปหน้ารายการ</button>
     </div>
   </dialog>;
 };

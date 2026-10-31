@@ -1,3 +1,4 @@
+import {canSelectOrderStep,previousOrderStep,orderProgress} from '../../lib/orderProgress.js';
 import {harvestRange} from '../../lib/pooledBooking.js';
 import {EditOrderItems} from '../../components/admin/EditOrderItems.js';
 import {OrderDeadlineNotice} from '../../components/common/OrderDeadlineNotice.js';
@@ -547,7 +548,7 @@ export const AdminOrdersPage: React.FC = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                   <div>
                     <p className="font-extrabold text-slate-900 text-sm sm:text-base">อัปเดตความคืบหน้าออเดอร์</p>
-                    <p className="text-slate-500 mt-1">เลือกขั้นตอนที่ต้องการ แล้วบันทึกจากรายการนี้</p>
+                    <p className="text-slate-500 mt-1">เลือกขั้นตอนถัดไป แล้วกดบันทึกด้านล่างเพื่อยืนยันสถานะ</p>
                   </div>
                   <div className="rounded-full bg-white border border-slate-200 px-3 py-1.5 flex items-center gap-2 shadow-sm">
                     <span className="text-slate-500">ปัจจุบัน</span>
@@ -560,7 +561,7 @@ export const AdminOrdersPage: React.FC = () => {
                     { value: 'confirmed', title: 'ยืนยันแล้ว', note: 'รับออเดอร์เข้าระบบ', Icon: BadgeCheck, color: 'blue' },
                     { value: 'ready', title: 'พร้อมรับ / ส่ง', note: 'เตรียมสินค้าเรียบร้อย', Icon: PackageCheck, color: 'violet' },
                     { value: 'completed', title: 'สำเร็จแล้ว', note: 'ลูกค้าได้รับสินค้า', Icon: CheckCircle2, color: 'emerald' },
-                  ] as const).map(({ value, title, note, Icon, color }) => {
+                  ] as const).map(({ value, title, note, Icon, color }, index) => {
                     const active = modalStatus === value;
                     const colors: Record<string, string> = {
                       amber: active ? 'border-amber-500 bg-amber-50 text-amber-800 ring-2 ring-amber-100' : 'border-slate-200 bg-white hover:border-amber-300',
@@ -569,10 +570,10 @@ export const AdminOrdersPage: React.FC = () => {
                       emerald: active ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100' : 'border-slate-200 bg-white hover:border-emerald-300',
                     };
                     return (
-                      <button key={value} type="button" aria-pressed={active} onClick={() => setModalStatus(value)}
-                        className={`min-h-[98px] rounded-xl border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 ${colors[color]} ${active ? 'shadow-sm' : 'text-slate-700'}`}>
+                      <button key={value} type="button" aria-pressed={active} disabled={isUpdating || !canSelectOrderStep(selectedOrder.status,value)} onClick={() => setModalStatus(value)}
+                        className={`disabled:cursor-not-allowed disabled:opacity-40 min-h-[98px] rounded-xl border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 ${colors[color]} ${active ? 'shadow-sm' : 'text-slate-700'}`}>
                         <span className="flex items-center justify-between gap-2">
-                          <span className="font-extrabold">{title}</span>
+                          <span className="font-extrabold">{index+1}. {title}</span>
                           <Icon size={18} className={active ? '' : 'text-slate-400'} />
                         </span>
                         <span className={`mt-2 block text-[11px] leading-4 ${active ? 'opacity-80' : 'text-slate-500'}`}>{note}</span>
@@ -580,6 +581,8 @@ export const AdminOrdersPage: React.FC = () => {
                     );
                   })}
                 </div>
+                {previousOrderStep(selectedOrder.status)&&<button type="button" disabled={isUpdating} onClick={()=>{const previous=previousOrderStep(selectedOrder.status);if(previous&&window.confirm('ยืนยันย้อนสถานะออเดอร์หนึ่งขั้น? หลังเลือกแล้วต้องกดบันทึกด้านล่างอีกครั้ง'))setModalStatus(previous);}} className="mt-3 rounded-lg px-2 py-1 text-xs text-slate-500 underline underline-offset-2 hover:bg-slate-100 disabled:opacity-50">ย้อนกลับสถานะก่อนหน้า</button>}
+                {orderProgress.indexOf(modalStatus)>=0&&modalStatus!==selectedOrder.status&&<p role="status" className="mt-2 text-xs font-semibold text-emerald-800">เลือกสถานะใหม่แล้ว กรุณากดบันทึกด้านล่างเพื่อยืนยัน</p>}
                 <div className="mt-4 border-t border-slate-200/80 pt-4">
                   <p className="font-bold text-slate-700 mb-2">การจัดการกรณีพิเศษ</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -588,8 +591,8 @@ export const AdminOrdersPage: React.FC = () => {
                       { value: 'no_show', title: 'ลูกค้าไม่มารับสินค้า', note: 'บันทึกประวัติไม่มารับของ', Icon: UserRoundX },
                     ] as const).map(({ value, title, note, Icon }) => {
                       const active = modalStatus === value;
-                      return <button key={value} type="button" aria-pressed={active} onClick={() => setModalStatus(value)}
-                        className={`rounded-xl border p-3 text-left flex items-center gap-3 transition-all focus:outline-none focus:ring-2 focus:ring-rose-300 ${active ? 'border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white hover:border-rose-300 text-slate-700'}`}>
+                      return <button key={value} type="button" aria-pressed={active} disabled={isUpdating || (value==='no_show' && selectedOrder.status!=='ready')} onClick={() => setModalStatus(value)}
+                        className={`disabled:cursor-not-allowed disabled:opacity-40 rounded-xl border p-3 text-left flex items-center gap-3 transition-all focus:outline-none focus:ring-2 focus:ring-rose-300 ${active ? 'border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white hover:border-rose-300 text-slate-700'}`}>
                         <span className={`w-9 h-9 rounded-lg grid place-items-center ${active ? 'bg-rose-100' : 'bg-slate-100 text-slate-500'}`}><Icon size={18} /></span>
                         <span><span className="block font-bold">{title}</span><span className="block text-[11px] text-slate-500 mt-0.5">{note}</span></span>
                       </button>;
