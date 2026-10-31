@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {AlertTriangle,ChevronDown,X} from 'lucide-react';
 import {api} from '../../lib/api.js';
@@ -14,7 +14,7 @@ const num=(value:number)=>Number(value).toLocaleString('th-TH',{maximumFractionD
 const field='mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100';
 
 export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promise<void>}>=({round,onChanged})=>{
-  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
+  const [open,setOpen]=useState(round.closure_reason==='unsold'),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
   const [data,setData]=useState<Preview|null>(null),[error,setError]=useState('');
   const [entries,setEntries]=useState<Record<string,UnsoldInput>>({});
   const [disposition,setDisposition]=useState(''),[handlingNote,setHandlingNote]=useState('');
@@ -37,6 +37,9 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
       setRequestId(crypto.randomUUID());setConfirmed(false);setDisposition('');setHandlingNote('');
     }catch(err:any){setError(err.message||'โหลดข้อมูลไม่สำเร็จ');}finally{setLoading(false);}
   };
+  useEffect(()=>{
+    if(isHistory){setOpen(true);void load();}
+  },[round.id,isHistory]);
   const toggle=()=>{if(!open){setOpen(true);if(isHistory||isReady)void load();}else setOpen(false);};
   const update=(id:string,key:keyof UnsoldInput,value:string)=>{setEntries(prev=>({...prev,[id]:{...prev[id],[key]:value}}));setConfirmed(false);};
   const total=data?.items.reduce((sum,item)=>sum+Number(entries[item.id]?.count||0),0)||0;

@@ -747,7 +747,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 {nextStepInfo && <span className="text-xs text-slate-500">ขั้นตอนถัดไป: {nextStepInfo.title.replace(/^\d+\.\s*/, '')}</span>}
               </>}
             </div>
-            {(activeStepTab === 7 && (round.closure_reason === 'unsold' || (!isViewingPastStep && currentStep === 7 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status)))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
+            {(round.closure_reason === 'unsold' || (activeStepTab === 7 && !isViewingPastStep && currentStep === 7 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
 
           {activeStepTab !== 4 && <RoundCropsSummary items={round.round_items || []} />}
