@@ -119,7 +119,7 @@ export const AdminCustomersPage: React.FC = () => {
                   <th className="py-3 px-4">ที่อยู่ลูกค้า</th>
                   <th className="py-3 px-4">ประวัติไม่มารับ (No-show)</th>
                   <th className="py-3 px-4 text-right">วันที่ลงทะเบียน</th>
-                  <th className="py-3 px-4 text-right">คำสั่งซื้อ</th>
+                  <th className="py-3 px-4 text-right">ประวัติ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -146,7 +146,7 @@ export const AdminCustomersPage: React.FC = () => {
                     <td className="py-3.5 px-4 text-right text-slate-400 text-xs">
                       {formatDate(c.created_at)}
                     </td>
-                    <td className="px-4 py-3.5 text-right"><button type="button" onClick={()=>setHistoryCustomer(c)} className="inline-flex whitespace-nowrap items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100"><History className="h-4 w-4"/>ดูประวัติและส่วนลด</button></td>
+                    <td className="px-4 py-3.5 text-right"><button type="button" onClick={()=>setHistoryCustomer(c)} className="inline-flex whitespace-nowrap items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100"><History className="h-4 w-4"/>ดูประวัติ</button></td>
                   </tr>
                 ))}
               </tbody>
