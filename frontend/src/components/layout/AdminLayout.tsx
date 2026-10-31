@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
+import {usePendingOrdersCount} from '../../lib/usePendingOrdersCount.js';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -25,6 +26,7 @@ export const AdminLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const pendingOrders=usePendingOrdersCount(!isLoading&&isAdmin,location.pathname);
   const isNavActive = (to: string, isActive: boolean) =>
     isActive && !(to === '/admin/rounds' && location.pathname.startsWith('/admin/rounds/history'));
 
@@ -115,6 +117,7 @@ export const AdminLayout: React.FC = () => {
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
+                  {item.to==='/admin/orders'&&pendingOrders>0&&<span role="status" aria-label={`คำสั่งจองรอยืนยัน ${pendingOrders} ออเดอร์`} title="คำสั่งจองรอยืนยัน" className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-white">{pendingOrders.toLocaleString('th-TH')}</span>}
                 </NavLink>
               </React.Fragment>
             );
@@ -189,6 +192,7 @@ export const AdminLayout: React.FC = () => {
                   >
                     <Icon className="w-4 h-4" />
                     <span>{item.label}</span>
+                  {item.to==='/admin/orders'&&pendingOrders>0&&<span role="status" aria-label={`คำสั่งจองรอยืนยัน ${pendingOrders} ออเดอร์`} title="คำสั่งจองรอยืนยัน" className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-white">{pendingOrders.toLocaleString('th-TH')}</span>}
                   </NavLink>
                 </React.Fragment>
               );

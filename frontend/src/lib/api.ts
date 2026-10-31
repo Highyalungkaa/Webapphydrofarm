@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+export const orderChangesEvent='hydrofarm:orders-changed';
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -36,6 +37,10 @@ export async function apiRequest<T = any>(
     throw new Error(data.error || `เกิดข้อผิดพลาด (${response.status})`);
   }
 
+  if(options.method && options.method.toUpperCase()!=='GET'
+    && /^\/?(?:admin\/)?orders(?:[/?]|$)/.test(endpoint)) {
+    window.dispatchEvent(new Event(orderChangesEvent));
+  }
   return data as T;
 }
 

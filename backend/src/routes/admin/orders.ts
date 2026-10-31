@@ -52,6 +52,19 @@ const updateOrderSchema = z.object({
   })).optional(),
 });
 
+// Count only orders still awaiting a decision, independent of page filters/pagination.
+router.get('/pending-count', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const {count,error}=await supabaseAdmin.from('orders')
+      .select('id',{count:'exact',head:true}).eq('status','pending_confirmation');
+    if(error || typeof count!=='number') {
+      res.status(500).json({error:'โหลดจำนวนคำสั่งจองรอยืนยันไม่สำเร็จ'});return;
+    }
+    res.setHeader('Cache-Control','no-store');
+    res.json({count});
+  }catch{res.status(500).json({error:'โหลดจำนวนคำสั่งจองรอยืนยันไม่สำเร็จ'});}
+});
+
 // GET /api/admin/orders - List all orders with multi-parameter filtering
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
