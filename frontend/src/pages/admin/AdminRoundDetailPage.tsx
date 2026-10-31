@@ -254,14 +254,15 @@ export const AdminRoundDetailPage: React.FC = () => {
     if (!round || updatingStep) return;
     const target=round.sold_out_date ? 7 : Number(round.current_step||1)-1;
     if(target<1 || round.status==='completed' || round.status==='cancelled' || round.completed_date) return;
-    if(!window.confirm(`ยืนยันย้อนกลับไปขั้นตอนที่ ${target}: ${STEPS[target-1].title.replace(/^\d+\.\s*/, '')}?\nวันที่ที่บันทึกของขั้นตอนนี้และขั้นถัดไปจะถูกล้าง ต้องเลือกวันและบันทึกใหม่`)) return;
+    const previousDate=round[STEPS[target-1].field];
+    const previousInputDate=target===5?toBangkokDateString(previousDate):previousDate;
+    if(!window.confirm(`ยืนยันย้อนกลับไปขั้นตอนที่ ${target}: ${STEPS[target-1].title.replace(/^\d+\.\s*/, '')}?\nระบบจะยกเลิกการยืนยันวันที่ของขั้นตอนนี้และขั้นถัดไป โดยแสดงวันที่เดิมให้ตรวจสอบ แก้ไข และบันทึกใหม่`)) return;
     setUpdatingStep(true);setError(null);setActionSuccess(null);
     try {
       await api.post(`/admin/rounds/${round.id}/rollback-step`,{expected_updated_at:round.updated_at});
       await loadRound();
-      // Step 6 starts from the calculated harvest schedule, not the cleared confirmation date.
-      if(target!==6)setInputDate('');
-      setActionSuccess(target===6?'ย้อนสถานะแล้ว ระบบแสดงวันที่เก็บเกี่ยวที่คำนวณไว้ กรุณาตรวจสอบและบันทึกใหม่':'ย้อนสถานะแล้ว กรุณาเลือกวันที่และบันทึกใหม่');
+      if(previousInputDate)setInputDate(previousInputDate);
+      setActionSuccess('ย้อนสถานะแล้ว แสดงวันที่เดิมให้ตรวจสอบ สามารถเปลี่ยนวันก่อนบันทึกยืนยันใหม่ได้');
     } catch(err:any){setError(err.message||'ย้อนสถานะไม่สำเร็จ');}
     finally{setUpdatingStep(false);}
   };
