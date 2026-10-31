@@ -258,7 +258,10 @@ export const AdminRoundDetailPage: React.FC = () => {
     setUpdatingStep(true);setError(null);setActionSuccess(null);
     try {
       await api.post(`/admin/rounds/${round.id}/rollback-step`,{expected_updated_at:round.updated_at});
-      await loadRound();setInputDate('');setActionSuccess('ย้อนสถานะแล้ว กรุณาเลือกวันที่และบันทึกใหม่');
+      await loadRound();
+      // Step 6 starts from the calculated harvest schedule, not the cleared confirmation date.
+      if(target!==6)setInputDate('');
+      setActionSuccess(target===6?'ย้อนสถานะแล้ว ระบบแสดงวันที่เก็บเกี่ยวที่คำนวณไว้ กรุณาตรวจสอบและบันทึกใหม่':'ย้อนสถานะแล้ว กรุณาเลือกวันที่และบันทึกใหม่');
     } catch(err:any){setError(err.message||'ย้อนสถานะไม่สำเร็จ');}
     finally{setUpdatingStep(false);}
   };
