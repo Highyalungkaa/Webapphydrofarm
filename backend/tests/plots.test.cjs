@@ -26,7 +26,7 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } =
         return { data: oldPlot ? [oldPlot] : plots, error: null };
       };
       const query = {
-        select() { return query; }, range() { return query; }, delete() { mutation = true; saved = {deleted: true}; return query; }, eq() { return query; }, order() { return query; },
+        select(fields) { if (table === 'planting_rounds' && /round_items\([^)]*plot_ids/.test(fields)) throw new Error('column round_items.plot_ids does not exist'); return query; }, range() { return query; }, delete() { mutation = true; saved = {deleted: true}; return query; }, eq() { return query; }, order() { return query; },
         in(_column, values) { selectedIds = values; return query; },
         insert(payload) { mutation = true; saved = { id: 'plot', ...payload }; return query; },
         update(payload) { mutation = true; saved = { ...oldPlot, ...payload }; return query; },

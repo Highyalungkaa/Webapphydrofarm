@@ -283,7 +283,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     if (!oldPlot) { res.status(404).json({ error: 'ไม่พบแปลงปลูกนี้ กรุณาโหลดรายการใหม่' }); return; }
     for (let start = 0; ; start += 500) {
       const { data: rounds, error: historyError } = await db.from('planting_rounds')
-        .select('id,status,completed_date,notes,round_items(crop_id,plot_ids)').order('id').range(start, start + 499);
+        .select('id,status,completed_date,notes,round_items(*)').order('id').range(start, start + 499);
       if (historyError) { res.status(500).json({ error: 'ตรวจสอบรอบปลูกไม่สำเร็จ กรุณาลองใหม่' }); return; }
       if ((rounds || []).some(round => round.status !== 'completed' && round.status !== 'cancelled'
         && !round.completed_date && roundReferencesPlot(oldPlot, round))) {
@@ -294,6 +294,9 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const { error } = await db.from('plots').delete().eq('id', id);
 
     if (error) {
+      if (error.code === '42703' && error.message?.includes('plot_ids')) {
+        res.status(503).json({ error: 'ฐานข้อมูลขาดข้อมูลเชื่อมแปลงปลูก กรุณารัน migration 050 แล้วลองลบอีกครั้ง' }); return;
+      }
       res.status(error.message?.includes('กรุณาสิ้นสุดรอบ') ? 409 : error.code === '23503' ? 503 : 400).json({ error: error.code === '23503'
         ? 'ฐานข้อมูลยังไม่รองรับการลบแปลงที่มีประวัติ กรุณารัน migration 049'
         : error.message?.includes('กรุณาสิ้นสุดรอบ') ? 'แปลงนี้ยังใช้ในรอบปลูก กรุณาสิ้นสุดรอบก่อนลบ'

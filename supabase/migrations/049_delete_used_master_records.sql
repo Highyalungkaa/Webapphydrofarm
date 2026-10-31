@@ -1,6 +1,7 @@
 -- Preserve completed transaction history while allowing permanent deletion of
 -- crops, plots and equipment products. Run after 048 and deploy the matching API.
 BEGIN;
+ALTER TABLE public.round_items ADD COLUMN IF NOT EXISTS plot_ids UUID[] DEFAULT ARRAY[]::UUID[];
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.plots'::REGCLASS
