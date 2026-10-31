@@ -121,6 +121,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('order_id') || '');
   const [selectedDate, setSelectedDate] = useState('');
+  const [roundResultFilter, setRoundResultFilter] = useState<'all' | 'unsold'>('all');
   const [discountFilter, setDiscountFilter] = useState<'all' | 'discounted' | 'regular'>('all');
   const [activeSection, setActiveSection] = useState<'rounds' | 'orders' | 'bookings'>(searchParams.get('section') === 'orders' || searchParams.has('order_id') ? 'orders' : 'rounds');
 
@@ -147,6 +148,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   };
 
   const filteredRounds = rounds.filter((r) => {
+    if (roundResultFilter === 'unsold' && r.closure_reason !== 'unsold') return false;
     if (selectedDate && bangkokDateKey(r.completed_date || r.updated_at) !== selectedDate) return false;
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
@@ -297,6 +299,13 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             ล้างคำค้น
           </button>
         )}
+        {activeSection === 'rounds' && <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-52">
+          <span className="mb-1.5 block">ผลการขายของรอบ</span>
+          <select value={roundResultFilter} onChange={(e) => setRoundResultFilter(e.target.value as 'all' | 'unsold')} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
+            <option value="all">ทุกรอบ</option>
+            <option value="unsold">รอบที่ผักขายไม่หมด</option>
+          </select>
+        </label>}
         {activeSection === 'orders' && <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-44">
           <span className="mb-1.5 block">ส่วนลด</span>
           <select value={discountFilter} onChange={(e) => setDiscountFilter(e.target.value as 'all' | 'discounted' | 'regular')} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
@@ -325,14 +334,14 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           <div className="p-16 text-center text-slate-500 bg-white rounded-3xl border border-slate-200 space-y-3">
             <History className="w-12 h-12 mx-auto text-slate-300 stroke-[1.5]" />
             <h3 className="text-base font-bold text-slate-800">
-              {searchQuery || selectedDate ? 'ไม่พบประวัติรอบตามตัวกรอง' : 'ยังไม่มีประวัติรอบการปลูกที่สิ้นสุด'}
+              {searchQuery || selectedDate || roundResultFilter !== 'all' ? 'ไม่พบประวัติรอบตามตัวกรอง' : 'ยังไม่มีประวัติรอบการปลูกที่สิ้นสุด'}
             </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
               {searchQuery || selectedDate
-                ? 'ลองเปลี่ยนคำค้นหาหรือวันที่อีกครั้ง'
+                ? 'ลองเปลี่ยนคำค้นหา วันที่ หรือตัวกรองผลการขายอีกครั้ง'
                 : 'เมื่อรอบการปลูกปัจจุบันดำเนินการครบทั้ง 8 สเต็ปและกดยืนยันสถานะ "สิ้นสุดรอบ" ระบบจะย้ายรอบนั้นมาเก็บไว้ที่หน้านี้อัตโนมัติ'}
             </p>
-            {!searchQuery && !selectedDate && (
+            {!searchQuery && !selectedDate && roundResultFilter === 'all' && (
               <div className="pt-2">
                 <Link
                   to="/admin/rounds"
