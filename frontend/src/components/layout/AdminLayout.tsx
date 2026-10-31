@@ -77,7 +77,6 @@ export const AdminLayout: React.FC = () => {
     { to: '/admin/customers', label: 'รายชื่อลูกค้า', icon: Users, dividerBefore: true },
     { to: '/admin/admins', label: 'ผู้ดูแลระบบ', icon: ShieldAlert },
     { to: '/admin/settings', label: 'ตั้งค่าระบบ', icon: Settings, dividerBefore: true },
-    { to: '/admin/audit', label: 'บันทึกการแก้ไข', icon: History },
     { to: '/admin/reports', label: 'รายงาน', icon: BarChart3, dividerBefore: true },
   ];
 
