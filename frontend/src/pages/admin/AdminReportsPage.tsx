@@ -310,7 +310,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const height = 300;
   const left = 52;
   const right = 18;
-  const top = 40;
+  const top = 60;
   const bottom = 52;
   const plotHeight = height - top - bottom;
   const plotWidth = width - left - right;
@@ -322,7 +322,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const gap = Math.max(4, barWidth * 0.22);
   const y = (value: number) => top + plotHeight - (value / axisMax) * plotHeight;
 
-  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="กราฟแท่งเปรียบเทียบยอดจองและยอดส่งมอบจริงของแต่ละชนิดผัก" className="min-w-[620px] w-full overflow-visible">
+  return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="กราฟแท่งเปรียบเทียบยอดจองและยอดส่งมอบจริงของแต่ละชนิดผัก" style={{minWidth:width}} className="w-full overflow-visible">
     {[0, 1, 2, 3, 4].map((tick) => {
       const value = step * tick;
       const yy = y(value);
@@ -337,13 +337,16 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
       const soldX = center + gap / 2;
       const bookedHeight = Math.max(crop.bookedKg > 0 ? 2 : 0, crop.bookedKg / axisMax * plotHeight);
       const soldHeight = Math.max(crop.soldKg > 0 ? 2 : 0, crop.soldKg / axisMax * plotHeight);
-      const bookedLabelY = y(crop.bookedKg) - 8 - (Math.abs(y(crop.bookedKg) - y(crop.soldKg)) < 16 ? 16 : 0);
+      const soldLabelY = y(crop.soldKg) - 10;
+      const bookedLabelY = Math.abs(y(crop.bookedKg) - y(crop.soldKg)) < 24
+        ? Math.min(y(crop.bookedKg) - 10, soldLabelY - 24)
+        : y(crop.bookedKg) - 10;
       return <g key={crop.name}>
         <title>{crop.name}: จอง {kg(crop.bookedKg)}, ส่งจริง {kg(crop.soldKg)}</title>
         <rect x={bookedX} y={y(crop.bookedKg)} width={barWidth} height={bookedHeight} rx="6" fill="#10b981" />
         <rect x={soldX} y={y(crop.soldKg)} width={barWidth} height={soldHeight} rx="6" fill="#0ea5e9" />
-        <text x={bookedX + barWidth / 2} y={bookedLabelY} textAnchor="middle" fill="#047857" fontSize="11" fontWeight="700">{numberFormat.format(crop.bookedKg)}</text>
-        <text x={soldX + barWidth / 2} y={y(crop.soldKg) - 8} textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">{numberFormat.format(crop.soldKg)}</text>
+        <text x={bookedX + barWidth / 2} y={bookedLabelY} textAnchor="middle" fill="#065f46" fontSize="16" fontWeight="800">{numberFormat.format(crop.bookedKg)}</text>
+        <text x={soldX + barWidth / 2} y={soldLabelY} textAnchor="middle" fill="#075985" fontSize="16" fontWeight="800">{numberFormat.format(crop.soldKg)}</text>
         <text x={center} y={height - 24} textAnchor="middle" fill="#475569" fontSize="10" fontWeight="600">{crop.name.length > 10 ? `${crop.name.slice(0, 9)}…` : crop.name}</text>
       </g>;
     })}
