@@ -250,6 +250,19 @@ export const AdminRoundDetailPage: React.FC = () => {
     }
   };
 
+  const handleRollbackStep = async () => {
+    if (!round || updatingStep) return;
+    const target=round.sold_out_date ? 7 : Number(round.current_step||1)-1;
+    if(target<1 || round.status==='completed' || round.status==='cancelled' || round.completed_date) return;
+    if(!window.confirm(`ยืนยันย้อนกลับไปขั้นตอนที่ ${target}: ${STEPS[target-1].title.replace(/^\d+\.\s*/, '')}?\nวันที่ที่บันทึกของขั้นตอนนี้และขั้นถัดไปจะถูกล้าง ต้องเลือกวันและบันทึกใหม่`)) return;
+    setUpdatingStep(true);setError(null);setActionSuccess(null);
+    try {
+      await api.post(`/admin/rounds/${round.id}/rollback-step`,{expected_updated_at:round.updated_at});
+      await loadRound();setInputDate('');setActionSuccess('ย้อนสถานะแล้ว กรุณาเลือกวันที่และบันทึกใหม่');
+    } catch(err:any){setError(err.message||'ย้อนสถานะไม่สำเร็จ');}
+    finally{setUpdatingStep(false);}
+  };
+
   const handleConfirmStepUpdate = async () => {
     if (!round || !inputDate) return;
     if (activeStepTab !== (round.current_step || 1) || round.status === 'completed' || !!round.completed_date) return;
@@ -744,6 +757,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     {isBookingConfirmed ? 'จัดการการจอง' : 'ไปเปิดรับจอง'}
                   </Link>
                 )}
+                {currentStep>1 && round.status!=='cancelled' && <button type="button" onClick={handleRollbackStep} disabled={updatingStep} className="rounded-lg px-2 py-1 text-xs text-slate-500 underline underline-offset-2 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50">ย้อนกลับสถานะก่อนหน้า</button>}
                 {nextStepInfo && <span className="text-xs text-slate-500">ขั้นตอนถัดไป: {nextStepInfo.title.replace(/^\d+\.\s*/, '')}</span>}
               </>}
             </div>

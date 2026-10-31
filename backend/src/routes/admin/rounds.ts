@@ -490,6 +490,21 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
     res.status(err.status||500).json({ error: err.status?err.message:'เกิดข้อผิดพลาดในการสร้างรอบการปลูก' });
   }
 });
+router.post('/:id/rollback-step', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const parsed=z.object({expected_updated_at:z.string().datetime({offset:true})}).safeParse(req.body);
+  if(!z.string().uuid().safeParse(req.params.id).success || !parsed.success){
+    res.status(400).json({error:'ข้อมูลรอบปลูกไม่ถูกต้อง กรุณาโหลดหน้าใหม่'});return;
+  }
+  try{
+    const {data,error}=await supabaseAdmin.rpc('rollback_planting_step',{
+      p_actor_id:req.user!.id,p_round_id:req.params.id,p_expected_updated_at:parsed.data.expected_updated_at,
+    });
+    if(error){const missing=['42883','PGRST202','42703'].includes(error.code);
+      res.status(missing?503:409).json({error:missing?'กรุณารัน migration 053 ก่อนใช้การย้อนสถานะรอบปลูก':error.message});return;}
+    res.json(data);
+  }catch{res.status(500).json({error:'ย้อนสถานะไม่สำเร็จ กรุณาโหลดหน้าใหม่แล้วตรวจสอบสถานะล่าสุด'});}
+});
+
 // PATCH /api/admin/rounds/:id/step - Stepper Lifecycle Progression (8 Steps)
 router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
