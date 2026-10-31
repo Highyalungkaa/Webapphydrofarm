@@ -1,6 +1,7 @@
-import React,{useEffect,useState} from 'react';
+import {FormPopup} from '../common/FormPopup.js';
+import React,{useEffect,useId,useState} from 'react';
 import {Link} from 'react-router-dom';
-import {AlertTriangle,ChevronDown,X} from 'lucide-react';
+import {AlertTriangle,X} from 'lucide-react';
 import {api} from '../../lib/api.js';
 import {formatDateDMY,toBangkokDateString} from '../../lib/dateFormat.js';
 import {isValidLossDate} from '../../lib/plantLossWizard.js';
@@ -14,7 +15,8 @@ const num=(value:number)=>Number(value).toLocaleString('th-TH',{maximumFractionD
 const field='mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100';
 
 export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promise<void>}>=({round,onChanged})=>{
-  const [open,setOpen]=useState(round.closure_reason==='unsold'),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
+  const [open,setOpen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false);
+  const popupTitleId=useId();
   const [data,setData]=useState<Preview|null>(null),[error,setError]=useState('');
   const [entries,setEntries]=useState<Record<string,UnsoldInput>>({});
   const [disposition,setDisposition]=useState(''),[handlingNote,setHandlingNote]=useState('');
@@ -38,7 +40,7 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
     }catch(err:any){setError(err.message||'โหลดข้อมูลไม่สำเร็จ');}finally{setLoading(false);}
   };
   useEffect(()=>{
-    if(isHistory){setOpen(true);void load();}
+    if(isHistory&&open){void load();}
   },[round.id,isHistory]);
   const toggle=()=>{if(!open){setOpen(true);if(isHistory||isReady)void load();}else setOpen(false);};
   const update=(id:string,key:keyof UnsoldInput,value:string)=>{setEntries(prev=>({...prev,[id]:{...prev[id],[key]:value}}));setConfirmed(false);};
@@ -55,9 +57,10 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
     }catch(err:any){setError(err.message||'สิ้นสุดรอบไม่สำเร็จ');}finally{setSaving(false);}
   };
   return <section className="space-y-3">
-    <button type="button" onClick={toggle} disabled={saving} aria-expanded={open} className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"><AlertTriangle className="h-4 w-4"/>{isHistory?'สิ้นสุดรอบ — มีผักขายไม่ออก (ดูบันทึก)':'บันทึกผักขายไม่ออกและสิ้นสุดรอบ'}<ChevronDown className={`h-4 w-4 ${open?'rotate-180':''}`}/></button>
-    {open&&<div className="space-y-4 rounded-2xl border border-amber-200 bg-white p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-2"><h3 className="font-extrabold text-slate-900">{isHistory?'ประวัติผักขายไม่ออก':'ตรวจสอบผักคงเหลือก่อนสิ้นสุดรอบ'}</h3><button type="button" disabled={saving} onClick={()=>setOpen(false)} aria-label="ปิดแบบฟอร์ม" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4"/></button></div>
+    <button type="button" onClick={toggle} disabled={saving} aria-haspopup="dialog" className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"><AlertTriangle className="h-4 w-4"/>{isHistory?'สิ้นสุดรอบ — มีผักขายไม่ออก (ดูบันทึก)':'บันทึกผักขายไม่ออกและสิ้นสุดรอบ'}</button>
+    <FormPopup open={open} onClose={()=>setOpen(false)} closeDisabled={saving} labelledBy={popupTitleId}>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2"><h3 id={popupTitleId} className="font-extrabold text-slate-900">{isHistory?'ประวัติผักขายไม่ออก':'ตรวจสอบผักคงเหลือก่อนสิ้นสุดรอบ'}</h3><button type="button" disabled={saving} onClick={()=>setOpen(false)} aria-label="ปิดแบบฟอร์ม" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4"/></button></div>
       {loading&&<p className="text-sm text-slate-500">กำลังตรวจสอบผลผลิตและออเดอร์...</p>}
       {!isHistory&&!isReady&&<p role="status" className="rounded-xl bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">{readinessMessage}</p>}
       {error&&<div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}<button type="button" disabled={saving} onClick={load} className="ml-3 font-bold underline">ตรวจสอบข้อมูลอีกครั้ง</button></div>}
@@ -85,6 +88,7 @@ export const UnsoldRoundClose:React.FC<{round:PlantingRound;onChanged:()=>Promis
         {!total&&<p className="text-xs text-slate-500">หากไม่มีผักขายไม่ออก ให้ใช้การสิ้นสุดรอบตามปกติ</p>}
         <button disabled={saving||!valid} className="rounded-xl bg-amber-700 px-5 py-3 text-sm font-bold text-white hover:bg-amber-800 disabled:opacity-50">{saving?'กำลังบันทึกและสิ้นสุดรอบ...':'ยืนยันบันทึกผักขายไม่ออกและสิ้นสุดรอบ'}</button>
       </form>}
-    </div>}
+    </div>
+    </FormPopup>
   </section>;
 };

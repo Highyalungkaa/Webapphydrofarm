@@ -1,5 +1,6 @@
+import {FormPopup} from '../common/FormPopup.js';
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Plus, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString } from '../../lib/dateFormat.js';
 import { getLossPlotChoices, getLossItemsForPlot, isValidLossDate } from '../../lib/plantLossWizard.js';
@@ -98,15 +99,16 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
   };
 
   return <section className="space-y-3">
-    <button type="button" aria-expanded={expanded} aria-controls={panelId} disabled={saving} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50">
+    <button type="button" aria-haspopup="dialog" disabled={saving} onClick={() => setExpanded(true)} className="inline-flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50">
       <AlertTriangle aria-hidden="true" className="h-4 w-4" />บันทึกผักเสียหายระหว่างปลูก
       {!!totals?.lost && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs">สูญเสีย {number(totals.lost)} ต้น</span>}
-      <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
     </button>
-    <div id={panelId} hidden={!expanded} className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <FormPopup open={expanded} onClose={() => setExpanded(false)} closeDisabled={saving} labelledBy={panelId}>
+    <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 className="text-lg font-extrabold text-slate-900">บันทึกผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
+      <div><h2 id={panelId} className="text-lg font-extrabold text-slate-900">บันทึกผักเสียหายระหว่างปลูก</h2><p className="mt-1 text-xs text-slate-500">บันทึกได้หลายครั้ง ตั้งแต่ปักเม็ดจนถึงพร้อมเก็บและขาย พร้อมประวัติย้อนหลัง</p></div>
       {canRecord && !open && <button type="button" onClick={start} disabled={saving || loading || !data?.items.some(i => i.remaining_plant_count > 0)} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"><Plus className="h-4 w-4" />บันทึกผักเสียหาย</button>}
+    <button type="button" disabled={saving} onClick={() => setExpanded(false)} aria-label="ปิดหน้าบันทึกผักเสียหาย" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
     </div>
     {loading && <p className="text-sm text-slate-500">กำลังโหลดข้อมูลผักเสียหาย...</p>}
     {error && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}{!data && <button type="button" onClick={load} className="ml-3 font-bold underline">ลองใหม่</button>}</div>}
@@ -153,5 +155,6 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
       <p className="text-xs leading-relaxed text-slate-500">การบันทึกผักเสียหายปรับเฉพาะจำนวนต้น ไม่แปลงเป็นกิโลกรัม ไม่คืนพื้นที่แปลงอัตโนมัติ และไม่เปลี่ยนจำนวนในออเดอร์ลูกค้า</p>
     </>}
     </div>
+    </FormPopup>
   </section>;
 };
