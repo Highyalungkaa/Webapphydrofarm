@@ -24,43 +24,9 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response): Promise<void>
   }
 });
 
-// DELETE /api/admin/admins/:id - Delete admin email
-router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const id = req.params.id as string;
-
-    // Check count of admins to avoid locking everyone out
-    const { data: admins } = await supabaseAdmin.from('admin_users').select('id, email');
-    if ((admins?.length || 0) <= 1) {
-      res.status(400).json({ error: 'ต้องมีผู้ดูแลระบบอย่างน้อย 1 บัญชี ไม่สามารถลบได้' });
-      return;
-    }
-
-    const { data: deleted, error } = await supabaseAdmin
-      .from('admin_users')
-      .delete()
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      res.status(400).json({ error: error.message });
-      return;
-    }
-
-    await recordAuditLog({
-      actorId: req.user!.id,
-      actorEmail: req.user!.email,
-      entityType: 'admin_users',
-      entityId: id,
-      action: 'delete',
-      oldData: deleted,
-    });
-
-    res.json({ message: 'ลบสิทธิ์แอดมินเรียบร้อยแล้ว' });
-  } catch (err: any) {
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการลบแอดมิน' });
-  }
+// Existing clients receive a clear response; membership is maintained in Supabase.
+router.delete('/:id', (_req: AuthenticatedRequest, res: Response): void => {
+  res.status(410).json({ error: 'เพิ่มหรือลบผู้ดูแลระบบผ่าน Supabase เท่านั้น' });
 });
 
 export default router;

@@ -141,3 +141,15 @@ test('equipment stock, retries, shipping and cancellation are transactional in P
   await assert.rejects(save(id,{payment_status:'unpaid'}),/ชำระเงิน/);await assert.rejects(save(id,{tracking_number:'OTHER'},undefined,customer),/ไม่มีสิทธิ์/);
  });
 });
+
+test('admin membership can only be changed by privileged database access',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ await db.exec("CREATE ROLE anon;CREATE ROLE authenticated;CREATE TABLE admin_users(id INTEGER PRIMARY KEY,email TEXT);GRANT USAGE ON SCHEMA public TO authenticated;GRANT ALL ON admin_users TO authenticated;INSERT INTO admin_users VALUES(1,'admin@example.com')");
+ await db.exec(migration('051_admin_membership_database_only.sql'));
+ await db.exec(migration('051_admin_membership_database_only.sql'));
+ await db.exec('SET ROLE authenticated');
+ assert.equal((await db.query('SELECT * FROM admin_users')).rows.length,1);
+ for(const sql of ["INSERT INTO admin_users VALUES(2,'other@example.com')","UPDATE admin_users SET email='changed@example.com'",'DELETE FROM admin_users'])await assert.rejects(db.exec(sql),/permission denied/);
+ await db.exec("RESET ROLE;INSERT INTO admin_users VALUES(2,'other@example.com');DELETE FROM admin_users WHERE id=2");
+ assert.equal((await db.query('SELECT * FROM admin_users')).rows.length,1);
+});

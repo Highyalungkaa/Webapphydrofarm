@@ -20,6 +20,12 @@ function setup(file,{errorTable,existing,adminEmail='admin@example.com',email='a
  const exports=load(file,name=>{if(name==='express')return{Router:()=>router};if(name.endsWith('/supabase.js'))return{supabaseAdmin:db,getSupabaseClient:()=>db};if(name.endsWith('/auth.js'))return{requireAuth:auth,requireAdmin:admin};if(name.endsWith('/audit.js'))return{recordAuditLog:async value=>audit.push(value)};if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if(name.endsWith('/pooledCatalog.js'))return require('./load-service.cjs')('pooledCatalog');if(name.endsWith('/rateLimiter.js'))return{orderCreationLimiter(){}};return require(name);});
  return{exports,mutations,filters,audit,middleware,db,calls,async request(method,route,body){const res={statusCode:200,status(code){this.statusCode=code;return this;},json(value){this.body=value;}};await routes.get(`${method} ${route}`)({body,params:{id:actor},query:{},headers:{authorization:'Bearer test'},user:{id:actor,email,isAdmin}},res);return res;}};
 }
+test('website cannot remove administrators and performs no database writes',async()=>{
+ const app=setup('../src/routes/admin/admins.ts');
+ const res=await app.request('delete','/:id');assert.equal(res.statusCode,410);
+ assert.match(res.body.error,/Supabase/);assert.equal(app.mutations.length,0);
+});
+
 test('crop create and edit persist the chosen growing days and reject blank names',async()=>{
  for(const method of ['post','put']){const app=setup('../src/routes/admin/crops.ts',{existing:{id:actor}});const body={name:'Oak',default_price_per_kg:50,slots_per_kg:8,growing_days:32,is_active:true};
  const result=await app.request(method,method==='post'?'/':'/:id',body);assert.ok(result.statusCode<300);assert.equal(app.mutations.at(-1).value.growing_days,32);
