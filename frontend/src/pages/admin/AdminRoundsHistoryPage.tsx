@@ -307,7 +307,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           </select>
         </label>}
         {activeSection === 'orders' && <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-44">
-          <span className="mb-1.5 block">ส่วนลด</span>
+          <span className="mb-1.5 block">ประเภทคำสั่งจอง</span>
           <select value={discountFilter} onChange={(e) => setDiscountFilter(e.target.value as 'all' | 'discounted' | 'regular')} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
             <option value="all">ทุกคำสั่งจอง</option>
             <option value="discounted">มีส่วนลด</option>
