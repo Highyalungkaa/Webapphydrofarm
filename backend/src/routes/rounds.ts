@@ -69,7 +69,7 @@ async function enrichRoundItems(roundId: string, limited = false) {
       crop_image_snapshot:item.crop_image_snapshot,crop_slots_per_kg_snapshot:item.crop_slots_per_kg_snapshot,
       crop_growing_days_snapshot:item.crop_growing_days_snapshot,
       crop_name:item.crops?.name || item.crop_name_snapshot || 'ผัก',booked_qty_kg,
-      plant_count:item.plant_count,planting_plants_per_kg:item.planting_plants_per_kg,
+      plant_count:item.plant_count,lost_plant_count:item.lost_plant_count,planting_plants_per_kg:item.planting_plants_per_kg,
       estimated_qty_kg:item.planting_plants_per_kg!=null?item.estimated_qty_kg:null,
       max_qty_per_order_kg:limited ? item.max_qty_per_order_kg : null,
       order_limit_remaining:item.order_limit_remaining,

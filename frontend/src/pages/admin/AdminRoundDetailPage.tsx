@@ -1,5 +1,6 @@
 import { RoundWeightSummary } from '../../components/admin/RoundWeightSummary.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
+import {remainingEstimatedKg} from '../../lib/estimatedYield.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
@@ -339,8 +340,8 @@ export const AdminRoundDetailPage: React.FC = () => {
   const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
 
   const totalBooked = Number(round.total_booked_kg || 0);
-  const forecastItems=(round.round_items||[]).filter(item=>Number(item.planting_plants_per_kg)>0&&item.estimated_qty_kg!=null);
-  const totalEstimatedKg=forecastItems.reduce((sum,item)=>sum+Number(item.estimated_qty_kg),0);
+  const forecastItems=(round.round_items||[]).filter(item=>remainingEstimatedKg(item)!=null);
+  const totalEstimatedKg=forecastItems.reduce((sum,item)=>sum+(remainingEstimatedKg(item)||0),0);
   const missingForecastCount=(round.round_items||[]).length-forecastItems.length;
   const orders = (round as any).orders || [];
   const totalRevenue = orders
