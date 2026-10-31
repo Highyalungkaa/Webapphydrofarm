@@ -10,6 +10,7 @@ import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
 import { Order, PlantingRound, OrderStatus, PaymentStatus, PaymentMethod } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
+import { FormPopup } from '../../components/common/FormPopup.js';
 import {
   Search,
   Eye,
@@ -55,6 +56,13 @@ export const AdminOrdersPage: React.FC = () => {
   const [ownWeightInputs, setOwnWeightInputs] = useState<Record<string, string>>({});
   const [discountInputs, setDiscountInputs] = useState<Record<string, string>>({});
   const [showSubstituteInputs, setShowSubstituteInputs] = useState(false);
+  const [detailTab, setDetailTab] = useState<'items' | 'status'>('items');
+  const [updateError, setUpdateError] = useState('');
+  const selectDetailTab = (tab: 'items' | 'status') => {
+    setDetailTab(tab);
+    const content = document.getElementById(`order-tab-${tab}`)?.closest('dialog')?.firstElementChild;
+    content?.scrollTo({top:0});
+  };
 
   useEffect(() => {
     api.get<PlantingRound[]>('/admin/rounds').then(setRounds).catch(console.error);
@@ -93,6 +101,8 @@ export const AdminOrdersPage: React.FC = () => {
   };
 
   const handleOpenDetailModal = (order: Order) => {
+    setDetailTab('items');
+    setUpdateError('');
     setShowSubstituteInputs(false);
     setSelectedOrder(order);
     setOwnWeightInputs(Object.fromEntries((order.order_items || []).map(item => [item.id, item.own_qty_kg == null ? '' : String(item.own_qty_kg)])));
@@ -110,12 +120,13 @@ export const AdminOrdersPage: React.FC = () => {
 
   const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder) return;
+    if (!selectedOrder || isUpdating) return;
+    setUpdateError('');
     const issues=orderUpdateIssues(modalStatus,modalPaymentStatus,selectedOrder.order_items||[],ownWeightInputs,substituteInputs,discountInputs);
-    if(issues.length){alert(issues.join('\n'));return;}
+    if(issues.length){setUpdateError('กรุณาตรวจสอบข้อมูลที่ระบุด้านล่างก่อนบันทึก');return;}
     if (modalStatus === 'completed' && modalPaymentStatus !== 'paid'
       && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) {
-      alert('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ');
+      setUpdateError('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ');
       return;
     }
 
@@ -139,7 +150,7 @@ export const AdminOrdersPage: React.FC = () => {
       setSelectedOrder(null);
       await loadOrders();
     } catch (err: any) {
-      alert(err.message || 'เกิดข้อผิดพลาดในการบันทึก');
+      setUpdateError(err.message || 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
     } finally {
       setIsUpdating(false);
     }
@@ -424,32 +435,41 @@ export const AdminOrdersPage: React.FC = () => {
 
       {/* Order Detail & Action Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <FormPopup open onClose={() => setSelectedOrder(null)} closeDisabled={isUpdating} labelledBy="order-detail-heading">
+          <div className="space-y-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <span className="text-[11px] uppercase font-bold text-slate-400">
                   ออเดอร์ #{selectedOrder.id.slice(0, 8)}
                 </span>
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 id="order-detail-heading" className="text-lg font-extrabold text-slate-900 sm:text-xl">
                   รายละเอียดและปรับสถานะคำสั่งจอง
                 </h2>
               </div>
               <button
                 onClick={() => setSelectedOrder(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600"
+                type="button" disabled={isUpdating} aria-label="ปิดรายละเอียดคำสั่งจอง"
+                className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+              <div className="min-w-0"><p className="break-words font-bold text-slate-900">{selectedOrder.customer_name || selectedOrder.profiles?.full_name || 'ลูกค้า'}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge status={selectedOrder.status} type="order" /><Badge status={selectedOrder.payment_status} type="payment" /></div></div>
+              <div className="shrink-0"><p className="text-xs text-slate-600">ยอดสุทธิ</p><p className="text-2xl font-extrabold tabular-nums text-emerald-800">฿{modalNetTotal.toLocaleString()}</p></div>
+            </div>
+            <div role="tablist" aria-label="ส่วนจัดการคำสั่งจอง" className="sticky -top-4 z-10 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:-top-6">
+              {([{value:'items',label:'รายละเอียดและจัดผัก'},{value:'status',label:'สถานะและชำระเงิน'}] as const).map(({value,label})=><button key={value} id={`order-tab-${value}`} role="tab" type="button" aria-selected={detailTab===value} aria-controls={`order-panel-${value}`} tabIndex={detailTab===value?0:-1} disabled={isUpdating} onClick={()=>selectDetailTab(value)} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?'items':event.key==='End'?'status':detailTab==='items'?'status':'items';selectDetailTab(next);document.getElementById(`order-tab-${next}`)?.focus();}}} className={`rounded-lg px-2 py-3 text-xs font-bold transition sm:text-sm ${detailTab===value?'bg-white text-emerald-800 shadow-sm':'text-slate-500 hover:text-slate-800'}`}>{label}</button>)}
+            </div>
+            <div id="order-panel-items" role="tabpanel" aria-labelledby="order-tab-items" hidden={detailTab!=='items'} className="space-y-5">
             {/* Customer & Fulfillment Info */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 grid grid-cols-2 gap-3 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-slate-400 block font-medium">ลูกค้า</span>
                 <p className="font-bold text-slate-900">{(selectedOrder.customer_name || selectedOrder.profiles?.full_name)}</p>{selectedOrder.order_source === 'facebook_chat' && <p className="mt-1 text-sm text-blue-700">ออเดอร์นอกระบบ{selectedOrder.admin_request_payload?.order_origin && <span className="block break-words text-slate-700">ช่องทางที่ลูกค้าสั่ง: {selectedOrder.admin_request_payload.order_origin}</span>}{selectedOrder.source_reference && <span className="block break-words text-slate-600">ชื่อบัญชีที่ติดต่อ: {selectedOrder.source_reference}</span>}</p>}
                 <p className="text-slate-500">{selectedOrder.profiles?.email}</p>
-                <p className="text-slate-700 mt-1">โทร: {selectedOrder.contact_phone}</p>
+                <p className="text-slate-700 mt-1">โทร: {selectedOrder.contact_phone ? <a href={`tel:${selectedOrder.contact_phone}`} className="font-semibold text-emerald-800 underline underline-offset-2">{selectedOrder.contact_phone}</a> : 'ไม่ได้ระบุ'}</p>
               </div>
               <div>
                 <span className="text-slate-400 block font-medium">วิธีรับและสถานที่</span>
@@ -473,8 +493,8 @@ export const AdminOrdersPage: React.FC = () => {
             <EditOrderItems order={selectedOrder} onSaved={async()=>{setSelectedOrder(null);await loadOrders();}}/>
             <section className="space-y-3">
               <div>
-                <h3 className="font-bold text-xs uppercase text-slate-500">รายการผักและส่วนลด</h3>
-                <p className="mt-1 text-[11px] text-slate-500">กรอกส่วนลดเป็นจำนวนเงินบาทแยกแต่ละรายการ ระบบจะหักออกจากยอดที่ลูกค้าต้องชำระ</p>
+                <h3 className="text-sm font-extrabold text-slate-900">รายการผักที่ลูกค้าจอง</h3>
+                <p className="mt-1 text-xs text-slate-500">หากมีส่วนลด ให้กรอกจำนวนเงินในรายการนั้น</p>
               </div>
               <div className="space-y-2">
                 {selectedOrder.order_items?.map((it) => {
@@ -492,7 +512,7 @@ export const AdminOrdersPage: React.FC = () => {
             </section>
 
             <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
-              <div><h3 className="text-sm font-extrabold text-slate-900">น้ำหนักผักฟาร์มที่ชั่งจัดจริง</h3><p className="mt-1 text-xs leading-relaxed text-slate-600">ชั่งผักที่จัดให้ลูกค้าจากเครื่องชั่ง แล้วกรอกน้ำหนักจริงที่นี่ บันทึกเป็นน้ำหนักชั่งจริงของออเดอร์ หากไม่พอให้กรอกผักทดแทนแยกด้านล่าง</p></div>
+              <div><h3 className="text-sm font-extrabold text-slate-900">บันทึกน้ำหนักที่ชั่งจริง</h3><p className="mt-1 text-xs leading-relaxed text-slate-600">กรอกน้ำหนักผักจากฟาร์มที่จัดให้ลูกค้า หากไม่พอให้เพิ่มผักทดแทนด้านล่าง</p></div>
               {(selectedOrder.order_items || []).map(item => {
                 const ownText=ownWeightInputs[item.id]??'',own=Number(ownText||0),sub=Number(substituteInputs[item.id]?.qtyKg||0),ordered=Number(item.qty_kg);
                 const missing=Math.max(0,Math.round((ordered-own-sub)*100)/100),over=sub>ordered+0.000001;
@@ -501,7 +521,7 @@ export const AdminOrdersPage: React.FC = () => {
                   {over?<p role="alert" className="text-xs font-bold text-rose-700">ผักทดแทนเกินยอดจอง กรุณาตรวจสอบ</p>:ownText===''?<p className="text-xs text-slate-500">ยังไม่บันทึกน้ำหนักชั่งจริง (กรอก 0 เมื่อใช้ผักทดแทนทั้งหมด)</p>:missing>0?<div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><span>ยังขาด {missing.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</span><button type="button" onClick={()=>{setShowSubstituteInputs(true);setSubstituteInputs(p=>({...p,[item.id]:{qtyKg:String(Math.round((ordered-own)*100)/100),totalCost:p[item.id]?.totalCost||''}}));}} className="font-bold underline">กรอกผักทดแทนส่วนที่ขาด</button></div>:<p className="text-xs font-bold text-emerald-800">จัดครบตามยอดจองแล้ว{own+sub>ordered+0.000001?` · ชั่งได้เกิน ${(own+sub-ordered).toFixed(2)} กก.`:''}</p>}
                 </div>;
               })}
-              <p className="text-xs text-slate-600">ระบบบันทึกน้ำหนักตามเครื่องชั่ง ยอดเงินตามออเดอร์เดิม บันทึกการจัดผักบางส่วนไว้ก่อนได้ ก่อนเปลี่ยนเป็น “พร้อมรับ / ส่ง” หรือ “สำเร็จ” ต้องกรอกน้ำหนักจริงและจัดผักรวมให้ครบยอดจอง</p>
+              <p className="text-xs leading-relaxed text-slate-600">บันทึกน้ำหนักบางส่วนไว้ก่อนได้ ต้องจัดผักให้ครบก่อนเลือก “พร้อมรับ / ส่ง” ยอดเงินยังคิดตามที่จอง</p>
             </section>
 
             <button type="button" onClick={() => setShowSubstituteInputs((open) => !open)} aria-expanded={showSubstituteInputs} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-left transition hover:bg-amber-100/70 sm:px-5">
@@ -545,21 +565,23 @@ export const AdminOrdersPage: React.FC = () => {
                 );
               })}
             </section>}
+            </div>
 
             {/* Update Form */}
-            <form onSubmit={handleUpdateOrder} className="space-y-5 pt-5 border-t border-slate-100 text-xs sm:text-sm">
+            <form id="order-update-form" onSubmit={handleUpdateOrder}>
+            <div id="order-panel-status" role="tabpanel" aria-labelledby="order-tab-status" hidden={detailTab!=='status'} className="space-y-5 text-xs sm:text-sm">
               <section className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/80 to-white p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                   <div>
                     <p className="font-extrabold text-slate-900 text-sm sm:text-base">อัปเดตความคืบหน้าออเดอร์</p>
-                    <p className="text-slate-500 mt-1">เลือกขั้นตอนถัดไป แล้วกดบันทึกด้านล่างเพื่อยืนยันสถานะ</p>
+                    <p className="text-slate-500 mt-1">เลือกขั้นตอนถัดไป แล้วกด “ยืนยันและบันทึก”</p>
                   </div>
                   <div className="rounded-full bg-white border border-slate-200 px-3 py-1.5 flex items-center gap-2 shadow-sm">
                     <span className="text-slate-500">ปัจจุบัน</span>
                     <Badge status={selectedOrder.status} type="order" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {([
                     { value: 'pending_confirmation', title: 'รอยืนยัน', note: 'ตรวจสอบคำสั่งจอง', Icon: Clock3, color: 'amber' },
                     { value: 'confirmed', title: 'ยืนยันแล้ว', note: 'รับออเดอร์เข้าระบบ', Icon: BadgeCheck, color: 'blue' },
@@ -581,15 +603,16 @@ export const AdminOrdersPage: React.FC = () => {
                           <Icon size={18} className={active ? '' : 'text-slate-400'} />
                         </span>
                         <span className={`mt-2 block text-[11px] leading-4 ${active ? 'opacity-80' : 'text-slate-500'}`}>{note}</span>
+                        <span className="mt-2 block text-[10px] font-bold">{value===selectedOrder.status?'สถานะปัจจุบัน':active?'เลือกไว้ · ยังไม่บันทึก':orderProgress[orderProgress.indexOf(selectedOrder.status)+1]===value?'ขั้นตอนถัดไป':index<orderProgress.indexOf(selectedOrder.status)?'ผ่านขั้นตอนนี้แล้ว':'ยังเลือกไม่ได้'}</span>
                       </button>
                     );
                   })}
                 </div>
                 {previousOrderStep(selectedOrder.status)&&<button type="button" disabled={isUpdating} onClick={()=>{const previous=previousOrderStep(selectedOrder.status);if(previous&&window.confirm('ยืนยันย้อนสถานะออเดอร์หนึ่งขั้น? หลังเลือกแล้วต้องกดบันทึกด้านล่างอีกครั้ง'))setModalStatus(previous);}} className="mt-3 rounded-lg px-2 py-1 text-xs text-slate-500 underline underline-offset-2 hover:bg-slate-100 disabled:opacity-50">ย้อนกลับสถานะก่อนหน้า</button>}
                 {orderProgress.indexOf(modalStatus)>=0&&modalStatus!==selectedOrder.status&&<p role="status" className="mt-2 text-xs font-semibold text-emerald-800">เลือกสถานะใหม่แล้ว กรุณากดบันทึกด้านล่างเพื่อยืนยัน</p>}
-                <div className="mt-4 border-t border-slate-200/80 pt-4">
-                  <p className="font-bold text-slate-700 mb-2">การจัดการกรณีพิเศษ</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <details className="mt-4 border-t border-slate-200/80 pt-4" open={modalStatus==='cancelled'||modalStatus==='no_show'?true:undefined}>
+                  <summary className="cursor-pointer font-semibold text-slate-600">ยกเลิกออเดอร์ / ลูกค้าไม่มารับ</summary>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {([
                       { value: 'cancelled', title: 'ยกเลิกออเดอร์', note: 'หยุดดำเนินการคำสั่งจองนี้', Icon: Ban },
                       { value: 'no_show', title: 'ลูกค้าไม่มารับสินค้า', note: 'บันทึกประวัติไม่มารับของ', Icon: UserRoundX },
@@ -602,7 +625,7 @@ export const AdminOrdersPage: React.FC = () => {
                       </button>;
                     })}
                   </div>
-                </div>
+                </details>
               </section>
 
               <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
@@ -673,26 +696,35 @@ export const AdminOrdersPage: React.FC = () => {
                   <span className="font-bold">กำลังเปลี่ยนสถานะ:</span><Badge status={selectedOrder.status} type="order" /><span aria-hidden="true">→</span><Badge status={modalStatus} type="order" />
                 </div>
               )}
-              {updateIssues.length>0&&<div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-bold">กรุณาตรวจสอบก่อนบันทึก</p><ul className="mt-2 list-disc space-y-1 pl-5">{updateIssues.map(issue=><li key={issue}>{issue}</li>)}</ul></div>}
-              <div className="flex items-center justify-end gap-2 pt-3">
+            </div>
+            </form>
+            <div className="sticky -bottom-4 z-10 -mx-4 border-t border-slate-200 bg-white px-4 py-3 sm:-bottom-6 sm:-mx-6 sm:px-6">
+              {updateError&&<p role="alert" className="mb-3 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-800">{updateError}</p>}
+              {updateIssues.length>0&&<details className="mb-3 max-h-40 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" open><summary className="cursor-pointer font-bold">ต้องตรวจสอบ {updateIssues.length} รายการก่อนบันทึก</summary><ul className="mt-2 list-disc space-y-1 pl-5">{updateIssues.map(issue=><li key={issue}>{issue}</li>)}</ul>{detailTab==='status'&&<button type="button" onClick={()=>selectDetailTab('items')} className="mt-2 font-bold underline underline-offset-2">กลับไปตรวจสอบรายการและน้ำหนัก</button>}</details>}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-500">{modalStatus!==selectedOrder.status?'มีการเลือกสถานะใหม่ · ยังไม่ได้บันทึก':'กดบันทึกเพื่อยืนยันข้อมูลที่แก้ไข'}</p>
+                <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  disabled={isUpdating}
                   onClick={() => setSelectedOrder(null)}
                   className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium"
                 >
-                  ยกเลิก
+                  ปิด
                 </button>
+                {detailTab==='items'&&<button type="button" disabled={isUpdating} onClick={()=>selectDetailTab('status')} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800 sm:text-sm">สถานะและชำระเงิน →</button>}
                 <button
-                  type="submit"
+                  type="submit" form="order-update-form"
                   disabled={isUpdating || updateIssues.length>0}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isUpdating ? 'กำลังบันทึก...' : 'ยืนยันและบันทึก'}
                 </button>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
+        </FormPopup>
       )}
     </div>
   );
