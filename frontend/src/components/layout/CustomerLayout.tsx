@@ -26,10 +26,10 @@ export const CustomerLayout: React.FC = () => {
       <footer className={`${isHome ? 'block pb-28 pt-6 md:pb-6' : 'hidden py-6 md:block'} border-t border-emerald-100 bg-white`}>
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-5 px-6 text-xs text-slate-500 sm:flex-row sm:items-center">
           <p><strong className="text-emerald-800">HydroFarm</strong> · ผักสดและอุปกรณ์ปลูก</p>
-          {isHome && contactPhone && <a href={`tel:${contactPhone.replace(/[^\d+]/g, '')}`} className="inline-flex w-full items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-900 transition hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 sm:w-auto">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-700 text-white"><Phone className="h-5 w-5" aria-hidden="true" /></span>
-            <span><span className="block text-sm font-bold">ติดต่อฟาร์ม</span><span className="mt-0.5 block text-2xl font-extrabold tabular-nums">{contactPhone}</span></span>
-          </a>}
+          {isHome && contactPhone && <p className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <Phone className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+            <span>ติดต่อฟาร์ม:</span><span className="font-semibold tabular-nums text-emerald-800">{contactPhone}</span>
+          </p>}
           <p>จากฟาร์มถึงมือคุณ</p>
         </div>
       </footer>
