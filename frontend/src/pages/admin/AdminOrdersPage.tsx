@@ -34,8 +34,8 @@ const OrderSourceRounds: React.FC<{order: Order}> = ({order}) => {
     const source = item.round_items?.planting_rounds;
     if (source?.name) sources.set(source.id || item.round_items?.round_id || source.name, source.name);
   }
-  if (!sources.size) return <p className="break-words font-semibold text-slate-800">{order.planting_rounds?.name || 'ไม่พบชื่อรอบปลูก'}</p>;
-  return <ul className="space-y-1 font-semibold text-slate-800">{[...sources].map(([id,name]) => <li key={id} className="break-words">{name}</li>)}</ul>;
+  if (!sources.size) return <p className="break-words text-xs font-medium leading-relaxed text-slate-700">{order.planting_rounds?.name || 'ไม่พบชื่อรอบปลูก'}</p>;
+  return <ul className="space-y-0.5 text-xs font-medium leading-relaxed text-slate-700">{[...sources].map(([id,name]) => <li key={id} className="break-words">{name}</li>)}</ul>;
 };
 
 export const AdminOrdersPage: React.FC = () => {
