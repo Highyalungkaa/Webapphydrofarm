@@ -642,7 +642,7 @@ export const AdminRoundsPage: React.FC = () => {
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 text-sm"><p>ลูกค้าจอง {bookedTotal.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p><p className="mt-1 text-xs text-slate-500">{round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}</p></td>
+                      <td className="px-4 py-4 text-sm"><p>ลูกค้าจอง {bookedTotal.toLocaleString('th-TH',{maximumFractionDigits:2})} กก.</p></td>
 
                       {/* Actions */}
                       <td className="py-4 px-4 text-right whitespace-nowrap">

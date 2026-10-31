@@ -1,7 +1,5 @@
 import {harvestRange,priceLabel} from '../../lib/pooledBooking.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
-import {OrderLimitNotice} from '../../components/common/OrderLimitNotice.js';
-import { PurchaseLimitBadge } from '../../components/common/PurchaseLimitBadge.js';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -70,7 +68,6 @@ export const RoundDetailPage: React.FC = () => {
     const requestedQty = currentQty + delta;
     const maxAllowed = Math.min(
       item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg),
-      item.max_qty_per_order_kg ? Number(item.max_qty_per_order_kg) : Number.POSITIVE_INFINITY,
     );
     const newQty = Math.max(0, Math.round((currentQty === 0 && delta > 0 ? Math.min(delta, maxAllowed) : requestedQty) * 100) / 100);
 
@@ -79,9 +76,7 @@ export const RoundDetailPage: React.FC = () => {
         round_item_id: item.id,
         crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
         price_per_kg: Number(item.price_per_kg),
-        price_tiers:item.price_tiers,
-        max_qty_per_order_kg: item.max_qty_per_order_kg,
-        available_qty_kg: item.available_qty_kg ?? null,
+        price_tiers:item.price_tiers,        available_qty_kg: item.available_qty_kg ?? null,
       },
       newQty
     );
@@ -106,9 +101,7 @@ export const RoundDetailPage: React.FC = () => {
       round_item_id: item.id,
       crop_name: item.crop_name || item.crops?.name || 'ผักสลัด',
       price_per_kg: Number(item.price_per_kg),
-        price_tiers:item.price_tiers,
-      max_qty_per_order_kg: item.max_qty_per_order_kg,
-      available_qty_kg: item.available_qty_kg ?? null,
+        price_tiers:item.price_tiers,      available_qty_kg: item.available_qty_kg ?? null,
     }, parsed.qty);
     setQtyInputErrors((previous) => ({ ...previous, [item.id]: result.success ? undefined : result.message }));
     if (result.success) {
@@ -165,10 +158,10 @@ export const RoundDetailPage: React.FC = () => {
         </Link>
       </div>
 
-      <OrderLimitNotice remaining={round.order_limit_remaining}/>
+
       <CustomerPageHeader eyebrow="รอบเปิดจอง · ผักสดจากฟาร์ม" title={round.is_pooled?'เลือกผักที่ต้องการจอง':round.name} description="ดูชนิดผักที่พร้อมจอง เลือกจำนวน แล้วตรวจสอบรายการก่อนยืนยัน" icon={<Sprout className="h-8 w-8" />}>
         <span className="rounded-full bg-lime-300 px-3 py-1.5 text-xs font-extrabold text-emerald-950">{round.status === 'booking_open' ? 'เปิดรับจอง' : 'ปิดรับจอง'}</span>
-        {(round.purchase_limit_enabled||round.order_limit_remaining!=null) && <PurchaseLimitBadge/>}
+
         <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white">{round.items?.length || 0} ชนิดผัก</span>
       </CustomerPageHeader>
 
@@ -226,8 +219,7 @@ export const RoundDetailPage: React.FC = () => {
             const cropName = item.crop_name || item.crops?.name || 'ผักสลัด';
             const price = Number(item.price_per_kg);
             const available = item.available_qty_kg == null ? Infinity : Number(item.available_qty_kg);
-            const cropOrderLimitReached = item.order_limit_remaining === 0;
-            const isBookingClosed = round.order_limit_remaining===0 || cropOrderLimitReached || round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
+            const isBookingClosed = round.status !== 'booking_open' || new Date(round.booking_opens_at) > new Date();
             const isSoldOut = item.is_sold_out || available < 0.5;
 
             return (
@@ -245,15 +237,7 @@ export const RoundDetailPage: React.FC = () => {
                   </div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h3 className="text-lg font-black leading-snug text-slate-950">{cropName}</h3>
-                    {cropOrderLimitReached ? (
-                      <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                        ผักนี้รับออเดอร์ครบแล้ว
-                      </span>
-                    ) : isBookingClosed ? (
-                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                        ปิดรับจองแล้ว
-                      </span>
-                    ) : isSoldOut ? (
+                    {isSoldOut ? (
                       <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
                         เต็มแล้ว
                       </span>
@@ -270,16 +254,6 @@ export const RoundDetailPage: React.FC = () => {
                   </div>
 
                   {round.is_pooled?<div className="mb-3 space-y-1"><p className="font-extrabold text-emerald-800">คงเหลือ {formatKg(Number(item.available_qty_kg||0))} กก.</p><p className="text-xs text-slate-500">ผลผลิตประมาณ {formatKg(item.estimated_qty_kg)} กก.</p><p className="text-xs text-slate-500">เก็บ {harvestRange(item.harvest_start_date,item.harvest_end_date)}</p></div>:<EstimatedYield item={item} compact/>}
-                  {item.max_qty_per_order_kg != null && item.max_qty_per_order_kg < Number(item.available_qty_kg ?? Infinity) && (
-                    <p className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block mb-3 border border-amber-200">
-                      จำกัดสูงสุด {item.max_qty_per_order_kg} กก./ออเดอร์
-                    </p>
-                  )}
-                  {item.order_limit_remaining != null && item.order_limit_remaining > 0 && (
-                    <p className="mb-3 inline-block rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] text-orange-800">
-                      ผักนี้รับได้อีก {item.order_limit_remaining.toLocaleString()} ออเดอร์
-                    </p>
-                  )}
                 </div>
 
                 {/* Per-crop quantity step and controller */}
@@ -311,7 +285,7 @@ export const RoundDetailPage: React.FC = () => {
                           inputMode="decimal"
                           min="0.5"
                           step="0.01"
-                          max={Math.min(item.max_qty_per_order_kg??Infinity,available)}
+                          max={available}
                           placeholder="เช่น 2.5"
                           value={qtyInputs[item.id] ?? (inCartQty > 0 ? String(inCartQty) : '')}
                           onChange={(event) => {
@@ -335,7 +309,7 @@ export const RoundDetailPage: React.FC = () => {
 
                   {isBookingClosed ? (
                     <span className="text-xs text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                      {cropOrderLimitReached ? 'ผักนี้รับออเดอร์ครบแล้ว' : 'ปิดรับการจองแล้ว'}
+                      ปิดรับการจองแล้ว
                     </span>
                   ) : isSoldOut ? (
                     <span className="text-xs text-slate-400 font-medium">ไม่สามารถจองได้</span>
@@ -376,7 +350,7 @@ export const RoundDetailPage: React.FC = () => {
       </section>
 
       {/* Floating Bottom Cart Bar */}
-      {items.length > 0 && round.status === 'booking_open' && round.order_limit_remaining!==0 && (
+      {items.length > 0 && round.status === 'booking_open' && (
         <div className="fixed bottom-14 md:bottom-6 left-0 right-0 z-30 px-4 max-w-lg mx-auto">
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-emerald-800 bg-emerald-950 p-4 text-white shadow-2xl backdrop-blur-md">
             <div>

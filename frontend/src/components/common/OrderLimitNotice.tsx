@@ -1,2 +1,0 @@
-import React from 'react';
-export const OrderLimitNotice:React.FC<{remaining?:number|null}>=({remaining})=> remaining==null?null:<p role="status" className={`rounded-xl border px-4 py-3 text-sm font-bold ${remaining===0?'border-rose-200 bg-rose-50 text-rose-800':'border-orange-200 bg-orange-50 text-orange-900'}`}>{remaining===0?'รับออเดอร์ครบแล้วในรอบนี้':`สั่งได้อีก ${remaining.toLocaleString()} ออเดอร์`}</p>;

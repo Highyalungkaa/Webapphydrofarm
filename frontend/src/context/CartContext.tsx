@@ -72,12 +72,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (itemData.available_qty_kg != null && qty > itemData.available_qty_kg) {
       return { success:false,message:`ผัก ${itemData.crop_name} คงเหลือ ${itemData.available_qty_kg} กก. กรุณาลดจำนวน` };
     }
-    if (itemData.max_qty_per_order_kg != null && qty > itemData.max_qty_per_order_kg) {
-      return {
-        success: false,
-        message: `ผัก ${itemData.crop_name} จำกัดการจองสูงสุดไม่เกิน ${itemData.max_qty_per_order_kg} กก. ต่อออเดอร์`,
-      };
-    }
 
     setItems((prev) => {
       const index = prev.findIndex((i) => i.round_item_id === itemData.round_item_id);

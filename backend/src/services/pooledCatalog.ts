@@ -13,18 +13,15 @@ export function buildPooledCatalog(sources: any[]) {
     }
     item.estimated_qty_kg += Number(source.estimated_qty_kg);
     item.booked_qty_kg += Number(source.booked_qty_kg);
-    const capacity = source.order_limit_remaining===0 || source.round_order_limit_remaining===0 ? 0 :
-      Math.max(0,Math.min(Number(source.available_qty_kg),source.max_qty_per_order_kg==null?Infinity:Number(source.max_qty_per_order_kg)));
-    // available is physical reservable stock; max is the sum each source permits per order.
-    if (source.order_limit_remaining!==0 && source.round_order_limit_remaining!==0) item.available_qty_kg += Number(source.available_qty_kg);
+    const capacity = Math.max(0,Number(source.available_qty_kg));
+    item.available_qty_kg += capacity;
     item.price_tiers.push({available_qty_kg:capacity,price_per_kg:Number(source.price_per_kg),round_item_id:source.id,harvest_date:source.harvest_date});
     item.harvest_end_date=source.harvest_date;
-    item.has_purchase_limit ||= source.max_qty_per_order_kg!=null || source.order_limit_remaining!=null || source.round_order_limit_remaining!=null;
   }
   const items=[...grouped.values()].map(item=>{
     item.available_qty_kg=Math.round(item.available_qty_kg*100)/100;
-    item.max_qty_per_order_kg=Math.round(item.price_tiers.reduce((n:number,t:any)=>n+t.available_qty_kg,0)*100)/100;
-    item.is_sold_out=item.max_qty_per_order_kg<0.5;
+    item.max_qty_per_order_kg=null;
+    item.is_sold_out=item.available_qty_kg<0.5;
     item.price_per_kg=item.price_tiers.find((t:any)=>t.available_qty_kg>0)?.price_per_kg ?? item.price_per_kg;
     return item;
   });
@@ -32,7 +29,7 @@ export function buildPooledCatalog(sources: any[]) {
   return { id:'catalog',name:'ผักเปิดจอง',is_pooled:true,status:sources.length?'booking_open':'booking_closed',items,
     harvest_start_date:dates[0]||null,harvest_end_date:dates.at(-1)||null,fulfillment_date:dates.at(-1)||null,
     booking_opens_at:sorted.map(s=>s.booking_opens_at).filter(Boolean).sort()[0]||null,
-    purchase_limit_enabled:items.some(i=>i.has_purchase_limit),order_limit_remaining:null,
+    purchase_limit_enabled:false,order_limit_remaining:null,
     total_estimated_kg:items.reduce((n,i)=>n+i.estimated_qty_kg,0),
     total_available_kg:items.reduce((n,i)=>n+i.available_qty_kg,0),is_all_sold_out:items.every(i=>i.is_sold_out) };
 }

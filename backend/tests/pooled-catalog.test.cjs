@@ -9,10 +9,10 @@ test('same crop merges stock and harvest dates; price tiers retain FIFO source o
  const next=buildPooledCatalog([source({round_id:'r2',harvest_date:'2026-11-08',available_qty_kg:3})]);
  assert.equal(next.items[0].available_qty_kg,3);assert.equal(next.harvest_start_date,'2026-11-08');
 });
-test('source quotas stop only that source, kilogram caps combine per source per order',()=>{
+test('retired quotas and caps do not reduce physical stock offered to customers',()=>{
  const c=buildPooledCatalog([source({order_limit_remaining:0}),source({id:'b',max_qty_per_order_kg:2}),source({id:'c',max_qty_per_order_kg:1})]);
- assert.equal(c.items[0].available_qty_kg,16);assert.equal(c.items[0].max_qty_per_order_kg,3);
- assert.equal(c.items[0].price_tiers[0].available_qty_kg,0);assert.equal(c.purchase_limit_enabled,true);
+ assert.equal(c.items[0].available_qty_kg,24);assert.equal(c.items[0].max_qty_per_order_kg,null);
+ assert.equal(c.items[0].price_tiers[0].available_qty_kg,8);assert.equal(c.purchase_limit_enabled,false);
  assert.equal(buildPooledCatalog([source({available_qty_kg:0.3})]).is_all_sold_out,true);
 });
 test('round revenue and quantities contain only that round source lines, with discount retained',()=>{

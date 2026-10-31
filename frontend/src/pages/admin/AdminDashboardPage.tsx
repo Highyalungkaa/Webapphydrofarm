@@ -283,7 +283,7 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">ยอดจอง <strong>{bookedKg.toFixed(2)} กก.</strong><span className="ml-3 text-xs text-slate-500">{round.purchase_limit_enabled?'จำกัดจำนวนการซื้อ':'ไม่จำกัดจำนวนการซื้อ'}</span></div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">ยอดจอง <strong>{bookedKg.toFixed(2)} กก.</strong></div>
                 </div>
               );
             })}

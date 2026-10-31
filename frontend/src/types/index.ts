@@ -89,8 +89,6 @@ export interface RoundItem {
   shortage_qty_kg?: number;
   price_per_kg: number;
   growing_days?: number;
-  max_qty_per_order_kg?: number | null;
-  order_limit_remaining?: number | null;
   booked_qty_kg?: number;
   available_qty_kg?: number | null;
   is_sold_out?: boolean;
@@ -103,8 +101,6 @@ export interface PlantingRound {
   is_pooled?: boolean;
   harvest_start_date?: string | null;
   harvest_end_date?: string | null;
-  order_limit_remaining?: number | null;
-  purchase_limit_enabled?: boolean;
   id: string;
   name: string;
   planted_at: string;
@@ -224,7 +220,6 @@ export interface CartItem {
   crop_name: string;
   price_per_kg: number;
   qty_kg: number;
-  max_qty_per_order_kg?: number | null;
   available_qty_kg: number | null;
 }
 

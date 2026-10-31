@@ -1,6 +1,5 @@
 import { RoundWeightSummary } from '../../components/admin/RoundWeightSummary.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
-import { PurchaseLimitPanel } from '../../components/admin/PurchaseLimitPanel.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
 import { plotSupportsCrop } from '../../lib/plotCrops.js';
@@ -193,11 +192,6 @@ export const AdminRoundDetailPage: React.FC = () => {
     if (id) loadRound();
   }, [id]);
 
-  useEffect(() => {
-    if (!loading && round && window.location.hash === '#purchase-limits') {
-      document.getElementById('purchase-limits')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [loading, round?.id]);
 
   const loadRound = async () => {
     try {
@@ -846,7 +840,6 @@ export const AdminRoundDetailPage: React.FC = () => {
         <p className="text-sm text-slate-500">บันทึกผักเสียและกำหนดจำนวนที่ลูกค้าแต่ละคนจองได้</p>
       </div>
       <PlantLossPanel roundId={round.id} onChanged={loadRound} />
-      <PurchaseLimitPanel round={round} onChanged={loadRound} />
     </div>
   );
 };

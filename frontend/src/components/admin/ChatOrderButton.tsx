@@ -1,4 +1,3 @@
-import {OrderLimitNotice} from '../common/OrderLimitNotice.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquarePlus, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
@@ -18,7 +17,6 @@ export const ChatOrderButton: React.FC<{ roundId?: string; onCreated: () => Prom
 
 const ChatOrderForm: React.FC<{initialRoundId?: string; onClose: () => void; onCreated: () => Promise<void>}> = ({initialRoundId, onClose, onCreated}) => {
   const [rounds, setRounds] = useState<PlantingRound[]>([]), [origins, setOrigins] = useState<string[]>([]);
-  const [remainingOrders,setRemainingOrders]=useState<number|null>(null);
   const [roundId, setRoundId] = useState(initialRoundId || ''), [items, setItems] = useState<RoundItem[]>([]);
   const [name, setName] = useState(''), [phone, setPhone] = useState(''), [orderOrigin, setOrderOrigin] = useState('');
   const [method, setMethod] = useState<'pickup'|'delivery'>('pickup'), [address, setAddress] = useState('');
@@ -33,19 +31,19 @@ const ChatOrderForm: React.FC<{initialRoundId?: string; onClose: () => void; onC
     api.get<string[]>('/admin/orders/chat-origins').then(values => {if(active)setOrigins(values);}).catch(() => {});
     return () => {active=false;}; }, []);
   useEffect(() => {
-    let active=true; setItems([]);setQuantities({});setAccepted(false);setRemainingOrders(null);
+    let active=true; setItems([]);setQuantities({});setAccepted(false);
     if(!roundId){setItemsLoading(false);return;}
     setItemsLoading(true);
-    api.get<PlantingRound>(`/admin/rounds/${roundId}`).then(r => {if(active){if(!isOpen(r))throw new Error('รอบนี้ยังไม่เปิดหรือปิดรับจองแล้ว');setRemainingOrders(r.order_limit_remaining??null);setItems((r.items || r.round_items || []).map(i=>({...i,max_qty_per_order_kg:r.purchase_limit_enabled?i.max_qty_per_order_kg:null})));}})
+    api.get<PlantingRound>(`/admin/rounds/${roundId}`).then(r => {if(active){if(!isOpen(r))throw new Error('รอบนี้ยังไม่เปิดหรือปิดรับจองแล้ว');setItems(r.items || r.round_items || []);}})
       .catch(e => {if(active)setError(e.message);}).finally(() => {if(active)setItemsLoading(false);});
     return () => {active=false;};
   }, [roundId]);
   const selected = items.filter(i => quantities[i.id] !== undefined && quantities[i.id] !== '');
   const totalKg = selected.reduce((s,i)=>s+Number(quantities[i.id] || 0),0);
   const total = selected.reduce((s,i)=>s+Number(quantities[i.id] || 0)*Number(i.price_per_kg),0);
-  const invalidQty = selected.some(i => {const q=Number(quantities[i.id]);return !Number.isFinite(q)||q<0.5||i.order_limit_remaining===0||(i.max_qty_per_order_kg!=null && q>Number(i.max_qty_per_order_kg))||Math.abs(q*100-Math.round(q*100))>0.00001;});
+  const invalidQty = selected.some(i => {const q=Number(quantities[i.id]);return !Number.isFinite(q)||q<0.5||Math.abs(q*100-Math.round(q*100))>0.00001;});
   const submit = async (event:React.FormEvent) => {
-    event.preventDefault(); if(saving || success || remainingOrders===0 || !accepted || invalidQty || !selected.length)return;
+    event.preventDefault(); if(saving || success || !accepted || invalidQty || !selected.length)return;
     setSaving(true);setError('');
     const body={round_id:roundId,customer_id:null,customer_name:name.trim(),contact_phone:phone.trim(),order_origin:orderOrigin.trim(),fulfillment_method:method,
       delivery_address:method==='delivery'?address.trim():'',source_reference:reference.trim(),note:note.trim(),accepted_substitution_terms:true,
@@ -66,15 +64,15 @@ const ChatOrderForm: React.FC<{initialRoundId?: string; onClose: () => void; onC
         {error&&<p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
         {loading?<p className="text-sm text-slate-500">กำลังโหลดข้อมูล...</p>:<fieldset disabled={saving} className="space-y-5">
           <section className="space-y-3"><h3 className="font-bold text-slate-800">1. เลือกรอบและผัก</h3><label className="block text-sm">รอบเปิดจอง<select required className={field} value={roundId} onChange={e=>{setRoundId(e.target.value);setError('');}}><option value="">เลือกรอบที่เปิดรับจอง</option>{rounds.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-            <OrderLimitNotice remaining={remainingOrders}/>{!rounds.length&&<p className="text-sm text-amber-800">ยังไม่มีรอบที่เปิดรับจอง กรุณาเปิดรอบจองในหน้ารอบปลูกก่อน</p>}
-            {itemsLoading?<p className="text-sm text-slate-500">กำลังโหลดรายการผัก...</p>:items.map(i=>{const max=i.max_qty_per_order_kg==null?undefined:Number(i.max_qty_per_order_kg);return <div key={i.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><strong className="text-sm">{i.crops?.name||i.crop_name||'ผัก'}</strong><p className="mt-1 text-xs text-slate-500">{number(Number(i.price_per_kg))} บาท/กก.</p>{i.max_qty_per_order_kg!=null&&<p className="text-xs text-slate-500">สูงสุด {number(Number(max))} กก./ออเดอร์</p>}{i.order_limit_remaining!=null&&<p className="text-xs font-semibold text-orange-800">{i.order_limit_remaining===0?'รับออเดอร์ครบแล้ว':'รับได้อีก '+i.order_limit_remaining+' ออเดอร์'}</p>}</div><label className="w-28 shrink-0 text-xs">จำนวน (กก.)<input aria-label={`จำนวน ${i.crops?.name||i.crop_name||'ผัก'} (กก.)`} type="number" disabled={i.order_limit_remaining===0} min="0.5" max={max} step="0.01" placeholder="ไม่เลือก" value={quantities[i.id]??''} onChange={e=>setQuantities(q=>({...q,[i.id]:e.target.value}))} className={field}/></label></div>;})}
+            {!rounds.length&&<p className="text-sm text-amber-800">ยังไม่มีรอบที่เปิดรับจอง กรุณาเปิดรอบจองในหน้ารอบปลูกก่อน</p>}
+            {itemsLoading?<p className="text-sm text-slate-500">กำลังโหลดรายการผัก...</p>:items.map(i=>{return <div key={i.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"><div><strong className="text-sm">{i.crops?.name||i.crop_name||'ผัก'}</strong><p className="mt-1 text-xs text-slate-500">{number(Number(i.price_per_kg))} บาท/กก.</p></div><label className="w-28 shrink-0 text-xs">จำนวน (กก.)<input aria-label={`จำนวน ${i.crops?.name||i.crop_name||'ผัก'} (กก.)`} type="number" min="0.5" step="0.01" placeholder="ไม่เลือก" value={quantities[i.id]??''} onChange={e=>setQuantities(q=>({...q,[i.id]:e.target.value}))} className={field}/></label></div>;})}
             {invalidQty&&<p role="alert" className="text-sm text-rose-700">กรอกอย่างน้อย 0.5 กก. และเลือกเฉพาะผักที่ยังรับออเดอร์ได้</p>}
           </section>
           <section className="space-y-3"><h3 className="font-bold text-slate-800">2. ข้อมูลลูกค้า</h3><label className="block text-sm">ลูกค้าสั่งมาจากช่องทางไหน (ถ้ามี)<input list="chat-order-origins" maxLength={100} placeholder="พิมพ์ช่องทาง หรือเลือกที่เคยบันทึก" value={orderOrigin} onChange={e=>setOrderOrigin(e.target.value)} className={field}/><datalist id="chat-order-origins">{origins.map(origin=><option key={origin} value={origin}/>)}</datalist></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">ชื่อลูกค้า<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)} className={field}/></label><label className="text-sm">เบอร์โทรศัพท์<input required type="tel" minLength={9} maxLength={30} value={phone} onChange={e=>setPhone(e.target.value)} className={field}/></label></div></section>
           <section className="space-y-3"><h3 className="font-bold text-slate-800">3. วิธีรับผักและข้อมูลออเดอร์</h3><label className="block text-sm">วิธีรับผัก<select className={field} value={method} onChange={e=>setMethod(e.target.value as 'pickup'|'delivery')}><option value="pickup">รับเองที่ฟาร์ม</option><option value="delivery">จัดส่ง</option></select></label>{method==='delivery'&&<label className="block text-sm">ที่อยู่จัดส่ง<textarea required maxLength={2000} className={field} value={address} onChange={e=>setAddress(e.target.value)}/></label>}<label className="block text-sm">ชื่อบัญชีที่ติดต่อ (ถ้ามี)<input maxLength={1000} className={field} value={reference} onChange={e=>setReference(e.target.value)} /></label><label className="block text-sm">หมายเหตุ (ถ้ามี)<textarea maxLength={2000} className={field} value={note} onChange={e=>setNote(e.target.value)}/></label></section>
           <div className="rounded-xl bg-emerald-50 p-4"><div className="flex justify-between font-bold text-emerald-900"><span>รวม {number(totalKg)} กก.</span><span>{number(total)} บาท</span></div><p className="mt-2 text-xs text-emerald-800">บันทึกแล้วจะยืนยันออเดอร์ทันที สถานะชำระเงินเริ่มต้นเป็น “ยังไม่ชำระเงิน”</p></div>
           <label className="flex items-start gap-2 text-sm text-slate-700"><input required type="checkbox" className="mt-1" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/>ตรวจสอบรายการกับลูกค้าและแจ้งเงื่อนไขการทดแทนผักหากผลผลิตไม่เพียงพอแล้ว</label>
-          <div className="flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm">ยกเลิก</button><button type="submit" disabled={saving||itemsLoading||remainingOrders===0||!selected.length||invalidQty||!accepted||!rounds.some(r=>r.id===roundId)} className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40">{saving?'กำลังบันทึก...':'ยืนยันและเพิ่มออเดอร์'}</button></div>
+          <div className="flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-xl border px-4 py-2.5 text-sm">ยกเลิก</button><button type="submit" disabled={saving||itemsLoading||!selected.length||invalidQty||!accepted||!rounds.some(r=>r.id===roundId)} className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40">{saving?'กำลังบันทึก...':'ยืนยันและเพิ่มออเดอร์'}</button></div>
         </fieldset>}
       </form>}
     </div>

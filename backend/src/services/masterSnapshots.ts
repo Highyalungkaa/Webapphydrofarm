@@ -1,6 +1,9 @@
 // Rebuild a crop display object from a completed round's saved values.
 export function restoreCropSnapshots(value: any): any {
   if (!value || typeof value !== 'object') return value;
+  if (Object.prototype.hasOwnProperty.call(value,'purchase_limit_enabled')) value.purchase_limit_enabled=false;
+  if (Object.prototype.hasOwnProperty.call(value,'order_limit_remaining')) value.order_limit_remaining=null;
+  if (Object.prototype.hasOwnProperty.call(value,'max_qty_per_order_kg')) value.max_qty_per_order_kg=null;
   if (Array.isArray(value)) { value.forEach(restoreCropSnapshots); return value; }
   if (value.crop_name_snapshot && !value.crops) {
     value.crops = {

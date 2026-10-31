@@ -128,4 +128,22 @@ test('pooled crop stock and FIFO orders',async t=>{
     await db.query('UPDATE crops SET is_active=false WHERE id=$1',[x.crop]);await assert.rejects(book(x.crop,1),/สต๊อก/);
   });
 
+  await t.test('retired limits cannot block new orders, while physical stock is still protected',async()=>{
+    const x=await setup();
+    await db.query('UPDATE planting_rounds SET purchase_limit_enabled=true,order_limit_remaining=0 WHERE id IN($1,$2)',[x.a,x.b]);
+    await db.query('UPDATE round_items SET max_qty_per_order_kg=0.5,order_limit_remaining=0 WHERE id IN($1,$2)',[x.ia,x.ib]);
+    await db.exec(migration('052_remove_booking_limits.sql'));await db.exec(migration('052_remove_booking_limits.sql'));
+    const o=await book(x.crop,11);assert.ok(o.order_id);
+    await book(x.crop,1);await book(x.crop,1);
+    await assert.rejects(book(x.crop,8),/สต๊อก/);
+    await db.query('UPDATE planting_rounds SET purchase_limit_enabled=true,order_limit_remaining=0 WHERE id=$1',[x.a]);
+    await db.query('UPDATE round_items SET max_qty_per_order_kg=0.5,order_limit_remaining=0 WHERE id=$1',[x.ia]);
+    const r=(await db.query('SELECT purchase_limit_enabled,order_limit_remaining FROM planting_rounds WHERE id=$1',[x.a])).rows[0];
+    assert.equal(r.purchase_limit_enabled,false);assert.equal(r.order_limit_remaining,null);
+    const i=(await db.query('SELECT max_qty_per_order_kg,order_limit_remaining FROM round_items WHERE id=$1',[x.ia])).rows[0];
+    assert.equal(i.max_qty_per_order_kg,null);assert.equal(i.order_limit_remaining,null);
+    await db.query("UPDATE orders SET status='cancelled' WHERE id=$1",[o.order_id]);
+    await book(x.crop,10);
+  });
+
 });
