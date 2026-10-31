@@ -306,7 +306,8 @@ const SubstituteBar: React.FC<{ crop: SubstituteReport; maxQty: number }> = ({ c
 
 const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const data = crops.slice(0, 8);
-  const width = Math.max(760, data.length * 112 + 70);
+  const labelWidth = Math.max(64, ...data.flatMap(crop => [crop.bookedKg, crop.soldKg]).map(value => numberFormat.format(value).length * 10 + 16));
+  const width = Math.max(760, data.length * (labelWidth * 2 + 24) + 70);
   const height = 300;
   const left = 52;
   const right = 18;
@@ -319,7 +320,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
   const axisMax = step * 4;
   const groupWidth = plotWidth / Math.max(1, data.length);
   const barWidth = Math.min(24, groupWidth * 0.27);
-  const gap = Math.max(4, barWidth * 0.22);
+  const gap = labelWidth - barWidth;
   const y = (value: number) => top + plotHeight - (value / axisMax) * plotHeight;
 
   return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="กราฟแท่งเปรียบเทียบยอดจองและยอดส่งมอบจริงของแต่ละชนิดผัก" style={{minWidth:width}} className="w-full overflow-visible">
@@ -338,9 +339,7 @@ const CropBarChart: React.FC<{ crops: CropReport[] }> = ({ crops }) => {
       const bookedHeight = Math.max(crop.bookedKg > 0 ? 2 : 0, crop.bookedKg / axisMax * plotHeight);
       const soldHeight = Math.max(crop.soldKg > 0 ? 2 : 0, crop.soldKg / axisMax * plotHeight);
       const soldLabelY = y(crop.soldKg) - 10;
-      const bookedLabelY = Math.abs(y(crop.bookedKg) - y(crop.soldKg)) < 24
-        ? Math.min(y(crop.bookedKg) - 10, soldLabelY - 24)
-        : y(crop.bookedKg) - 10;
+      const bookedLabelY = y(crop.bookedKg) - 10;
       return <g key={crop.name}>
         <title>{crop.name}: จอง {kg(crop.bookedKg)}, ส่งจริง {kg(crop.soldKg)}</title>
         <rect x={bookedX} y={y(crop.bookedKg)} width={barWidth} height={bookedHeight} rx="6" fill="#10b981" />
