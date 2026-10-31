@@ -143,15 +143,19 @@ for (const [name,extra] of [
   ['completed round',{oldPlot:{id:'plot',...body},rounds:[{status:'completed',notes:'{}',round_items:[{crop_id:ids[0],plot_ids:['plot']}]}]}],
   ['JSON allocation',{oldPlot:{id:'plot',...body},rounds:[{status:'completed',notes:JSON.stringify({cropPlotAllocations:{[ids[0]]:{plot:100}}}),round_items:[{crop_id:ids[0]}]}]}],
 ]) test('deleting a plot preserves '+name,async()=>{
-  const app=setup(extra);const res=await app.request('delete');assert.equal(res.statusCode,409);assert.match(res.body.error,/เลิกใช้งาน/);assert.equal(app.saved(),undefined);
+  const app=setup(extra);const res=await app.request('delete');assert.equal(res.statusCode,200);assert.equal(app.saved().deleted,true);
 });
 test('an unused plot can be deleted, while a missing plot is reported honestly',async()=>{
   const app=setup({oldPlot:{id:'plot',...body}});assert.equal((await app.request('delete')).statusCode,200);assert.equal(app.saved().deleted,true);
   assert.equal((await setup().request('delete')).statusCode,404);
 });
+test('deleting a plot in an active round requires ending that round',async()=>{
+  const app=setup({oldPlot:{id:'plot',...body},rounds:[{status:'growing',notes:'{}',round_items:[{crop_id:ids[0],plot_ids:['plot']}]}]});
+  const res=await app.request('delete');assert.equal(res.statusCode,409);assert.match(res.body.error,/สิ้นสุดรอบ/);assert.equal(app.saved(),undefined);
+});
 test('foreign-key rejection gives a user-facing next step without SQL details',async()=>{
   const app=setup({oldPlot:{id:'plot',...body},writeError:{code:'23503',message:'plant_losses_plot_id_fkey'}});const res=await app.request('delete');
-  assert.equal(res.statusCode,409);assert.match(res.body.error,/เลิกใช้งาน/);assert.doesNotMatch(res.body.error,/fkey|constraint/);
+  assert.equal(res.statusCode,503);assert.match(res.body.error,/migration 049/);assert.doesNotMatch(res.body.error,/fkey|constraint/);
 });
 test('retiring a plot retains its id and history and can be reversed',async()=>{
   const app=setup({oldPlot:{id:'plot',...body,plant_losses:[{count:1}]}});

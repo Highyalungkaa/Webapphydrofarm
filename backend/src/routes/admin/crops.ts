@@ -224,8 +224,11 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     const { error } = await db.from('crops').delete().eq('id', id);
 
     if (error) {
-      res.status(400).json({
-        error: 'ไม่สามารถลบชนิดผักนี้ได้ เนื่องจากมีรอบการปลูกหรือแปลงปลูกที่อ้างอิงอยู่ (แนะนำให้เลือก "ปิดใช้งาน" แทน)',
+      res.status(error.message?.includes('ยังอยู่ในรอบปลูก') ? 409 : error.code === '23503' ? 503 : 400).json({
+        error: error.message?.includes('ยังอยู่ในรอบปลูก')
+          ? 'ชนิดผักนี้ยังอยู่ในรอบปลูกที่ไม่สิ้นสุด กรุณาสิ้นสุดรอบก่อนลบ'
+          : error.code === '23503' ? 'ฐานข้อมูลยังไม่รองรับการลบชนิดผักที่มีประวัติ กรุณารัน migration 049'
+          : 'ลบชนิดผักไม่สำเร็จ กรุณาลองใหม่',
       });
       return;
     }

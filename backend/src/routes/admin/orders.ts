@@ -95,8 +95,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           substitute_total_cost,
           substitute_note,
           round_items (
-            id,
-            round_id,
+            *,
             planting_rounds(id,name),
             crops (
               id,
@@ -195,8 +194,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           substitute_total_cost,
           substitute_note,
           round_items (
-            id,
-            round_id,
+            *,
             planting_rounds(id,name),
             crop_id,
             crops (

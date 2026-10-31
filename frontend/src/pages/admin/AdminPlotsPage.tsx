@@ -166,7 +166,7 @@ export const AdminPlotsPage: React.FC = () => {
         is_active: false, notes: removalPlot.notes,
       });
       setRemovalPlot(null);
-      setNotice(permanent ? 'ลบแปลงที่ยังไม่เคยใช้งานแล้ว' : 'เลิกใช้งานแปลงแล้ว ประวัติยังอยู่ครบ ดูหรือเปิดใช้งานอีกครั้งได้จากตัวกรอง “เลิกใช้งานแล้ว”');
+      setNotice(permanent ? 'ลบแปลงแล้ว ประวัติรอบปลูกและผักเสียหายยังอยู่' : 'เลิกใช้งานแปลงแล้ว ประวัติยังอยู่ครบ ดูหรือเปิดใช้งานอีกครั้งได้จากตัวกรอง “เลิกใช้งานแล้ว”');
       await loadData();
     } catch (err: any) { setRemovalError(err.message || 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่'); }
     finally { setRemoving(false); }
@@ -326,13 +326,13 @@ export const AdminPlotsPage: React.FC = () => {
           <div role="dialog" aria-modal="true" aria-labelledby="remove-plot-title" className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
             <h2 id="remove-plot-title" className="text-lg font-bold text-slate-900">จัดการแปลง {removalPlot.name}</h2>
             <p className="text-sm leading-relaxed text-slate-600">เลิกใช้งานแปลงเพื่อไม่ให้เลือกใช้ในรอบปลูกใหม่ ประวัติรอบปลูกและผักเสียหายจะยังอยู่ และเปิดใช้งานอีกครั้งได้</p>
-            {isPlotInUse(removalPlot) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">แปลงนี้ยังมีรอบปลูกดำเนินอยู่ การเลิกใช้งานจะหยุดการเลือกใช้ในรอบใหม่ ส่วนรอบเดิมยังคงอยู่ กรุณาจัดการรอบเดิมให้เสร็จตามปกติ</p>}
-            {removalPlot.has_history && <p className="text-sm text-slate-600">แปลงนี้มีประวัติแล้ว จึงเก็บแปลงไว้สำหรับดูย้อนหลัง ไม่ต้องลบประวัติผักเสียหาย</p>}
-            {!removalPlot.has_history && !isPlotInUse(removalPlot) && <p className="text-sm text-slate-500">ถ้าสร้างแปลงผิดและยังไม่เคยใช้งาน สามารถเลือกลบถาวรได้ ระบบจะตรวจประวัติอีกครั้งก่อนลบ</p>}
+            {isPlotInUse(removalPlot) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">แปลงนี้ยังมีรอบปลูกดำเนินอยู่ กรุณาสิ้นสุดรอบก่อนลบถาวร หรือเลิกใช้งานเพื่อหยุดการเลือกใช้ในรอบใหม่</p>}
+            {removalPlot.has_history && <p className="text-sm text-slate-600">แปลงนี้มีประวัติ เมื่อลบถาวร ระบบยังเก็บชื่อแปลงในประวัติการปลูกและผักเสียหาย</p>}
+            {!removalPlot.has_history && <p className="text-sm text-slate-500">การลบถาวรจะนำแปลงออกจากรายการจัดการ</p>}
             {removalError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{removalError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <button autoFocus disabled={removing} onClick={() => setRemovalPlot(null)} className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50">ยกเลิก</button>
-              {!removalPlot.has_history && !isPlotInUse(removalPlot) && <button disabled={removing} onClick={() => removePlot(true)} className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">ลบถาวร</button>}
+              {!isPlotInUse(removalPlot) && <button disabled={removing} onClick={() => removePlot(true)} className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">ลบถาวร</button>}
               {removalPlot.is_active && <button disabled={removing} onClick={() => removePlot(false)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{removing ? 'กำลังบันทึก...' : 'เลิกใช้งานแปลง'}</button>}
             </div>
           </div>

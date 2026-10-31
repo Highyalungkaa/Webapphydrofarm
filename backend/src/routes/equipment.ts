@@ -208,6 +208,22 @@ router.put('/admin/products/:id', async (req, res) => {
   res.json(data);
 });
 
+router.delete('/admin/products/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const { data: oldProduct, error: lookupError } = await supabaseAdmin.from('equipment_products').select('*').eq('id', req.params.id).maybeSingle();
+  if (lookupError) { res.status(500).json({ error: 'ตรวจสอบสินค้าไม่สำเร็จ กรุณาลองใหม่' }); return; }
+  if (!oldProduct) { res.status(404).json({ error: 'ไม่พบสินค้า' }); return; }
+  const { error } = await supabaseAdmin.from('equipment_products').delete().eq('id', req.params.id);
+  if (error) {
+    res.status(error.message?.includes('คำสั่งซื้อที่ไม่สิ้นสุด') ? 409 : error.code === '23503' ? 503 : 400).json({
+      error: error.message?.includes('คำสั่งซื้อที่ไม่สิ้นสุด')
+        ? 'สินค้านี้อยู่ในคำสั่งซื้อที่ยังไม่สิ้นสุด กรุณาจัดการคำสั่งซื้อก่อนลบ'
+        : error.code === '23503' ? 'ฐานข้อมูลยังไม่รองรับการลบสินค้าที่มีประวัติ กรุณารัน migration 049'
+        : 'ลบสินค้าไม่สำเร็จ กรุณาลองใหม่',
+    }); return;
+  }
+  res.json({ message: 'ลบสินค้าแล้ว ประวัติคำสั่งซื้อและสต็อกยังอยู่' });
+});
+
 router.post('/admin/products/:id/stock', async (req: AuthenticatedRequest, res: Response) => {
   const parsed = z.object({ quantity_change: z.number().int().refine((v) => v !== 0), transaction_type: z.enum(['restock', 'adjustment']), note: z.string().trim().min(1) }).refine((value) => value.transaction_type !== 'restock' || value.quantity_change > 0).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'ระบุจำนวนปรับสต็อกและเหตุผลให้ถูกต้อง' }); return; }
@@ -314,7 +330,7 @@ router.get('/admin/reports/export', async (req, res) => {
         .order('name').order('id').range(start, end)),
       readAllEquipmentRows(async (start, end) => {
         let query = supabaseAdmin.from('equipment_inventory_transactions')
-          .select('id,product_id,order_id,transaction_type,quantity_change,stock_after,note,created_at')
+          .select('*')
           .order('created_at', { ascending: false }).order('id', { ascending: false })
           .range(start, end);
         if (cutoff) query = query.gte('created_at', cutoff);

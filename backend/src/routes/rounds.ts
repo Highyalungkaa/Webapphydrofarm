@@ -65,7 +65,10 @@ async function enrichRoundItems(roundId: string, limited = false) {
     const available=Math.max(0,Math.round((estimated-booked_qty_kg)*100)/100);
     return {
       id:item.id,round_id:item.round_id,crop_id:item.crop_id,price_per_kg:item.price_per_kg,crops:item.crops,
-      crop_name:item.crops?.name || 'ผัก',booked_qty_kg,
+      crop_id_snapshot:item.crop_id_snapshot,crop_name_snapshot:item.crop_name_snapshot,
+      crop_image_snapshot:item.crop_image_snapshot,crop_slots_per_kg_snapshot:item.crop_slots_per_kg_snapshot,
+      crop_growing_days_snapshot:item.crop_growing_days_snapshot,
+      crop_name:item.crops?.name || item.crop_name_snapshot || 'ผัก',booked_qty_kg,
       plant_count:item.plant_count,planting_plants_per_kg:item.planting_plants_per_kg,
       estimated_qty_kg:item.planting_plants_per_kg!=null?item.estimated_qty_kg:null,
       max_qty_per_order_kg:limited ? item.max_qty_per_order_kg : null,

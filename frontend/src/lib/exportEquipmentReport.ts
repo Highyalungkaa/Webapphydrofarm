@@ -11,7 +11,9 @@ type ExportOrder = EquipmentOrder & {
 
 type StockTransaction = {
   id: string;
-  product_id: string;
+  product_id: string | null;
+  product_name?: string | null;
+  product_sku?: string | null;
   order_id?: string | null;
   transaction_type: string;
   quantity_change: number;
@@ -270,9 +272,9 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
     { header: 'หมายเหตุ', key: 'note', width: 48 },
   ]);
   [...data.transactions].sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach((transaction) => {
-    const product = productById.get(transaction.product_id);
+    const product = transaction.product_id ? productById.get(transaction.product_id) : undefined;
     stock.sheet.addRow({
-      date: bangkokDate(transaction.created_at), sku: product?.sku || '-', product: product?.name || '-',
+      date: bangkokDate(transaction.created_at), sku: product?.sku || transaction.product_sku || '-', product: product?.name || transaction.product_name || '-',
       type: movementLabels[transaction.transaction_type] || transaction.transaction_type,
       change: number(transaction.quantity_change), after: number(transaction.stock_after),
       orderId: transaction.order_id || '-', note: transaction.note || '-',

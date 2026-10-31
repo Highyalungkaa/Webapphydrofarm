@@ -1,0 +1,55 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto'),{PGlite}=require('@electric-sql/pglite');
+const migration=fs.readFileSync(path.resolve(__dirname,'../../supabase/migrations/049_delete_used_master_records.sql'),'utf8');
+test('used master records can be deleted after workflows finish while transaction snapshots survive',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;
+ CREATE TABLE crops(id UUID PRIMARY KEY,name TEXT,image_url TEXT,slots_per_kg NUMERIC,growing_days INTEGER);
+ CREATE TABLE plots(id UUID PRIMARY KEY,name TEXT,crop_id UUID REFERENCES crops(id) ON DELETE SET NULL,crop_ids UUID[],slot_capacity INTEGER);
+ CREATE TABLE planting_rounds(id UUID PRIMARY KEY,status TEXT,completed_date DATE,notes TEXT);
+ CREATE TABLE round_items(id UUID PRIMARY KEY,round_id UUID REFERENCES planting_rounds(id),crop_id UUID NOT NULL REFERENCES crops(id) ON DELETE RESTRICT,plot_ids UUID[],plant_count INTEGER DEFAULT 10,estimated_qty_kg NUMERIC DEFAULT 2,planting_plants_per_kg NUMERIC DEFAULT 5,loss_baseline_plant_count INTEGER);
+ CREATE TABLE plant_losses(id UUID PRIMARY KEY,plot_id UUID REFERENCES plots(id) ON DELETE RESTRICT,plot_name TEXT);
+ CREATE TABLE equipment_products(id UUID PRIMARY KEY,name TEXT,sku TEXT);
+ CREATE TABLE equipment_orders(id UUID PRIMARY KEY,status TEXT);
+ CREATE TABLE equipment_order_items(id UUID PRIMARY KEY,order_id UUID REFERENCES equipment_orders(id),product_id UUID REFERENCES equipment_products(id) ON DELETE SET NULL,product_name TEXT,sku TEXT);
+ CREATE TABLE equipment_inventory_transactions(id UUID PRIMARY KEY,product_id UUID NOT NULL REFERENCES equipment_products(id) ON DELETE RESTRICT,product_name TEXT,product_sku TEXT);`);
+ await db.exec(`CREATE FUNCTION guard_active_plot() RETURNS TRIGGER LANGUAGE plpgsql AS $$BEGIN
+   IF EXISTS(SELECT 1 FROM round_items i JOIN planting_rounds r ON r.id=i.round_id
+     WHERE OLD.id=ANY(i.plot_ids) AND r.status<>'completed') THEN RAISE EXCEPTION 'ยังใช้งาน'; END IF;
+   RETURN OLD; END$$;
+   CREATE TRIGGER guard_active_plot BEFORE DELETE ON plots FOR EACH ROW EXECUTE FUNCTION guard_active_plot();`);
+ const [crop,plot,round,item,loss,product,order,orderItem,tx]=Array.from({length:9},randomUUID);
+ await db.query("INSERT INTO crops VALUES($1,'Oak',NULL,5,30)",[crop]);
+ await db.query("INSERT INTO plots VALUES($1,'Plot A',$2,ARRAY[$2::UUID],100)",[plot,crop]);
+ await db.query("INSERT INTO planting_rounds VALUES($1,'growing',NULL,$2)",[round,JSON.stringify({cropPlotIds:{[crop]:[plot]}})]);
+ await db.query('INSERT INTO round_items VALUES($1,$2,$3,ARRAY[$4::UUID])',[item,round,crop,plot]);
+ await db.query('INSERT INTO plant_losses VALUES($1,$2,NULL)',[loss,plot]);
+ await db.query("INSERT INTO equipment_products VALUES($1,'Pump','P-1')",[product]);
+ await db.query("INSERT INTO equipment_orders VALUES($1,'processing')",[order]);
+ await db.query("INSERT INTO equipment_order_items VALUES($1,$2,$3,'Pump','P-1')",[orderItem,order,product]);
+ await db.query('INSERT INTO equipment_inventory_transactions(id,product_id) VALUES($1,$2)',[tx,product]);
+ const lossesSql=fs.readFileSync(path.resolve(__dirname,'../../supabase/migrations/031_plant_loss_history.sql'),'utf8');
+ const weightSql=fs.readFileSync(path.resolve(__dirname,'../../supabase/migrations/038_projected_crop_weight.sql'),'utf8');
+ await db.exec(lossesSql.slice(lossesSql.indexOf('CREATE OR REPLACE FUNCTION public.protect_plant_loss_baseline()'),lossesSql.indexOf('DROP TRIGGER IF EXISTS protect_plant_loss_baseline')));
+ await db.exec('CREATE TRIGGER protect_plant_loss_baseline BEFORE UPDATE ON round_items FOR EACH ROW EXECUTE FUNCTION protect_plant_loss_baseline()');
+ await db.exec(weightSql.slice(weightSql.indexOf('CREATE OR REPLACE FUNCTION public.snapshot_projected_crop_weight()'),weightSql.indexOf('DROP TRIGGER IF EXISTS snapshot_projected_crop_weight')));
+ await db.exec('CREATE TRIGGER snapshot_projected_crop_weight BEFORE UPDATE OF plant_count,crop_id ON round_items FOR EACH ROW EXECUTE FUNCTION snapshot_projected_crop_weight()');
+ await db.query('UPDATE round_items SET loss_baseline_plant_count=10 WHERE id=$1',[item]);
+ await db.exec(migration);await db.exec(migration);
+ for(const [table,id] of [['crops',crop],['plots',plot],['equipment_products',product]])
+  await assert.rejects(db.query('DELETE FROM '+table+' WHERE id=$1',[id]),/สิ้นสุด|ยังใช้งาน/);
+ assert.equal((await db.query('SELECT count(*)::INTEGER AS n FROM plant_losses')).rows[0].n,1);
+ await db.query("UPDATE planting_rounds SET status='completed',completed_date=current_date WHERE id=$1",[round]);
+ await db.query("UPDATE equipment_orders SET status='completed' WHERE id=$1",[order]);
+ await db.query('DELETE FROM crops WHERE id=$1',[crop]);
+ await db.query('DELETE FROM plots WHERE id=$1',[plot]);
+ await db.query('DELETE FROM equipment_products WHERE id=$1',[product]);
+ const ri=(await db.query('SELECT crop_id,crop_id_snapshot,crop_name_snapshot FROM round_items')).rows[0];
+ assert.equal(ri.crop_id,null);assert.equal(ri.crop_id_snapshot,crop);assert.equal(ri.crop_name_snapshot,'Oak');
+ const pl=(await db.query('SELECT plot_id,plot_name FROM plant_losses')).rows[0];assert.equal(pl.plot_id,null);assert.equal(pl.plot_name,'Plot A');
+ const ei=(await db.query('SELECT product_id,product_name,product_sku FROM equipment_inventory_transactions')).rows[0];
+ assert.equal(ei.product_id,null);assert.equal(ei.product_name,'Pump');assert.equal(ei.product_sku,'P-1');
+ const oi=(await db.query('SELECT product_id,product_name FROM equipment_order_items')).rows[0];assert.equal(oi.product_id,null);assert.equal(oi.product_name,'Pump');
+ assert.equal((await db.query('SELECT crop_ids FROM plots WHERE id=$1',[plot])).rows.length,0);
+ const note=(await db.query('SELECT notes FROM planting_rounds WHERE id=$1',[round])).rows[0].notes;
+ assert.equal(JSON.parse(note).deletedPlotNames[plot],'Plot A');
+});

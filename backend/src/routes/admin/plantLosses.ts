@@ -32,7 +32,7 @@ async function loadPlantingContext() {
   const [plotsResult, roundsResult] = await Promise.all([
     supabaseAdmin.from('plots').select('id,name,slot_capacity,crop_id,crop_ids').order('zone_name').order('name'),
     supabaseAdmin.from('planting_rounds').select(`id,name,status,current_step,notes,updated_at,completed_date,sold_out_date,
-      round_items(id,crop_id,plant_count,estimated_qty_kg,bookable_qty_kg,crops(name,slots_per_kg))`).order('created_at'),
+      round_items(*,crops(name,slots_per_kg))`).order('created_at'),
   ]);
   if (plotsResult.error || roundsResult.error) throw plotsResult.error || roundsResult.error;
   const plots = plotsResult.data || [];

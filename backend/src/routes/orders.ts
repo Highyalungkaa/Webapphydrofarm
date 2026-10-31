@@ -151,8 +151,7 @@ router.get('/mine', requireAuth, async (req: AuthenticatedRequest, res: Response
           price_per_kg,
           discount_amount,
           round_items (
-            id,
-            round_id,
+            *,
             crops (
               id,
               name
@@ -202,8 +201,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
           fulfilled_qty_kg,
           fulfillment_source,
           round_items (
-            id,
-            round_id,
+            *,
             crops (
               id,
               name

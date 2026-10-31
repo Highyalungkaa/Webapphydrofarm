@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { restoreCropSnapshots } from './services/masterSnapshots.js';
 
 // Routes
 import profileRouter from './routes/profile.js';
@@ -50,6 +51,11 @@ app.use(
   })
 );
 app.use(express.json({ limit: '8mb' }));
+app.use((_req, res, next) => {
+  const sendJson = res.json.bind(res);
+  res.json = ((body: any) => sendJson(restoreCropSnapshots(body))) as typeof res.json;
+  next();
+});
 app.use(['/api/rounds','/api/orders','/api/admin/orders','/api/admin/rounds'],reconcileOrderExpiry);
 
 // Health Check

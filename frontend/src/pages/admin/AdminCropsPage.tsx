@@ -173,7 +173,7 @@ export const AdminCropsPage: React.FC = () => {
   };
 
   const handleDelete = async (crop: Crop) => {
-    if (!window.confirm(`ยืนยันการลบชนิดผัก "${crop.name}"? \n(หากมีรอบปลูกหรือแปลงที่ใช้ผักนี้อยู่ ระบบจะแนะนำให้ปิดใช้งานแทน)`)) {
+    if (!window.confirm(`ยืนยันการลบชนิดผัก "${crop.name}"? \n(รอบปลูกที่ยังดำเนินอยู่ต้องสิ้นสุดก่อนลบ ประวัติที่สิ้นสุดแล้วจะยังอยู่)`)) {
       return;
     }
 
