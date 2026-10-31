@@ -28,6 +28,16 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
+const OrderSourceRounds: React.FC<{order: Order}> = ({order}) => {
+  const sources = new Map<string, string>();
+  for (const item of order.order_items || []) {
+    const source = item.round_items?.planting_rounds;
+    if (source?.name) sources.set(source.id || item.round_items?.round_id || source.name, source.name);
+  }
+  if (!sources.size) return <p className="break-words font-semibold text-slate-800">{order.planting_rounds?.name || 'ไม่พบชื่อรอบปลูก'}</p>;
+  return <ul className="space-y-1 font-semibold text-slate-800">{[...sources].map(([id,name]) => <li key={id} className="break-words">{name}</li>)}</ul>;
+};
+
 export const AdminOrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -300,7 +310,7 @@ export const AdminOrdersPage: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-[10px] font-semibold text-slate-400">รอบปลูก / วันส่งมอบ</p>
-                      <p className="truncate font-semibold text-slate-800">{order.is_pooled?'คำสั่งจองผักรวม':order.planting_rounds?.name || '-'}</p>
+                      <OrderSourceRounds order={order} />
                       <p className="text-slate-500">{order.is_pooled?harvestRange(order.harvest_start_date,order.harvest_end_date):formatDateDMY(order.planting_rounds?.fulfillment_date)}</p>
                     </div>
                     <div>
@@ -366,8 +376,8 @@ export const AdminOrdersPage: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4 text-slate-700">
-                        <div className="font-medium truncate max-w-[150px]">
-                          {order.is_pooled?'คำสั่งจองผักรวม':order.planting_rounds?.name || '-'}
+                        <div className="min-w-[140px] max-w-[220px]">
+                          <OrderSourceRounds order={order} />
                         </div>
                         <span className="text-[11px] text-slate-400">
                           ส่ง: {order.is_pooled?harvestRange(order.harvest_start_date,order.harvest_end_date):formatDateDMY(order.planting_rounds?.fulfillment_date)}
