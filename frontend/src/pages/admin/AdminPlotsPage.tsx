@@ -26,6 +26,7 @@ export const AdminPlotsPage: React.FC = () => {
   const [zoneFilter, setZoneFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('true');
   const [removalPlot, setRemovalPlot] = useState<Plot | null>(null);
+  const [removalAction, setRemovalAction] = useState<'delete' | 'deactivate'>('delete');
   const [removing, setRemoving] = useState(false);
   const [removalError, setRemovalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export const AdminPlotsPage: React.FC = () => {
   };
 
   const togglePlotActive = async (plot: Plot) => {
-    if (plot.is_active) { setRemovalPlot(plot); setRemovalError(null); return; }
+    if (plot.is_active) { setRemovalAction('deactivate'); setRemovalPlot(plot); setRemovalError(null); return; }
     try {
       await api.put(`/admin/plots/${plot.id}`, {
         name: plot.name,
@@ -154,7 +155,7 @@ export const AdminPlotsPage: React.FC = () => {
     }
   };
 
-  const handleDelete = (plot: Plot) => { setRemovalPlot(plot); setRemovalError(null); };
+  const handleDelete = (plot: Plot) => { setRemovalAction('delete'); setRemovalPlot(plot); setRemovalError(null); };
   const removePlot = async (permanent: boolean) => {
     if (!removalPlot || removing) return;
     setRemoving(true); setRemovalError(null);
@@ -324,16 +325,16 @@ export const AdminPlotsPage: React.FC = () => {
       {removalPlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onKeyDown={e => { if (e.key === 'Escape' && !removing) setRemovalPlot(null); }}>
           <div role="dialog" aria-modal="true" aria-labelledby="remove-plot-title" className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-            <h2 id="remove-plot-title" className="text-lg font-bold text-slate-900">จัดการแปลง {removalPlot.name}</h2>
-            <p className="text-sm leading-relaxed text-slate-600">เลิกใช้งานแปลงเพื่อไม่ให้เลือกใช้ในรอบปลูกใหม่ ประวัติรอบปลูกและผักเสียหายจะยังอยู่ และเปิดใช้งานอีกครั้งได้</p>
-            {isPlotInUse(removalPlot) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">แปลงนี้ยังมีรอบปลูกดำเนินอยู่ กรุณาสิ้นสุดรอบก่อนลบถาวร หรือเลิกใช้งานเพื่อหยุดการเลือกใช้ในรอบใหม่</p>}
-            {removalPlot.has_history && <p className="text-sm text-slate-600">แปลงนี้มีประวัติ เมื่อลบถาวร ระบบยังเก็บชื่อแปลงในประวัติการปลูกและผักเสียหาย</p>}
-            {!removalPlot.has_history && <p className="text-sm text-slate-500">การลบถาวรจะนำแปลงออกจากรายการจัดการ</p>}
+            <h2 id="remove-plot-title" className="text-lg font-bold text-slate-900">{removalAction === 'delete' ? 'ลบแปลงถาวร' : 'เลิกใช้งานแปลง'} {removalPlot.name}</h2>
+            <p className="text-sm leading-relaxed text-slate-600">{removalAction === 'delete'
+              ? 'การลบถาวรจะนำแปลงออกจากรายการจัดการ ประวัติการปลูกและผักเสียหายที่บันทึกไว้จะยังอยู่'
+              : 'แปลงนี้จะไม่แสดงให้เลือกในรอบปลูกใหม่ ประวัติเดิมยังอยู่ และเปิดใช้งานอีกครั้งได้'}</p>
+            {removalAction === 'delete' && isPlotInUse(removalPlot) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">แปลงนี้ยังมีรอบปลูกดำเนินอยู่ กรุณาสิ้นสุดรอบก่อนลบถาวร</p>}
             {removalError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{removalError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <button autoFocus disabled={removing} onClick={() => setRemovalPlot(null)} className="rounded-xl border px-4 py-2 text-sm disabled:opacity-50">ยกเลิก</button>
-              {!isPlotInUse(removalPlot) && <button disabled={removing} onClick={() => removePlot(true)} className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">ลบถาวร</button>}
-              {removalPlot.is_active && <button disabled={removing} onClick={() => removePlot(false)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{removing ? 'กำลังบันทึก...' : 'เลิกใช้งานแปลง'}</button>}
+              {removalAction === 'delete' && <button disabled={removing || isPlotInUse(removalPlot)} onClick={() => removePlot(true)} className="rounded-xl border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">ลบถาวร</button>}
+              {removalAction === 'deactivate' && <button disabled={removing} onClick={() => removePlot(false)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{removing ? 'กำลังบันทึก...' : 'เลิกใช้งานแปลง'}</button>}
             </div>
           </div>
         </div>

@@ -62,7 +62,7 @@ export const PlotCard: React.FC<Props> = ({ plot, crops, onEdit, onToggle, onDel
         <button type="button" onClick={() => onEdit(plot)} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:text-emerald-800"><Edit2 className="h-3.5 w-3.5" />แก้ไขแปลง</button>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => onToggle(plot)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-medium text-slate-500 hover:bg-white hover:text-slate-800"><Power className="h-3.5 w-3.5" />{plot.is_active ? 'เลิกใช้งาน' : 'เปิดใช้งานอีกครั้ง'}</button>
-          <button type="button" onClick={() => onDelete(plot)} aria-label={`ลบหรือเลิกใช้งานแปลง ${plot.name}`} title="ลบหรือเลิกใช้งานแปลง" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+          <button type="button" onClick={() => onDelete(plot)} aria-label={`ลบแปลงถาวร ${plot.name}`} title="ลบหรือเลิกใช้งานแปลง" className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
         </div>
       </footer>
     </article>
