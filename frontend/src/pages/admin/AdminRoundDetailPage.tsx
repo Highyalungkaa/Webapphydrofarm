@@ -12,7 +12,8 @@ import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBang
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
 import { calculateHarvestDate, usesSeedHarvestDate } from '../../lib/harvestDates.js';
 import { isCurrentPlantingRound } from '../../lib/managedOrders.js';
-import { PlantingRound, RoundItem } from '../../types/index.js';
+import { roundCropSales } from '../../lib/roundCropSales.js';
+import { PlantingRound, RoundItem, Order } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
   ArrowLeft,
@@ -135,13 +136,15 @@ function getItemPlantCounts(item: RoundItem) {
   return { initial, lost, remaining: Math.max(0, initial - lost) };
 }
 
-const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
+const RoundCropsSummary: React.FC<{ items: RoundItem[]; roundName: string; orders: Order[] }> = ({ items, roundName, orders }) => {
+  const sales = roundCropSales(orders, items);
+  return (
   <aside className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-xs" aria-labelledby="round-crops-heading">
     <div className="mb-3 flex items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Leaf className="h-4 w-4" /></span>
         <div className="min-w-0">
-          <h3 id="round-crops-heading" className="text-sm font-extrabold text-slate-900">ผักที่ปลูกในรอบนี้</h3>
+          <h3 id="round-crops-heading" className="break-words text-sm font-extrabold text-slate-900">ผักที่ปลูกใน{roundName}</h3>
           <p className="text-[10px] text-slate-500">จำนวนต้นหลังหักผักเสียหาย</p>
         </div>
       </div>
@@ -152,7 +155,8 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
         {items.map((item) => {
           const { initial, lost, remaining } = getItemPlantCounts(item);
           return (
-            <li key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 border-l-2 border-l-emerald-400 bg-slate-50/70 px-3 py-2.5">
+            <li key={item.id} className="rounded-xl border border-slate-100 border-l-2 border-l-emerald-400 bg-slate-50/70 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-slate-800">{item.crop_name || item.crops?.name || 'ผัก'}</span>
                 {(item.loss_baseline_plant_count != null || item.plant_count != null) && <span className="block text-[10px] text-slate-500">เริ่มต้น {initial.toLocaleString('th-TH')} ต้น</span>}
@@ -166,6 +170,11 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
                   <span className={`block text-[11px] ${lost > 0 ? 'text-rose-600' : 'text-slate-500'}`}>เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
                 </span>
               )}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-2 text-xs">
+                <span className="font-medium text-slate-600">ยอดขาย</span>
+                <strong className="font-extrabold tabular-nums text-emerald-800">฿{(sales.get(item.id) || 0).toLocaleString('th-TH', {maximumFractionDigits:2})}</strong>
+              </div>
             </li>
           );
         })}
@@ -173,8 +182,10 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[] }> = ({ items }) => (
     ) : (
       <p className="text-xs text-slate-500">ยังไม่มีรายการผักในรอบนี้</p>
     )}
+    {items.length > 0 && <p className="mt-3 text-[10px] leading-relaxed text-slate-500">ยอดขายหลังหักส่วนลด เฉพาะออเดอร์เสร็จสิ้นและชำระเงินแล้ว</p>}
   </aside>
 );
+};
 
 export const AdminRoundDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -644,7 +655,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                   </span>
                 </p>
                 </div>
-                <RoundCropsSummary items={round.round_items || []} />
+                <RoundCropsSummary items={round.round_items || []} roundName={round.name} orders={orders} />
               </div>
             )}
 
@@ -768,7 +779,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             {(round.closure_reason === 'unsold' || (activeStepTab === 7 && !isViewingPastStep && currentStep === 7 && !round.sold_out_date && ['booking_open','booking_closed','harvested'].includes(round.status))) && <UnsoldRoundClose round={round} onChanged={loadRound} />}
           </div>
 
-          {activeStepTab !== 4 && <RoundCropsSummary items={round.round_items || []} />}
+          {activeStepTab !== 4 && <RoundCropsSummary items={round.round_items || []} roundName={round.name} orders={orders} />}
         </div>
       </section>
 
