@@ -143,7 +143,7 @@ export const AdminOrdersPage: React.FC = () => {
     if(issues.length){setUpdateError('กรุณาตรวจสอบข้อมูลที่ระบุด้านล่างก่อนบันทึก');return;}
     if (modalStatus === 'completed' && modalPaymentStatus !== 'paid'
       && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status)) {
-      setUpdateError('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นสำเร็จ');
+      setUpdateError('ต้องบันทึกว่าชำระเงินแล้วก่อนปิดออเดอร์เป็นเสร็จสิ้น');
       return;
     }
 
@@ -229,7 +229,7 @@ export const AdminOrdersPage: React.FC = () => {
               <option value="pending_confirmation">รอยืนยัน</option>
               <option value="confirmed">ยืนยันแล้ว</option>
               <option value="ready">พร้อมรับ/ส่ง</option>
-              <option value="completed">สำเร็จแล้ว</option>
+              <option value="completed">เสร็จสิ้น</option>
             </select>
           </div>
 
@@ -289,7 +289,7 @@ export const AdminOrdersPage: React.FC = () => {
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="flex flex-col gap-1 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-xs font-bold text-slate-700">รายการคำสั่งจอง <span className="font-medium text-slate-500">({orders.length} รายการ)</span></p>
-          <p className="text-[11px] text-slate-500">ออเดอร์สำเร็จจะแสดงอยู่จนกว่าจะสิ้นสุดรอบปลูก</p>
+          <p className="text-[11px] text-slate-500">ออเดอร์เสร็จสิ้นจะแสดงอยู่จนกว่าจะสิ้นสุดรอบปลูก</p>
         </div>
         {loading ? (
           <div className="py-16 text-center text-slate-500 text-sm">กำลังโหลดข้อมูลคำสั่งจอง...</div>
@@ -609,7 +609,7 @@ export const AdminOrdersPage: React.FC = () => {
                     { value: 'pending_confirmation', title: 'รอยืนยัน', note: 'ตรวจสอบคำสั่งจอง', Icon: Clock3, color: 'amber' },
                     { value: 'confirmed', title: 'ยืนยันแล้ว', note: 'รับออเดอร์เข้าระบบ', Icon: BadgeCheck, color: 'blue' },
                     { value: 'ready', title: 'พร้อมรับ / ส่ง', note: 'เตรียมสินค้าเรียบร้อย', Icon: PackageCheck, color: 'violet' },
-                    { value: 'completed', title: 'สำเร็จแล้ว', note: 'ลูกค้าได้รับสินค้า', Icon: CheckCircle2, color: 'emerald' },
+                    { value: 'completed', title: 'เสร็จสิ้น', note: 'ลูกค้าได้รับสินค้า', Icon: CheckCircle2, color: 'emerald' },
                   ] as const).map(({ value, title, note, Icon, color }, index) => {
                     const active = modalStatus === value;
                     const colors: Record<string, string> = {
@@ -673,7 +673,7 @@ export const AdminOrdersPage: React.FC = () => {
 
               {/* Payment Method (if paid) */}
               {modalStatus === 'completed' && modalPaymentStatus !== 'paid' && (modalStatus !== selectedOrder.status || modalPaymentStatus !== selectedOrder.payment_status) && (
-                <p role="alert" className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">กรุณาเลือก “ชำระเงินแล้ว” ก่อนปิดออเดอร์เป็นสำเร็จ</p>
+                <p role="alert" className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">กรุณาเลือก “ชำระเงินแล้ว” ก่อนปิดออเดอร์เป็นเสร็จสิ้น</p>
               )}
               {modalPaymentStatus === 'paid' && (
                 <div>

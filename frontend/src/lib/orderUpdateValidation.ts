@@ -3,7 +3,7 @@ import type {OrderItem,OrderStatus,PaymentStatus} from '../types/index.js';
 export function orderUpdateIssues(status:OrderStatus,payment:PaymentStatus,items:OrderItem[],own:Record<string,string>,
   substitute:Record<string,{qtyKg:string;totalCost:string}>,discount:Record<string,string>) {
   const issues:string[]=[];
-  if(status==='completed'&&payment!=='paid')issues.push('กรุณาบันทึกว่าชำระเงินแล้ว ก่อนเปลี่ยนออเดอร์เป็นสำเร็จ');
+  if(status==='completed'&&payment!=='paid')issues.push('กรุณาบันทึกว่าชำระเงินแล้ว ก่อนเปลี่ยนออเดอร์เป็นเสร็จสิ้น');
   for(const item of items){
     const name=item.round_items?.crops?.name||'ผักในออเดอร์';
     const text=own[item.id]??'',weight=Number(text||0),sub=Number(substitute[item.id]?.qtyKg||0),cost=Number(substitute[item.id]?.totalCost||0);

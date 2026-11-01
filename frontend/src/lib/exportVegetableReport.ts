@@ -29,7 +29,7 @@ const substituteCost = (item: OrderItem) => item.fulfillment_source === 'substit
   ? number(item.substitute_total_cost ?? substituteQty(item) * number(item.substitute_cost_per_kg)) : 0;
 const orderStatus: Record<string, string> = {
   pending_confirmation: 'รอยืนยัน', confirmed: 'ยืนยันแล้ว', ready: 'พร้อมรับ/ส่ง',
-  completed: 'สำเร็จแล้ว', cancelled: 'ยกเลิกแล้ว', no_show: 'ไม่มารับของ',
+  completed: 'เสร็จสิ้น', cancelled: 'ยกเลิกแล้ว', no_show: 'ไม่มารับของ',
 };
 const roundStatus: Record<string, string> = {
   draft: 'ร่าง', growing: 'กำลังปลูก', booking_open: 'เปิดให้จอง',

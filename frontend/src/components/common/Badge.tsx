@@ -27,7 +27,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, type = 'custom', label, cl
         colorClasses = 'bg-emerald-50 text-emerald-700 border-emerald-200';
         break;
       case 'completed':
-        text = 'สำเร็จแล้ว';
+        text = 'เสร็จสิ้น';
         colorClasses = 'bg-green-100 text-green-800 border-green-300';
         break;
       case 'cancelled':

@@ -11,7 +11,7 @@ export const OrderHistoryDialog:React.FC<{order:Order;onClose:()=>void}>=({order
   const navigate=useNavigate();
   const [reopening,setReopening]=useState(false),[reopenError,setReopenError]=useState('');
   const undoCompletion=async()=>{
-    if(reopening || !window.confirm('ยืนยันย้อนออเดอร์จากสำเร็จแล้ว เป็นพร้อมรับ / ส่ง? สถานะการชำระเงินจะยังคงเดิม'))return;
+    if(reopening || !window.confirm('ยืนยันย้อนออเดอร์จากเสร็จสิ้น เป็นพร้อมรับ / ส่ง? สถานะการชำระเงินจะยังคงเดิม'))return;
     setReopening(true);setReopenError('');
     try{
       await api.patch(`/admin/orders/${order.id}`,{status:'ready',expected_updated_at:order.updated_at});
@@ -39,7 +39,7 @@ export const OrderHistoryDialog:React.FC<{order:Order;onClose:()=>void}>=({order
         <div><dt className="text-xs text-slate-500">เบอร์โทรศัพท์</dt><dd className="mt-1 text-slate-800">{order.contact_phone||order.profiles?.phone||'-'}</dd></div>
         <div><dt className="text-xs text-slate-500">วิธีรับผัก</dt><dd className="mt-1 text-slate-800">{order.fulfillment_method==='pickup'?'รับที่ฟาร์ม':'จัดส่ง'}{order.fulfillment_method==='delivery'&&order.delivery_address&&<p className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-500">{order.delivery_address}</p>}</dd></div>
         <div><dt className="text-xs text-slate-500">วิธีชำระเงิน</dt><dd className="mt-1 text-slate-800">{order.payment_method==='transfer'?'โอนเงิน':order.payment_method==='cash'?'เงินสด':'ยังไม่บันทึก'}</dd></div>
-        {order.completed_at&&<div><dt className="text-xs text-slate-500">ส่งสำเร็จเมื่อ</dt><dd className="mt-1 text-slate-800">{formatDateTimeDMY(order.completed_at)}</dd></div>}
+        {order.completed_at&&<div><dt className="text-xs text-slate-500">เสร็จสิ้นเมื่อ</dt><dd className="mt-1 text-slate-800">{formatDateTimeDMY(order.completed_at)}</dd></div>}
         {order.paid_at&&<div><dt className="text-xs text-slate-500">ชำระเมื่อ</dt><dd className="mt-1 text-slate-800">{formatDateTimeDMY(order.paid_at)}</dd></div>}
       </dl>
       <OrderDiscountSummary order={order} expanded/>
