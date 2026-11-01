@@ -14,7 +14,6 @@ router.use(requireAuth, requireAdmin);
 
 const plotSchema = z.object({
   name: z.string().trim().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
-  zone_name: z.string().trim().min(1, 'กรุณาระบุชื่อโซน').max(100),
   slot_capacity: z.number().int().min(1, 'จำนวนต้นต้องมากกว่า 0').max(2147483647, 'จำนวนต้นเกินขนาดที่ระบบรองรับ'),
   is_active: z.boolean().default(true),
   notes: z.string().optional().nullable(),
@@ -23,7 +22,7 @@ const plotSchema = z.object({
 // GET /api/admin/plots - List all plots with crop details
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { zone_name, is_active } = req.query;
+    const { is_active } = req.query;
     const db = getSupabaseClient(req);
 
     let query = db
@@ -39,9 +38,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       .order('zone_name', { ascending: true })
       .order('name', { ascending: true });
 
-    if (zone_name && typeof zone_name === 'string') {
-      query = query.eq('zone_name', zone_name);
-    }
     if (is_active !== undefined && is_active !== '') {
       query = query.eq('is_active', is_active === 'true');
     }
@@ -125,7 +121,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    const { name, zone_name, slot_capacity, is_active, notes } = parsed.data;
+    const { name, slot_capacity, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
     // Each plot owns its capacity. The database still protects active plant allocations.
@@ -133,7 +129,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       .from('plots')
       .insert({
         name: name.trim(),
-        zone_name: zone_name.trim(),
+        zone_name: '', // Retired field remains NOT NULL in existing databases.
         slot_capacity,
         crop_id: null,
         crop_ids: [],
@@ -186,7 +182,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
-    const { name, zone_name, slot_capacity, is_active, notes } = parsed.data;
+    const { name, slot_capacity, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
     const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
@@ -202,7 +198,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       .from('plots')
       .update({
         name: name.trim(),
-        zone_name: zone_name.trim(),
         slot_capacity,
         is_active,
         notes: notes ? notes.trim() : null,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, MapPin, Power, Trash2 } from 'lucide-react';
+import { Edit2, Power, Trash2 } from 'lucide-react';
 import type { Plot } from '../../types/index.js';
 import { PlotRoundTimeline } from './PlotRoundTimeline.js';
 
@@ -26,7 +26,6 @@ export const PlotCard: React.FC<Props> = ({ plot, onEdit, onToggle, onDelete }) 
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="break-words text-lg font-extrabold leading-snug text-slate-900">{plot.name}</h3>
-            <p className="mt-1 flex items-start gap-1 text-xs text-slate-500"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="break-words">{plot.zone_name}</span></p>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${statusStyle}`}>{state}</span>
         </header>

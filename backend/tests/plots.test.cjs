@@ -163,3 +163,14 @@ test('retiring a plot retains its id and history and can be reversed',async()=>{
   assert.equal((await app.request('put',{is_active:false})).statusCode,200);assert.equal(app.saved().id,'plot');assert.equal(app.saved().plant_losses[0].count,1);assert.equal(app.saved().is_active,false);
   assert.equal((await app.request('put',{is_active:true})).statusCode,200);assert.equal(app.saved().is_active,true);
 });
+
+
+test('plots can be created and edited without a zone or greenhouse name',async()=>{
+ const created=setup();
+ assert.equal((await created.request('post',{zone_name:undefined})).statusCode,201);
+ assert.equal(created.saved().zone_name,'');
+ const edited=setup({oldPlot:{id:'plot',...body,zone_name:'Legacy zone'}});
+ assert.equal((await edited.request('put',{zone_name:undefined,slot_capacity:150})).statusCode,200);
+ assert.equal(edited.saved().slot_capacity,150);
+ assert.equal(edited.saved().zone_name,'Legacy zone');
+});

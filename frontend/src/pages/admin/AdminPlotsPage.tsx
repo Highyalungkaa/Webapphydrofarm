@@ -21,7 +21,6 @@ export const AdminPlotsPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
-  const [zoneFilter, setZoneFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('true');
   const [removalPlot, setRemovalPlot] = useState<Plot | null>(null);
   const [removalAction, setRemovalAction] = useState<'delete' | 'deactivate'>('delete');
@@ -35,7 +34,6 @@ export const AdminPlotsPage: React.FC = () => {
 
   // Form Fields
   const [name, setName] = useState('');
-  const [zoneName, setZoneName] = useState('');
   const [slotCapacity, setSlotCapacity] = useState<number>(200);
   const [isActive, setIsActive] = useState<boolean>(true);
   const [notes, setNotes] = useState('');
@@ -63,21 +61,17 @@ export const AdminPlotsPage: React.FC = () => {
   };
 
   const plots = allPlots.filter((plot) =>
-    (!zoneFilter || plot.zone_name === zoneFilter) &&
     (!activeFilter || String(plot.is_active) === activeFilter)
   );
   const plotGroups = [
-    { key: 'in-use', title: 'โซนใช้งาน', description: 'แปลงที่มีรอบปลูกกำลังใช้งานอยู่', plots: plots.filter(isPlotInUse), emptyMessage: 'ยังไม่มีแปลงที่กำลังใช้งาน', icon: Sprout },
-    { key: 'vacant', title: 'โซนพื้นที่ว่าง', description: 'แปลงที่ยังไม่มีรอบปลูกใช้งาน', plots: plots.filter((plot) => !isPlotInUse(plot)), emptyMessage: 'ยังไม่มีแปลงว่าง', icon: LayoutGrid },
+    { key: 'in-use', title: 'แปลงที่กำลังใช้งาน', description: 'แปลงที่มีรอบปลูกกำลังใช้งานอยู่', plots: plots.filter(isPlotInUse), emptyMessage: 'ยังไม่มีแปลงที่กำลังใช้งาน', icon: Sprout },
+    { key: 'vacant', title: 'แปลงว่าง', description: 'แปลงที่ยังไม่มีรอบปลูกใช้งาน', plots: plots.filter((plot) => !isPlotInUse(plot)), emptyMessage: 'ยังไม่มีแปลงว่าง', icon: LayoutGrid },
   ];
 
-  // Get unique zone names from existing plots
-  const existingZones = Array.from(new Set(allPlots.map((p) => p.zone_name).filter(Boolean)));
 
   const openCreateModal = () => {
     setEditingPlotId(null);
     setName(`แปลงที่ ${allPlots.length + 1}`);
-    setZoneName(existingZones.length > 0 ? existingZones[0] : 'โซน A (โรงเรือน 1)');
     setSlotCapacity(200);
     setIsActive(true);
     setNotes('');
@@ -88,7 +82,6 @@ export const AdminPlotsPage: React.FC = () => {
   const openEditModal = (plot: Plot) => {
     setEditingPlotId(plot.id);
     setName(plot.name);
-    setZoneName(plot.zone_name);
     setSlotCapacity(plot.slot_capacity);
     setIsActive(plot.is_active);
     setNotes(plot.notes || '');
@@ -101,7 +94,6 @@ export const AdminPlotsPage: React.FC = () => {
     try {
       await api.put(`/admin/plots/${plot.id}`, {
         name: plot.name,
-        zone_name: plot.zone_name,
         slot_capacity: plot.slot_capacity,
         is_active: !plot.is_active,
         notes: plot.notes,
@@ -120,7 +112,6 @@ export const AdminPlotsPage: React.FC = () => {
       setSaving(true);
       const payload = {
         name: name.trim(),
-        zone_name: zoneName.trim(),
         slot_capacity: Number(slotCapacity),
         is_active: isActive,
         notes: notes.trim() || null,
@@ -148,7 +139,7 @@ export const AdminPlotsPage: React.FC = () => {
     try {
       if (permanent) await api.delete(`/admin/plots/${removalPlot.id}`);
       else await api.put(`/admin/plots/${removalPlot.id}`, {
-        name: removalPlot.name, zone_name: removalPlot.zone_name,
+        name: removalPlot.name,
         slot_capacity: removalPlot.slot_capacity,
         is_active: false, notes: removalPlot.notes,
       });
@@ -238,18 +229,6 @@ export const AdminPlotsPage: React.FC = () => {
           <span>ตัวกรอง:</span>
         </div>
 
-        <select
-          value={zoneFilter}
-          onChange={(e) => setZoneFilter(e.target.value)}
-          className="p-2 rounded-xl border border-slate-200 bg-white"
-        >
-          <option value="">-- ทุกโซน --</option>
-          {existingZones.map((z) => (
-            <option key={z} value={z}>
-              {z}
-            </option>
-          ))}
-        </select>
 
         <select
           value={activeFilter}
@@ -261,10 +240,9 @@ export const AdminPlotsPage: React.FC = () => {
           <option value="false">เลิกใช้งานแล้ว</option>
         </select>
 
-        {(zoneFilter || activeFilter) && (
+        {activeFilter && (
           <button
             onClick={() => {
-              setZoneFilter('');
               setActiveFilter('');
             }}
             className="text-emerald-700 hover:underline font-semibold"
@@ -357,34 +335,6 @@ export const AdminPlotsPage: React.FC = () => {
                   required
                   className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
-              </div>
-
-              {/* Zone Name */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">ชื่อโซน / โรงเรือน *</label>
-                <input
-                  type="text"
-                  value={zoneName}
-                  onChange={(e) => setZoneName(e.target.value)}
-                  placeholder="เช่น โซน A (โรงเรือนกรีนเฮ้าส์ 1)"
-                  required
-                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                {existingZones.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="text-[11px] text-slate-400">เลือกโซนเดิม:</span>
-                    {existingZones.map((z) => (
-                      <button
-                        key={z}
-                        type="button"
-                        onClick={() => setZoneName(z)}
-                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px]"
-                      >
-                        {z}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Slot Capacity */}
