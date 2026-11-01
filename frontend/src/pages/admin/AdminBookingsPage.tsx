@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React,{useEffect,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {api} from '../../lib/api.js';
@@ -10,7 +11,8 @@ export const AdminBookingsPage:React.FC=()=>{
  const[name,setName]=useState('');
  const[selected,setSelected]=useState<PlantingRound|null>(null),[date,setDate]=useState(''),[harvest,setHarvest]=useState(''),[prices,setPrices]=useState<Record<string,string>>({});
  const[closing,setClosing]=useState<PlantingRound|null>(null),[closeAt,setCloseAt]=useState(''),[filter,setFilter]=useState('active');
- const load=async()=>{setLoading(true);try{setRounds(await api.get<PlantingRound[]>('/admin/rounds'));}catch(e:any){setError(e.message);}finally{setLoading(false);}};
+ const load=async (silent = false)=>{if (!silent) setLoading(true);try{setRounds(await api.get<PlantingRound[]>('/admin/rounds'));}catch(e:any){ if (!silent) {setError(e.message);} }finally{if (!silent) setLoading(false);}};
+  useLiveRefresh(() => load(true), {enabled: !loading && !selected && !closing && !saving, intervalMs: 5000});
  useEffect(()=>{void load();},[]);
  const open=(r:PlantingRound)=>{setSelected(r);setName(r.name);setError('');setNotice('');setDate(toBangkokDateString(r.booking_opens_at)||toBangkokDateString(new Date().toISOString())||'');setHarvest(r.fulfillment_date||r.expected_harvest_date||'');setPrices(Object.fromEntries((r.round_items||[]).map(i=>[i.id,String(i.price_per_kg)])));};
  const bookingOpensLater=!!date&&date>(toBangkokDateString(new Date().toISOString())||'');

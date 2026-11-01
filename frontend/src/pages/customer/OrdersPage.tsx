@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {harvestRange} from '../../lib/pooledBooking.js';
 import { EquipmentPaymentBadge } from '../../components/common/EquipmentPaymentSlip.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
@@ -23,6 +24,7 @@ export const OrdersPage: React.FC = () => {
   const [params] = useSearchParams();
   const newEquipmentOrder = params.get('order');
 
+  useLiveRefresh(async()=>{const [vegetables,equipment]=await Promise.all([api.get<Order[]>('/orders/mine'),api.get<EquipmentOrder[]>('/equipment/orders/mine')]);setOrders(vegetables);setEquipmentOrders(equipment);setError(null);},{enabled:!loading,intervalMs:10000});
   useEffect(() => {
     const fetchOrders = async () => {
       try {

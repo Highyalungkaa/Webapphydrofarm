@@ -1,3 +1,5 @@
+import {hasLiveDraft} from '../../lib/liveRefresh.js';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import type { EquipmentTransferAccount } from '../../types/index.js';
 import React, { useEffect, useState } from 'react';
 import { Check, Package, Settings2, Truck } from 'lucide-react';
@@ -15,6 +17,7 @@ export const AdminEquipmentShippingPage: React.FC = () => {
   const [accountLoading, setAccountLoading] = useState(true);
   const [accountSaving, setAccountSaving] = useState(false);
 
+  useLiveRefresh(async()=>{const [shipping,payment]=await Promise.all([api.get<{shipping_fee:number}>('/equipment/admin/settings/shipping'),api.get<EquipmentTransferAccount>('/equipment/payment-settings')]);if(hasLiveDraft())return;setFee(String(shipping.shipping_fee));const {bank_name,account_name,account_number,qr_image_url}=payment;setAccount({bank_name,account_name,account_number,qr_image_url});},{enabled:!loading && !accountLoading && !saving && !accountSaving && !qrFile,intervalMs:30000});
   useEffect(() => {
     api.get<{ shipping_fee: number }>('/equipment/admin/settings/shipping')
       .then((result) => setFee(String(result.shipping_fee)))

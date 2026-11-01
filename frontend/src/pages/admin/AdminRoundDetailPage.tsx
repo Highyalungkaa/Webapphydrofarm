@@ -1,4 +1,5 @@
 import { RoundWeightSummary } from '../../components/admin/RoundWeightSummary.js';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import {remainingEstimatedKg} from '../../lib/estimatedYield.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
@@ -199,17 +200,23 @@ export const AdminRoundDetailPage: React.FC = () => {
   const [updatingStep, setUpdatingStep] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [itemDaysMap, setItemDaysMap] = useState<Record<string, number>>({});
+  const [stepDirty,setStepDirty]=useState(false);
+  const stepDraft=React.useRef(false);stepDraft.current=stepDirty;
+  const roundRequest=React.useRef(0);
 
   useEffect(() => {
     if (id) loadRound();
   }, [id]);
 
 
-  const loadRound = async () => {
+  const loadRound = async (silent=false) => {
+    const request=++roundRequest.current;
     try {
-      setLoading(true);
+      if(!silent)setLoading(true);
       const data = await api.get<PlantingRound>(`/admin/rounds/${id}`);
+      if(request!==roundRequest.current||silent&&stepDraft.current)return;
       setRound(data);
+      setError(null);
 
       const daysMap: Record<string, number> = {};
       if (data.round_items) {
@@ -220,16 +227,21 @@ export const AdminRoundDetailPage: React.FC = () => {
       setItemDaysMap(daysMap);
 
       const currentStep = data.current_step || 1;
-      setActiveStepTab(currentStep);
-      initDateForStep(currentStep, data);
+      if(!silent||currentStep!==round?.current_step){
+        setActiveStepTab(currentStep);
+        initDateForStep(currentStep, data);
+      }
     } catch (err: any) {
-      setError(err.message || 'ไม่สามารถโหลดข้อมูลรอบได้');
+      if(!silent&&request===roundRequest.current)setError(err.message || 'ไม่สามารถโหลดข้อมูลรอบได้');
     } finally {
-      setLoading(false);
+      if(!silent&&request===roundRequest.current)setLoading(false);
     }
   };
+  useLiveRefresh(()=>loadRound(true),{enabled:!!id&&!loading&&!updatingStep&&!stepDirty,intervalMs:10000});
 
   const initDateForStep = (stepNum: number, currentRound: PlantingRound) => {
+    setStepDirty(false);
+    stepDraft.current=false;
     const today = new Date().toISOString().split('T')[0];
     let defaultVal = today;
 
@@ -558,7 +570,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <input
                   type="date"
                   value={inputDate}
-                  onChange={(e) => setInputDate(e.target.value)}
+                  onChange={(e) => {stepDraft.current=true;setStepDirty(true);setInputDate(e.target.value);}}
                   disabled={isViewingPastStep}
                   className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-2xs disabled:cursor-default disabled:bg-slate-50"
                 />
@@ -613,6 +625,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                                     disabled={isViewingPastStep}
                                     onChange={(e) => {
                                       const val = parseInt(e.target.value, 10) || 1;
+                                      setStepDirty(true);
+                                      stepDraft.current=true;
                                       setItemDaysMap((prev) => ({
                                         ...prev,
                                         [it.crop_id]: val,

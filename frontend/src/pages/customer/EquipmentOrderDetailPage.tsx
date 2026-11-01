@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { EquipmentPaymentSlip, EquipmentPaymentBadge } from '../../components/common/EquipmentPaymentSlip.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -16,11 +17,13 @@ export const EquipmentOrderDetailPage: React.FC = () => {
   const [order, setOrder] = useState<EquipmentOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const currentId=React.useRef(id);currentId.current=id;
 
+  useLiveRefresh(async()=>{const requested=id;const data=await api.get<EquipmentOrder>(`/equipment/orders/mine/${requested}`);if(requested===currentId.current){setOrder(data);setError('');}},{enabled:!!id && !loading,intervalMs:10000});
   useEffect(() => {
     if (!id) return;
     api.get<EquipmentOrder>(`/equipment/orders/mine/${id}`)
-      .then(setOrder)
+      .then(data=>{if(id===currentId.current)setOrder(data);})
       .catch((err: any) => setError(err.message || 'โหลดรายละเอียดออเดอร์ไม่สำเร็จ'))
       .finally(() => setLoading(false));
   }, [id]);

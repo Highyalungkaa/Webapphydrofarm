@@ -2,6 +2,9 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { EquipmentProduct } from '../types/index.js';
 import { useAuth } from './AuthContext.js';
 import {readCartValue,persistCartValue,restoreEquipmentCart} from '../lib/cartStorage.js';
+import {useLocation} from 'react-router-dom';
+import {api} from '../lib/api.js';
+import {useLiveRefresh} from '../lib/useLiveRefresh.js';
 
 interface EquipmentCartLine { product: EquipmentProduct; quantity: number }
 interface EquipmentCartValue {
@@ -37,6 +40,12 @@ export const EquipmentCartProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [cart, user?.id]);
 
   const items = !isLoading && user?.id === cart.userId ? cart.items : [];
+  const {pathname}=useLocation();
+  useLiveRefresh(async()=>{
+    const requestedUser=user?.id;
+    const products=await api.get<EquipmentProduct[]>('/equipment/products');
+    setCart(current=>current.userId===requestedUser?{...current,items:current.items.map(row=>({...row,product:products.find(p=>p.id===row.product.id)||{...row.product,is_active:false,stock_quantity:0}}))}:current);
+  },{enabled:!isLoading&&!!user&&items.length>0&&!pathname.startsWith('/admin'),intervalMs:10000,protectDraft:false});
   const updateItems = (change: (current: EquipmentCartLine[]) => EquipmentCartLine[]) => {
     if (!user || isLoading) return;
     setCart((current) => ({

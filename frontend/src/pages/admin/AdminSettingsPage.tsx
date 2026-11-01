@@ -1,3 +1,5 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
+import {hasLiveDraft} from '../../lib/liveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { Settings, Save, CheckCircle, AlertCircle } from 'lucide-react';
@@ -19,10 +21,11 @@ export const AdminSettingsPage: React.FC = () => {
     loadSettings();
   }, []);
 
-  const loadSettings = async () => {
+  const loadSettings = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await api.get('/admin/settings');
+      if(silent&&hasLiveDraft())return;
       const map = res.map || {};
       if (map.delivery_min_total_kg !== undefined) setDeliveryMinTotalKg(Number(map.delivery_min_total_kg));
       if (map.cancellation_deadline_hours_before_harvest !== undefined) setCancellationDeadlineHours(Number(map.cancellation_deadline_hours_before_harvest));
@@ -31,13 +34,14 @@ export const AdminSettingsPage: React.FC = () => {
       if(map.pending_confirmation_hours!==undefined)setPendingHours(Number(map.pending_confirmation_hours));
       setLoaded(true);
       setError(null);
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       setLoaded(false);
       setError('โหลดค่าตั้งระบบไม่สำเร็จ กรุณาลองโหลดใหม่ก่อนบันทึก');
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadSettings(true), {enabled: !loading && !saving, intervalMs: 30000});
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

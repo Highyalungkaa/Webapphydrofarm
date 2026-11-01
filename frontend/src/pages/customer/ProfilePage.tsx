@@ -1,3 +1,5 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
+import {hasLiveDraft} from '../../lib/liveRefresh.js';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { api } from '../../lib/api.js';
@@ -15,8 +17,9 @@ export const ProfilePage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useLiveRefresh(()=>refreshProfile(),{enabled:!!user && !isSaving,intervalMs:30000});
   useEffect(() => {
-    if (profile) {
+    if (profile && !hasLiveDraft()) {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
       setAddressDetail(profile.address_detail || '');

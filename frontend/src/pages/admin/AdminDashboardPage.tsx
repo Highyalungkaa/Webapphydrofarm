@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -50,6 +51,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useLiveRefresh(async()=>{const [roundData,orderData]=await Promise.all([api.get<PlantingRound[]>('/admin/rounds'),api.get<Order[]>('/admin/orders')]);setRounds([...roundData].sort((a,b)=>new Date(a.expected_harvest_date).getTime()-new Date(b.expected_harvest_date).getTime()));setOrders(orderData);},{enabled:!loading,intervalMs:15000});
   useEffect(() => {
     Promise.all([
       api.get<PlantingRound[]>('/admin/rounds'),

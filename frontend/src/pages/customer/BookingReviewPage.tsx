@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {harvestRange,priceLabel,cartLineTotal} from '../../lib/pooledBooking.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useEffect, useState } from 'react';
@@ -16,6 +17,7 @@ export const BookingReviewPage: React.FC = () => {
   const navigate = useNavigate();
   const [round, setRound] = useState<PlantingRound | null>(null);
   const [qtyError, setQtyError] = useState('');
+  const currentRound=React.useRef(roundId);currentRound.current=roundId;
 
   const changeQty = (item: typeof items[number], delta: number) => {
     const current=round?.items?.find(i=>i.id===item.round_item_id);
@@ -29,19 +31,12 @@ export const BookingReviewPage: React.FC = () => {
     if (!result.success) setQtyError(result.message || 'ไม่สามารถเปลี่ยนจำนวนได้');
   };
 
+  useLiveRefresh(async()=>{const requested=roundId;const data=await api.get<PlantingRound>(`/rounds/${requested}`);if(requested===currentRound.current)setRound(data);},{enabled:!!roundId,intervalMs:5000,protectDraft:false});
   useEffect(() => {
     if (!roundId) return;
     api.get<PlantingRound>(`/rounds/${roundId}`).then(data=>{
-      setRound(data);
-      for(const item of items){
-        const current=data.items?.find(i=>i.id===item.round_item_id);
-        if(current && item.qty_kg<=Number(current.available_qty_kg??Infinity)
-          ) {
-          setItemQty({...item,price_per_kg:Number(current.price_per_kg),price_tiers:current.price_tiers,
-            available_qty_kg:current.available_qty_kg??null},item.qty_kg);
-        }
-      }
-    }).catch(() => setRound(null));
+      if(roundId===currentRound.current)setRound(data);
+    }).catch(() => {if(roundId===currentRound.current)setRound(null);});
   }, [roundId]);
 
   if (items.length === 0 || !roundId) {

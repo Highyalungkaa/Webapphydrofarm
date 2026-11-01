@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { CartItem } from '../types/index.js';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import {useLocation} from 'react-router-dom';
+import { CartItem,PlantingRound } from '../types/index.js';
+import {api} from '../lib/api.js';
+import {useLiveRefresh} from '../lib/useLiveRefresh.js';
+import {syncVegetableAvailability} from '../lib/cartAvailability.js';
 import { cartLineTotal } from '../lib/pooledBooking.js';
 import {readCartValue,persistCartValue,restoreVegetableCart} from '../lib/cartStorage.js';
 
@@ -28,6 +32,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   });
+  const {pathname}=useLocation();
+  const currentRound=useRef(roundId);currentRound.current=roundId;
+  const refreshAvailability=async()=>{
+    const requested=roundId;
+    if(!requested||items.length===0)return;
+    const catalog=await api.get<PlantingRound>(`/rounds/${requested}`);
+    if(requested===currentRound.current)setItems(previous=>syncVegetableAvailability(previous,catalog));
+  };
+  useEffect(()=>{if(!pathname.startsWith('/admin'))void refreshAvailability().catch(()=>{});},[roundId,pathname]);
+  useLiveRefresh(refreshAvailability,{enabled:!!roundId&&items.length>0&&!pathname.startsWith('/admin'),intervalMs:5000,protectDraft:false});
 
   useEffect(() => {
     if (roundId) {

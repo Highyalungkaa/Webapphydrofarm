@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarDays, CheckCircle2, History, MapPin, Search, Truck, X } from 'lucide-react';
 import { EquipmentPaymentBadge, EquipmentPaymentSlip } from '../../components/common/EquipmentPaymentSlip.js';
@@ -19,6 +20,7 @@ export const AdminEquipmentOrderHistoryPage: React.FC = () => {
   const [dateTo, setDateTo] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  useLiveRefresh(async()=>{const data=await api.get<EquipmentOrder[]>('/equipment/admin/orders');setOrders(data.filter(isEquipmentOrderInHistory));setError('');},{enabled:!loading && !selectedId,intervalMs:20000});
   useEffect(() => {
     api.get<EquipmentOrder[]>('/equipment/admin/orders')
       .then((allOrders) => setOrders(allOrders.filter(isEquipmentOrderInHistory)))

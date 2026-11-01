@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { Crop } from '../../types/index.js';
@@ -66,18 +67,19 @@ export const AdminCropsPage: React.FC = () => {
     return () => URL.revokeObjectURL(previewUrl);
   }, [imageFile]);
 
-  const loadCrops = async () => {
+  const loadCrops = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await api.get<Crop[]>('/admin/crops');
       setCrops(data || []);
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       console.error(err);
       setError(err.message || 'โหลดข้อมูลผักไม่สำเร็จ');
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadCrops(true), {enabled: !loading && !isModalOpen && !saving, intervalMs: 15000});
 
   const openCreateModal = () => {
     setEditingId(null);

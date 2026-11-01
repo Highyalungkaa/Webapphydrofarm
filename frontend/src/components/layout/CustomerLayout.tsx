@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Phone } from 'lucide-react';
 import { api } from '../../lib/api.js';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { Navbar } from '../common/Navbar.js';
 import { BottomNav } from '../common/BottomNav.js';
 
 export const CustomerLayout: React.FC = () => {
   const isHome = useLocation().pathname === '/';
   const [contactPhone, setContactPhone] = useState<string | null>(null);
+  useLiveRefresh(async()=>{const data=await api.get<{phone:string|null}>('/settings/contact');setContactPhone(data.phone);},{enabled:isHome,intervalMs:30000,protectDraft:false});
   useEffect(() => {
     if (!isHome) return;
     let active = true;

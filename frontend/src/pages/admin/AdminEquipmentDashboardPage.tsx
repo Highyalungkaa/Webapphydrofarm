@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, BarChart3, Boxes, Clock3, PackageCheck, PackagePlus, ShoppingBag, Truck, WalletCards } from 'lucide-react';
@@ -14,6 +15,7 @@ export const AdminEquipmentDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  useLiveRefresh(async()=>{const [orderData,productData]=await Promise.all([api.get<EquipmentOrder[]>('/equipment/admin/orders'),api.get<EquipmentProduct[]>('/equipment/admin/products')]);setOrders(orderData);setProducts(productData);setError('');},{enabled:!loading,intervalMs:15000});
   useEffect(() => {
     Promise.all([
       api.get<EquipmentOrder[]>('/equipment/admin/orders'),

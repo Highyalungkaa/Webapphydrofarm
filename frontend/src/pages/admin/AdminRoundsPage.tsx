@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import {plantCountToKg} from '../../lib/plantingQuantities.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
@@ -64,9 +65,9 @@ export const AdminRoundsPage: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setSetupLoadError(null);
       const [roundsRes, cropsRes, plotsRes] = await Promise.allSettled([
         api.get<PlantingRound[]>('/admin/rounds'),
@@ -80,13 +81,14 @@ export const AdminRoundsPage: React.FC = () => {
       if (roundsRes.status === 'fulfilled') setRounds(roundsRes.value || []);
       if (cropsRes.status === 'fulfilled') setCrops(cropsRes.value || []);
       if (plotsRes.status === 'fulfilled') setPlots(plotsRes.value?.plots || []);
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       setSetupLoadError(err.message || 'ไม่สามารถโหลดข้อมูลความพร้อมของผักและแปลงปลูกได้');
       console.error(err);
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadData(true), {enabled: !loading && !isModalOpen && !saving && !deletingId, intervalMs: 15000});
 
   const activePlots = plots.filter((p) => p.is_active);
   const cropAvailability = getRoundCropAvailability(crops, plots, items.map((item) => item.crop_id));

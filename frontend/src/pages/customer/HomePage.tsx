@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React,{useEffect,useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../../lib/api.js';
@@ -9,6 +10,7 @@ import type {PlantingRound} from '../../types/index.js';
 export const HomePage:React.FC=()=>{
  const[catalog,setCatalog]=useState<PlantingRound|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const{user}=useAuth();const navigate=useNavigate();
+  useLiveRefresh(async()=>{const data=await api.get<PlantingRound>('/rounds/catalog');setCatalog(data);setError('');},{enabled:!loading,intervalMs:5000});
  useEffect(()=>{api.get<PlantingRound>('/rounds/catalog').then(setCatalog).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
  const open=()=>user?navigate('/rounds/catalog'):navigate('/login',{state:{returnTo:'/rounds/catalog'}});
  return <div className="space-y-8 pb-8">

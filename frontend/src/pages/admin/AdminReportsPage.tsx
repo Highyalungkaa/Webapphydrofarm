@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {orderMetrics,deliveredItemKg} from '../../lib/orderReport.js';
 import {scopeOrderToRound} from '../../lib/pooledBooking.js';
 import { orderCustomerKey } from '../../lib/orderCustomer.js';
@@ -49,9 +50,9 @@ export const AdminReportsPage: React.FC = () => {
     }
   };
 
-  const loadReport = async () => {
+  const loadReport = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [orderData, roundData] = await Promise.all([
         loadAllOrders(),
@@ -60,12 +61,13 @@ export const AdminReportsPage: React.FC = () => {
       setOrders(orderData || []);
       setRounds(roundData || []);
       setUpdatedAt(new Date());
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       setError(err.message || 'ไม่สามารถโหลดรายงานได้');
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadReport(true), {enabled: !loading && !exporting, intervalMs: 30000});
 
   useEffect(() => { void loadReport(); }, []);
 

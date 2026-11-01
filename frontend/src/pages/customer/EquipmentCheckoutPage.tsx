@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle2, LockKeyhole, Minus, Plus, ShoppingCart, Trash2
 import { useAuth } from '../../context/AuthContext.js';
 import { useEquipmentCart } from '../../context/EquipmentCartContext.js';
 import { api } from '../../lib/api.js';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { CustomerPageHeader } from '../../components/common/CustomerPageHeader.js';
 
 const money = (amount: number) => `฿${Number(amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -27,6 +28,10 @@ export const EquipmentCheckoutPage: React.FC = () => {
   const [error, setError] = useState('');
   const didPrefill = useRef(false);
   const orderRequest=useRef({key:'',id:crypto.randomUUID()});
+  useLiveRefresh(async()=>{
+    const [shipping,payment]=await Promise.all([api.get<{shipping_fee:number}>('/equipment/shipping'),api.get<EquipmentTransferAccount>('/equipment/payment-settings')]);
+    setShippingFee(Number(shipping.shipping_fee));setTransferAccount(payment);
+  },{enabled:!!user&&!authLoading&&!submitting,intervalMs:15000,protectDraft:false});
   useEffect(() => {
     setProductsReady(false);
     if (authLoading || !user) return;

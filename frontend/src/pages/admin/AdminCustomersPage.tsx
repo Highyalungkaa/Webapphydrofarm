@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
@@ -56,17 +57,18 @@ export const AdminCustomersPage: React.FC = () => {
     loadCustomers();
   }, []);
 
-  const loadCustomers = async () => {
+  const loadCustomers = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await api.get<CustomerItem[]>('/admin/customers');
       setCustomers(data);
-    } catch (err) {
+    } catch (err) { if (!silent) {
       console.error(err);
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadCustomers(true), {enabled: !loading && !historyCustomer, intervalMs: 15000});
 
   const formatDate = formatDateDMY;
   const query = searchQuery.trim().toLocaleLowerCase('th');

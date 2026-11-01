@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -45,20 +46,21 @@ export const AdminPlotsPage: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setLoadError(null);
       const plotsRes = await api.get<{ plots: Plot[]; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>('/admin/plots');
 
       setAllPlots(plotsRes.plots || []);
       setUnassignedRoundItems(plotsRes.unassigned_round_items || []);
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       setLoadError(err.message || 'ไม่สามารถโหลดข้อมูลการใช้แปลงปลูกได้');
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadData(true), {enabled: !loading && !isModalOpen && !removalPlot && !removing, intervalMs: 15000});
 
   const plots = allPlots.filter((plot) =>
     (!activeFilter || String(plot.is_active) === activeFilter)

@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, PackageCheck, Search, ShoppingBasket, ShoppingCart, SlidersHorizontal, Truck, Wrench, X } from 'lucide-react';
@@ -23,6 +24,7 @@ export const EquipmentShopPage: React.FC = () => {
   const [sortMode, setSortMode] = useState<SortMode>('recommended');
   const [addedProduct, setAddedProduct] = useState<string | null>(null);
 
+  useLiveRefresh(async()=>{setProducts(await api.get<EquipmentProduct[]>('/equipment/products'));setError('');},{enabled:!loading,intervalMs:10000,protectDraft:false});
   useEffect(() => {
     api.get<EquipmentProduct[]>('/equipment/products').then(setProducts)
       .catch((err) => setError(err.message || 'โหลดสินค้าไม่สำเร็จ'))

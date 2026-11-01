@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { EquipmentPaymentSlip, EquipmentPaymentBadge } from '../../components/common/EquipmentPaymentSlip.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -36,16 +37,19 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const orderEditor=React.useRef(selectedId);orderEditor.current=selectedId;
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const allOrders = await api.get<EquipmentOrder[]>('/equipment/admin/orders');
+      if(silent&&orderEditor.current)return;
       setOrders(allOrders.filter((order) => !isEquipmentOrderInHistory(order)));
     }
-    catch (err: any) { setError(err.message || 'โหลดคำสั่งซื้อไม่สำเร็จ'); }
-    finally { setLoading(false); }
+    catch (err: any) { if (!silent) { setError(err.message || 'โหลดคำสั่งซื้อไม่สำเร็จ'); } }
+    finally { if (!silent) setLoading(false); }
   };
+  useLiveRefresh(() => load(true), {enabled: !loading && !selectedId && !saving, intervalMs: 10000});
   useEffect(() => { void load(); }, []);
   const selectedOrder = orders.find((order) => order.id === selectedId) || null;
   const filtered = useMemo(() => orders.filter((order) => {

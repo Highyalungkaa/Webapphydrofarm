@@ -1,6 +1,7 @@
 import {harvestRange,priceLabel} from '../../lib/pooledBooking.js';
 import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import React, { useEffect, useState } from 'react';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
@@ -49,17 +50,22 @@ export const RoundDetailPage: React.FC = () => {
     }
   }, [id]);
 
-  const fetchRoundDetails = async (roundId: string) => {
+  const detailRequest=React.useRef(0);
+  const fetchRoundDetails = async (roundId: string, silent=false) => {
+    const request=++detailRequest.current;
     try {
-      setLoading(true);
+      if(!silent)setLoading(true);
       const data = await api.get<PlantingRound>(`/rounds/${roundId}`);
+      if(request!==detailRequest.current)return;
       setRound(data);
+      setError(null);
     } catch (err: any) {
-      setError(err.message || 'ไม่สามารถโหลดข้อมูลรอบการปลูกได้');
+      if(!silent&&request===detailRequest.current)setError(err.message || 'ไม่สามารถโหลดข้อมูลรอบการปลูกได้');
     } finally {
-      setLoading(false);
+      if(!silent&&request===detailRequest.current)setLoading(false);
     }
   };
+  useLiveRefresh(()=>id?fetchRoundDetails(id,true):undefined,{enabled:!!id&&!loading,intervalMs:5000,protectDraft:false});
 
   const handleQtyChange = (item: RoundItem, delta: number) => {
     setQtyAlert(null);

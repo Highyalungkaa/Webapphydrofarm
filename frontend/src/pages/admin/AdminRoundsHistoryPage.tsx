@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import {OrderHistoryDialog} from '../../components/admin/OrderHistoryDialog.js';
 import {orderDiscountAmount} from '../../lib/orderReport.js';
@@ -129,9 +130,9 @@ export const AdminRoundsHistoryPage: React.FC = () => {
     loadCompletedRounds();
   }, []);
 
-  const loadCompletedRounds = async () => {
+  const loadCompletedRounds = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [allRoundData, orderData] = await Promise.all([
         api.get<PlantingRound[]>('/admin/rounds'),
         api.get<Order[]>('/admin/orders'),
@@ -140,12 +141,13 @@ export const AdminRoundsHistoryPage: React.FC = () => {
       setRounds(allRounds.filter((round) => round.status === 'completed'));
       setClosedBookingRounds(allRounds.filter((round) => !!round.booking_closes_at || ['booking_closed', 'harvested', 'completed'].includes(round.status)));
       setArchivedOrders((orderData || []).filter((order) => ['completed', 'cancelled', 'no_show'].includes(order.status)));
-    } catch (err: any) {
+    } catch (err: any) { if (!silent) {
       console.error('Error loading completed rounds:', err);
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadCompletedRounds(true), {enabled: !loading, intervalMs: 20000});
 
   const filteredRounds = rounds.filter((r) => {
     if (roundResultFilter === 'unsold' && r.closure_reason !== 'unsold') return false;

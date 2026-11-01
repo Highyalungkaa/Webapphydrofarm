@@ -2,6 +2,7 @@ import {harvestRange,customerCropLines} from '../../lib/pooledBooking.js';
 import {OrderDeadlineNotice} from '../../components/common/OrderDeadlineNotice.js';
 import { formatKg } from '../../lib/bookingQuantity.js';
 import React, { useEffect, useState } from 'react';
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
@@ -48,17 +49,25 @@ export const OrderDetailPage: React.FC = () => {
       .catch(() => setFarmContactPhone(null));
   }, []);
 
-  const fetchOrderDetail = async (orderId: string) => {
+  const detailRequest=React.useRef(0);
+  const fetchOrderDetail = async (orderId: string,silent=false) => {
+    const request=++detailRequest.current;
     try {
-      setLoading(true);
+      if(!silent)setLoading(true);
       const data = await api.get<Order>(`/orders/${orderId}`);
+      if(request!==detailRequest.current)return;
       setOrder(data);
+      setError(null);
     } catch (err: any) {
-      setError(err.message || 'ไม่สามารถโหลดข้อมูลคำสั่งจองได้');
+      if(!silent&&request===detailRequest.current)setError(err.message || 'ไม่สามารถโหลดข้อมูลคำสั่งจองได้');
     } finally {
-      setLoading(false);
+      if(!silent&&request===detailRequest.current)setLoading(false);
     }
   };
+  useLiveRefresh(async()=>{
+    if(!id)return;
+    await Promise.all([fetchOrderDetail(id,true),api.get<{phone:string|null;cancellation_deadline_hours:number}>('/settings/contact').then(contact=>{setFarmContactPhone(contact.phone);setCancellationDeadlineHours(contact.cancellation_deadline_hours);})]);
+  },{enabled:!!id&&!loading&&!isCancelModalOpen&&!isCancelling,intervalMs:10000});
 
   const handleCancelOrder = async () => {
     if (!order) return;

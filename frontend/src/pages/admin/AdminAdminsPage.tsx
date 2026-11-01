@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { formatDateDMY } from '../../lib/dateFormat.js';
@@ -17,17 +18,18 @@ export const AdminAdminsPage: React.FC = () => {
     loadAdmins();
   }, []);
 
-  const loadAdmins = async () => {
+  const loadAdmins = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await api.get<AdminUser[]>('/admin/admins');
       setAdmins(data);
-    } catch (err) {
+    } catch (err) { if (!silent) {
       console.error(err);
-    } finally {
-      setLoading(false);
+    } } finally {
+      if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => loadAdmins(true), {enabled: !loading, intervalMs: 30000});
 
   const formatDate = formatDateDMY;
 

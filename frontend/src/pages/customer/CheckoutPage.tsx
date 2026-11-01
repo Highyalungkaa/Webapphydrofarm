@@ -24,6 +24,7 @@ export const CheckoutPage: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const stockChanged=items.some(item=>item.available_qty_kg!=null&&item.qty_kg>Number(item.available_qty_kg));
 
   // Pre-fill profile info if available
   useEffect(() => {
@@ -58,6 +59,7 @@ export const CheckoutPage: React.FC = () => {
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(stockChanged){setErrorMessage('ปริมาณผักคงเหลือลดลง กรุณากลับไปลดจำนวนในตะกร้าก่อนยืนยัน');return;}
     setErrorMessage(null);
 
     if (!user) {
@@ -179,6 +181,7 @@ export const CheckoutPage: React.FC = () => {
             <span>{errorMessage}</span>
           </div>
         )}
+        {stockChanged&&<p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">ปริมาณผักคงเหลือลดลง มีรายการที่จองเกินยอดล่าสุด กรุณากลับไปลดจำนวนในตะกร้า</p>}
 
         {/* Items Summary Table */}
         <div className="space-y-3">
@@ -369,9 +372,9 @@ export const CheckoutPage: React.FC = () => {
           {/* Submit button */}
           <button
             type="submit"
-            disabled={isSubmitting || !user}
+            disabled={isSubmitting || !user || stockChanged}
             className={`w-full py-3.5 rounded-2xl text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
-              isSubmitting || !user
+              isSubmitting || !user || stockChanged
                 ? 'bg-slate-400 cursor-not-allowed'
                 : 'bg-emerald-800 hover:bg-emerald-900 active:scale-98 shadow-emerald-800/20'
             }`}

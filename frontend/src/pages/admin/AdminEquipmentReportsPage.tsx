@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, CheckCircle2, Clock3, Coins, Download, PackageCheck, ShoppingBag, Truck, Wallet } from 'lucide-react';
 import { api } from '../../lib/api.js';
@@ -15,6 +16,7 @@ export const AdminEquipmentReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  useLiveRefresh(async()=>{setReport(await api.get<ReportData>('/equipment/admin/reports'));setError('');},{enabled:!loading && !exporting,intervalMs:30000});
   useEffect(() => { api.get<ReportData>('/equipment/admin/reports').then(setReport).catch((err) => setError(err.message)).finally(() => setLoading(false)); }, []);
   const summary = useMemo(() => {
     const all = report?.orders || [];

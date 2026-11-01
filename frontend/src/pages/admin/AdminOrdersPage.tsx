@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {orderUpdateIssues,ownWeightForSave} from '../../lib/orderUpdateValidation.js';
 import {isCurrentPlantingRound, showInManagedOrders} from '../../lib/managedOrders.js';
 import {canSelectOrderStep,previousOrderStep,orderProgress} from '../../lib/orderProgress.js';
@@ -76,12 +77,14 @@ export const AdminOrdersPage: React.FC = () => {
     content?.scrollTo({top:0});
   };
 
-  useEffect(() => {
-    api.get<PlantingRound[]>('/admin/rounds').then(data => {
+  const loadCurrentRounds=async()=>{
+    const data=await api.get<PlantingRound[]>('/admin/rounds');
       const currentRounds = data.filter(isCurrentPlantingRound);
       setRounds(currentRounds);
       setSelectedRound(current => current && !currentRounds.some(round => round.id === current) ? '' : current);
-    }).catch(console.error);
+  };
+  useEffect(() => {
+    void loadCurrentRounds().catch(console.error);
     loadOrders();
   }, [selectedRound, selectedStatus, selectedFulfillment, selectedPayment]);
 
@@ -95,10 +98,10 @@ export const AdminOrdersPage: React.FC = () => {
     setSearchParams(nextParams, { replace: true });
   }, [orders, searchParams, setSearchParams]);
 
-  const loadOrders = async () => {
+  const loadOrders = async (silent = false) => {
     const request = ++ordersRequest.current;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setLoadError('');
       const params = new URLSearchParams();
       if (selectedRound) params.append('round_id', selectedRound);
@@ -109,13 +112,14 @@ export const AdminOrdersPage: React.FC = () => {
 
       const data = await api.get<Order[]>(`/admin/orders?${params.toString()}`);
       if (request === ordersRequest.current) setOrders(data.filter(showInManagedOrders));
-    } catch (err:any) {
+    } catch (err:any) { if (!silent) {
       console.error(err);
       if (request === ordersRequest.current) setLoadError(err.message||'ไม่สามารถโหลดออเดอร์ได้ กรุณาลองใหม่');
-    } finally {
-      if (request === ordersRequest.current) setLoading(false);
+    } } finally {
+      if (request === ordersRequest.current) if (!silent) setLoading(false);
     }
   };
+  useLiveRefresh(() => Promise.all([loadOrders(true),loadCurrentRounds()]), {enabled: !loading && !selectedOrder && !isUpdating, intervalMs: 10000});
 
   const handleOpenDetailModal = (order: Order) => {
     setDetailTab('items');
@@ -275,7 +279,7 @@ export const AdminOrdersPage: React.FC = () => {
               />
               <button
                 type="button"
-                onClick={loadOrders}
+                onClick={() => void loadOrders()}
                 className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800"
               >
                 <Search className="w-4 h-4" />

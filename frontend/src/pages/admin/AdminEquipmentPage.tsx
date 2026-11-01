@@ -1,3 +1,4 @@
+import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Edit3, ImagePlus, Package, PackagePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { api } from '../../lib/api.js';
@@ -31,7 +32,8 @@ export const AdminEquipmentPage: React.FC = () => {
   const [stockNote, setStockNote] = useState('');
   const [history, setHistory] = useState<any[] | null>(null);
 
-  const load = async () => { setLoading(true); try { setProducts(await api.get<EquipmentProduct[]>('/equipment/admin/products')); } catch (err: any) { setError(err.message); } finally { setLoading(false); } };
+  const load = async (silent = false) => { if (!silent) setLoading(true); try { setProducts(await api.get<EquipmentProduct[]>('/equipment/admin/products')); } catch (err: any) { if (!silent) { setError(err.message); } } finally { if (!silent) setLoading(false); } };
+  useLiveRefresh(() => load(true), {enabled: !loading && !formOpen && !stockProduct && !saving, intervalMs: 15000});
   useEffect(() => { void load(); }, []);
   useEffect(() => () => { if (imagePreview.startsWith('blob:')) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
   const setField = (key: keyof ProductForm, value: string | boolean) => setForm((current) => ({ ...current, [key]: value }));
