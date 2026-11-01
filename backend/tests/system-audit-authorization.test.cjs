@@ -3,7 +3,7 @@ test('every registered admin endpoint and private customer endpoint enforces HTT
  const app=express();app.use(express.json());const cache=new Map(),routes=[];let unexpected=0;
  const db={auth:{async getUser(token){return token==='customer'?{data:{user:{id:'11111111-1111-4111-8111-111111111111',email:'customer@example.com'}},error:null}:{data:{user:null},error:{message:'Invalid token'}};}},
   from(table){if(table!=='admin_users'){unexpected++;throw Error('Unauthorized business access: '+table);}const q={select(){return q;},ilike(){return q;},limit(){return q;},async maybeSingle(){return{data:null,error:null};}};return q;},
-  rpc(){unexpected++;throw Error('Unauthorized RPC');}};
+  rpc(name){if(name==='get_current_session_deadline')return Promise.resolve({data:new Date(Date.now()+3600000).toISOString(),error:null});unexpected++;throw Error('Unauthorized RPC');}};
  const load=filename=>{filename=path.resolve(filename);if(cache.has(filename))return cache.get(filename);const exports={};cache.set(filename,exports);
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,{exports,console:{error(){},warn(){}},Buffer,process,require(name){
    if(name.endsWith('/config/supabase.js')||name.endsWith('/supabase.js'))return{supabaseAdmin:db,getSupabaseClient:()=>db};
