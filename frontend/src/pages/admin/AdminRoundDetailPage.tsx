@@ -145,7 +145,7 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[]; roundName: string; order
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><Leaf className="h-4 w-4" /></span>
         <div className="min-w-0">
           <h3 id="round-crops-heading" className="break-words text-sm font-extrabold text-slate-900">ผักที่ปลูกใน{roundName}</h3>
-          <p className="text-[10px] text-slate-500">จำนวนต้นหลังหักผักเสียหาย</p>
+          <p className="text-[10px] text-slate-500">หักผักเสียแล้ว ยังไม่หักจำนวนที่ขาย</p>
         </div>
       </div>
       <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{items.length} รายการ</span>
@@ -166,7 +166,7 @@ const RoundCropsSummary: React.FC<{ items: RoundItem[]; roundName: string; order
                 <span className="shrink-0 text-xs text-slate-500">ไม่ระบุจำนวน</span>
               ) : (
                 <span className="shrink-0 text-right">
-                  <strong className="block text-xs text-emerald-700">คงเหลือ {remaining.toLocaleString('th-TH')} ต้น</strong>
+                  <strong className="block text-xs text-emerald-700"><span className="block text-[10px] font-medium">ต้นที่ไม่เสียหาย</span>{remaining.toLocaleString('th-TH')} ต้น</strong>
                   <span className={`block text-[11px] ${lost > 0 ? 'text-rose-600' : 'text-slate-500'}`}>เสียหาย {lost.toLocaleString('th-TH')} ต้น</span>
                 </span>
               )}
@@ -410,7 +410,7 @@ export const AdminRoundDetailPage: React.FC = () => {
             <span className="text-base font-black text-slate-800">{plantCounts.initial.toLocaleString('th-TH')} ต้น</span>
           </div>
           <div className="px-2 text-center">
-            <span className="text-[10px] font-bold text-teal-700 block">จำนวนต้นคงเหลือ</span>
+            <span className="text-[10px] font-bold text-teal-700 block">ต้นที่ไม่เสียหาย</span>
             <span className="text-base font-black text-teal-800">{plantCounts.remaining.toLocaleString('th-TH')} ต้น</span>
           </div>
           <div className="px-2 text-center">
