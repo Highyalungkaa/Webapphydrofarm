@@ -8,7 +8,7 @@ const helpers = {};
 vm.runInNewContext(ts.transpileModule(
   fs.readFileSync(path.resolve(__dirname, '../src/services/plotRoundTimeline.ts'), 'utf8'),
   { compilerOptions: { module: ts.ModuleKind.CommonJS } },
-).outputText, { exports: helpers });
+).outputText, { exports: helpers, require: name => name.endsWith('/harvestDates.js') ? require('./load-service.cjs')('harvestDates') : require(name) });
 
 test('each crop uses its round-specific growing days and the actual transplant date', () => {
   const round = {

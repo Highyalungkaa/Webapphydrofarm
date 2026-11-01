@@ -10,6 +10,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
+import { calculateHarvestDate, transplantDelayDays, usesSeedHarvestDate } from '../../lib/harvestDates.js';
 import { PlantingRound, RoundItem } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -353,7 +354,10 @@ export const AdminRoundDetailPage: React.FC = () => {
   const isBookingConfirmed = ['booking_open', 'booking_closed'].includes(round.status)
     && !!round.booking_opens_at;
   const growingDays = round.growing_days || 45;
-  const calculatedHarvestDate = inputDate && activeStepTab === 4 ? addDaysToDateStr(inputDate, growingDays) : round.expected_harvest_date;
+  const harvestOptions = activeStepTab === 4 && !isViewingPastStep ? {actualDate:inputDate, fromSeed:true} : {};
+  const plantingDelay = transplantDelayDays(round, activeStepTab === 4 ? inputDate : undefined);
+  const seedBasedHarvest = activeStepTab === 4 && !isViewingPastStep || usesSeedHarvestDate(round);
+  const calculatedHarvestDate = activeStepTab === 4 ? calculateHarvestDate(round, growingDays, harvestOptions) : round.expected_harvest_date;
 
   const totalBooked = Number(round.total_booked_kg || 0);
   const forecastItems=(round.round_items||[]).filter(item=>remainingEstimatedKg(item)!=null);
@@ -573,9 +577,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                   {(round.round_items && round.round_items.length > 0) ? (
                     round.round_items.map((it: any) => {
                       const itemDays = Number(itemDaysMap[it.crop_id] ?? (it.growing_days || it.crops?.growing_days || growingDays || 45));
-                      const itemHarvestDate = inputDate
-                        ? addDaysToDateStr(inputDate, itemDays)
-                        : addDaysToDateStr(round.transplant_date || round.planted_at || new Date().toISOString().split('T')[0], itemDays);
+                      const itemHarvestDate = calculateHarvestDate(round, itemDays, harvestOptions);
                       const cropName = it.crop_name || it.crops?.name || 'ผัก';
 
                       return (
@@ -618,7 +620,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                           <div className="bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200/60 flex items-center gap-2 text-xs text-sky-900 self-start sm:self-auto">
                             <Calendar className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
                             <span>
-                              วันปลูกจริง ({inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}) + {itemDays} วัน ➔{' '}
+                              {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {itemDays} วัน{seedBasedHarvest && plantingDelay > 0 ? ` + ล่าช้า ${plantingDelay} วัน` : ''} ➔{' '}
                               <strong className="text-sky-950 font-black underline">
                                 พร้อมเก็บและขาย: {formatDateDMY(itemHarvestDate)}
                               </strong>
@@ -629,7 +631,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     })
                   ) : (
                     <div className="p-3 bg-white rounded-xl border border-sky-100 text-xs text-sky-900">
-                      วันปลูกจริง ({inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}) + {growingDays} วัน ➔{' '}
+                      {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {growingDays} วัน{seedBasedHarvest && plantingDelay > 0 ? ` + ล่าช้า ${plantingDelay} วัน` : ''} ➔{' '}
                       <strong className="font-bold underline">พร้อมเก็บและขาย: {formatDateDMY(calculatedHarvestDate)}</strong>
                     </div>
                   )}
@@ -638,7 +640,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <p className="text-[11px] text-sky-800/80 pt-1 border-t border-sky-200/60 flex items-center gap-1.5">
                   <span className="font-bold">💡 หมายเหตุ:</span>
                   <span>
-                    วันที่พร้อมเก็บและขายคำนวณแยกของแต่ละผัก โดยอิงจาก <strong>จำนวนวันปลูกที่กรอกตอนเพิ่มผักในรอบนี้</strong> + <strong>วันปลูกจริง (Step 4)</strong>
+                    {seedBasedHarvest ? <>นับระยะเวลาจาก <strong>วันปักเม็ด</strong> หากปลูกจริงช้ากว่าวันเริ่มปลูก จะเลื่อนวันเก็บเกี่ยวตามจำนวนวันที่ช้า</> : <>รอบนี้บันทึกด้วยสูตรเดิม: วันปลูกจริง + ระยะเวลาปลูก</>}
                   </span>
                 </p>
                 </div>
@@ -658,8 +660,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                   {(round.round_items && round.round_items.length > 0) ? (
                     round.round_items.map((it: any) => {
                       const itemDays = Number(itemDaysMap[it.crop_id] ?? (it.growing_days || it.crops?.growing_days || growingDays || 45));
-                      const baseDate = round.transplant_date || round.planted_at || round.seed_date || new Date().toISOString().split('T')[0];
-                      const itemHarvestDate = addDaysToDateStr(baseDate, itemDays);
+                      const itemHarvestDate = calculateHarvestDate(round, itemDays);
                       const cropName = it.crop_name || it.crops?.name || 'ผัก';
 
                       // Booking dates are managed on the booking page, not this form.
@@ -679,7 +680,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                 {cropName}
                               </span>
                               <span className="text-[11px] text-slate-500">
-                                ระยะปลูก {itemDays} วัน {round.transplant_date ? `(วันปลูกจริง: ${formatDateDMY(round.transplant_date)})` : ''}
+                                ระยะเวลา {itemDays} วัน{seedBasedHarvest ? ` จากวันปักเม็ด${plantingDelay > 0 ? ` · เลื่อน ${plantingDelay} วัน` : ''}` : round.transplant_date ? ` (วันปลูกจริง: ${formatDateDMY(round.transplant_date)})` : ''}
                               </span>
                             </div>
                           </div>

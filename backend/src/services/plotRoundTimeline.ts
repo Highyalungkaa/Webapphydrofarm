@@ -1,3 +1,5 @@
+import { calculateHarvestDate } from './harvestDates.js';
+
 interface TimelineRound {
   status: string;
   current_step?: number | null;
@@ -27,14 +29,7 @@ export function getPlotRoundTimeline(
   const transplantDate = round.transplant_date || (
     round.status !== 'draft' || Number(round.current_step) >= 5 ? round.planted_at : null
   );
-  let harvestDate: string | null = null;
-  if (transplantDate) {
-    const date = new Date(`${transplantDate.slice(0, 10)}T00:00:00Z`);
-    if (!Number.isNaN(date.getTime())) {
-      date.setUTCDate(date.getUTCDate() + growingDays);
-      harvestDate = date.toISOString().slice(0, 10);
-    }
-  }
+  const harvestDate = calculateHarvestDate(round, growingDays);
   return {
     status: round.status,
     current_step: round.current_step || 1,

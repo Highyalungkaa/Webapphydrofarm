@@ -2,6 +2,7 @@ import {roundOrderFilter,scopeRoundOrders} from '../../services/roundOrders.js';
 import {getPlotPlantingAllocations} from '../../services/plotPlantingAllocations.js';
 import {allocateRecordedPlotSlots} from '../../services/plantAllocation.js';
 import { getPlotCropIds } from '../../services/plotCrops.js';
+import { calculateHarvestDate, SEED_HARVEST_BASIS } from '../../services/harvestDates.js';
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { getSupabaseClient, supabaseAdmin } from '../../config/supabase.js';
@@ -473,6 +474,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
             cropGrowingDays: cropGrowingDaysMap,
             cropPlotIds: cropPlotIdsMap,
             cropPlotAllocations,
+            harvestDateBasis: SEED_HARVEST_BASIS,
           });
         }
         return inputRoundData.notes?.trim() || null;
@@ -593,7 +595,17 @@ router.patch('/:id/step', async (req: AuthenticatedRequest, res: Response): Prom
           const maxDays = Math.max(...Object.values(crop_growing_days));
           if (maxDays > 0) days = maxDays;
         }
-        const calculatedHarvest = addDaysToDateStr(date, days);
+        const calculatedHarvest = calculateHarvestDate(currentRound, days, {actualDate:date, fromSeed:true});
+        if (!calculatedHarvest) {
+          res.status(400).json({error:'ไม่สามารถคำนวณวันเก็บเกี่ยวได้ กรุณาตรวจสอบวันที่และระยะเวลาการเจริญเติบโต'});
+          return;
+        }
+        let metadata: Record<string, any> = {};
+        try {
+          const parsedNotes = JSON.parse(updatePayload.notes || currentRound.notes || '{}');
+          if (parsedNotes && typeof parsedNotes === 'object' && !Array.isArray(parsedNotes)) metadata = parsedNotes;
+        } catch { metadata.note = currentRound.notes || ''; }
+        updatePayload.notes = JSON.stringify({...metadata, harvestDateBasis:SEED_HARVEST_BASIS});
 
         updatePayload.transplant_date = date;
         updatePayload.planted_at = date;

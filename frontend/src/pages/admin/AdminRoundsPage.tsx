@@ -1034,7 +1034,7 @@ export const AdminRoundsPage: React.FC = () => {
 
                             {/* Growing Days */}
                             <div className="w-full sm:w-48 sm:shrink-0">
-                              <label htmlFor={`growing-days-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">ระยะเวลาการเจริญเติบโต (จากวันปลูกจริง) <span className="text-rose-600">*</span></label>
+                              <label htmlFor={`growing-days-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">ระยะเวลาการเจริญเติบโต <span className="text-rose-600">*</span></label>
                               <input
                                 id={`growing-days-${idx}`}
                                 type="number"
@@ -1047,7 +1047,7 @@ export const AdminRoundsPage: React.FC = () => {
                                 placeholder="จำนวนวัน"
                                 aria-invalid={invalidGrowingDays}
                                 aria-describedby={invalidGrowingDays ? `growing-days-warning-${idx}` : undefined}
-                                title="ระยะเวลาการเจริญเติบโตจากวันปลูกจริง (วัน)"
+                                title="ระยะเวลาการเจริญเติบโตนับจากวันปักเม็ด (วัน)"
                                 className={`w-full p-2.5 rounded-xl border bg-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 ${invalidGrowingDays ? 'border-rose-400' : 'border-slate-200'}`}
                               />
                               {invalidGrowingDays && <p id={`growing-days-warning-${idx}`} className="mt-1 text-[10px] font-semibold text-rose-600">{it.growing_days === '' ? 'กรุณาระบุระยะเวลาการเจริญเติบโต' : 'กรุณากรอกจำนวนวันเต็มมากกว่า 0'}</p>}

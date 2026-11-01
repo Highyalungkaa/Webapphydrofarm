@@ -46,7 +46,7 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } =
     return exports;
   };
   const helpers = loadTs('../src/services/plotCrops.ts', require);
-  const timeline = loadTs('../src/services/plotRoundTimeline.ts', require);
+  const timeline = loadTs('../src/services/plotRoundTimeline.ts', name => name.endsWith('/harvestDates.js') ? require('./load-service.cjs')('harvestDates') : require(name));
   const allocations = loadTs('../src/services/plotPlantingAllocations.ts', name => name.endsWith('/plantAllocation.js') ? loadTs('../src/services/plantAllocation.ts',require) : name.endsWith('/plotCrops.js') ? helpers : require(name));
   loadTs('../src/routes/admin/plots.ts', (name) => {
     if (name === 'express') return { Router: () => router };

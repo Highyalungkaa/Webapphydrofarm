@@ -43,7 +43,7 @@ function setup(initialRound = {}) {
   vm.runInNewContext(code, {
     exports, console,
     require(name) {
-      if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if (name === 'express') return { Router: () => router };
+      if(name.endsWith('/harvestDates.js'))return require('./load-service.cjs')('harvestDates');if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');if (name === 'express') return { Router: () => router };
       if (name.endsWith('/supabase.js')) return { getSupabaseClient: () => db };
       if (name.endsWith('/auth.js')) return {};
       if (name.endsWith('/audit.js')) return { recordAuditLog: async () => {} };
@@ -134,4 +134,19 @@ test('closing a scheduled booking before opening keeps the round completable', a
   assert.equal((await app.confirm(7)).statusCode, 200);
   assert.equal(app.round().booking_closes_at, null);
   assert.equal((await app.confirm(8)).statusCode, 200);
+});
+
+
+test('step four saves the seed-based harvest and does not compound repeated transplant delays',async()=>{
+ const app=setup({current_step:4,seed_date:'2026-08-15',planting_start_date:'2026-08-29',growing_days:40,notes:JSON.stringify({cropPlotIds:{oak:['plot-a']},cropGrowingDays:{oak:40}})});
+ const save=async date=>{const result=await app.confirm(4,{date,growing_days:40,crop_growing_days:{oak:40}});assert.equal(result.statusCode,200);};
+ await save('2026-08-31');
+ assert.equal(app.round().expected_harvest_date,'2026-09-26');
+ assert.equal(app.round().fulfillment_date,'2026-09-26');
+ assert.equal(app.round().growing_days,40);
+ assert.equal(JSON.parse(app.round().notes).cropGrowingDays.oak,40);
+ assert.equal(JSON.parse(app.round().notes).harvestDateBasis,'seed_with_transplant_delay');
+ await save('2026-08-31');assert.equal(app.round().expected_harvest_date,'2026-09-26');
+ await save('2026-08-29');assert.equal(app.round().expected_harvest_date,'2026-09-24');
+ assert.deepEqual(JSON.parse(app.round().notes).cropPlotIds,{oak:['plot-a']});
 });
