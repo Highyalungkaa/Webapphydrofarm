@@ -786,7 +786,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         <h2 className="text-lg font-extrabold text-slate-900">ยอดจองและคำสั่งซื้อ</h2>
         <p className="text-sm text-slate-500">ดูน้ำหนักที่จอง น้ำหนักที่ชั่ง และคำสั่งจองของลูกค้าในรอบนี้</p>
       </div>
-      <RoundWeightSummary round={round} />
+      <RoundWeightSummary round={round} onChanged={loadRound} />
 
       {/* Customer Orders in this Round */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">

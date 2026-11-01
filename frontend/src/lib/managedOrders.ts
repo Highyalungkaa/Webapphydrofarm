@@ -1,9 +1,9 @@
 import type {Order, PlantingRound} from '../types/index.js';
 
-type RoundState = Partial<Pick<PlantingRound, 'status' | 'completed_date' | 'current_step'>>;
+type RoundState = Partial<Pick<PlantingRound, 'status' | 'completed_date' | 'current_step' | 'sold_out_date'>>;
 export function isCurrentPlantingRound(round?: RoundState | null): boolean {
   return !!round && ['draft','growing','booking_open','booking_closed','harvested'].includes(round.status || '')
-    && !round.completed_date && Number(round.current_step || 1) < 8;
+    && !round.completed_date && (Number(round.current_step || 1) < 8 || !!round.sold_out_date);
 }
 
 export function showInManagedOrders(order: Order): boolean {

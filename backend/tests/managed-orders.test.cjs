@@ -10,6 +10,7 @@ const order={status:'completed',payment_status:'paid',planting_rounds:open};
 test('round filters keep current rounds including closed bookings, but omit ended rounds',()=>{
   for(const status of ['draft','growing','booking_open','booking_closed','harvested'])assert.equal(isCurrentPlantingRound({...open,status}),true);
   for(const round of [closed,{...open,status:'cancelled'},{...open,completed_date:'2026-11-02'},{...open,current_step:8},null])assert.equal(isCurrentPlantingRound(round),false);
+  assert.equal(isCurrentPlantingRound({...open,status:'booking_closed',current_step:8,sold_out_date:'2026-11-02'}),true,'sold out is not final round closure');
 });
 
 test('completed paid orders remain managed until their round ends',()=>{
