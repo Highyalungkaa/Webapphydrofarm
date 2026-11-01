@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { getPlotCropIds } from '../../lib/plotCrops.js';
 import { PlotCard } from '../../components/admin/PlotCard.js';
-import { Plot, Crop } from '../../types/index.js';
+import { Plot } from '../../types/index.js';
 import {
   Plus,
   AlertCircle,
@@ -18,7 +17,6 @@ const isPlotInUse = (plot: Plot) => Number(plot.used_slots || 0) > 0 || (plot.oc
 export const AdminPlotsPage: React.FC = () => {
   const [allPlots, setAllPlots] = useState<Plot[]>([]);
   const [unassignedRoundItems, setUnassignedRoundItems] = useState<Array<{ round_id: string; round_name: string; crop_name: string }>>([]);
-  const [crops, setCrops] = useState<Crop[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -39,7 +37,6 @@ export const AdminPlotsPage: React.FC = () => {
   const [name, setName] = useState('');
   const [zoneName, setZoneName] = useState('');
   const [slotCapacity, setSlotCapacity] = useState<number>(200);
-  const [cropIds, setCropIds] = useState<string[]>([]);
   const [isActive, setIsActive] = useState<boolean>(true);
   const [notes, setNotes] = useState('');
 
@@ -54,16 +51,10 @@ export const AdminPlotsPage: React.FC = () => {
     try {
       setLoading(true);
       setLoadError(null);
-      const [plotsRes, cropsData] = await Promise.all([
-        api.get<{ plots: Plot[]; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>(
-          '/admin/plots'
-        ),
-        api.get<Crop[]>('/admin/crops'),
-      ]);
+      const plotsRes = await api.get<{ plots: Plot[]; unassigned_round_items?: Array<{ round_id: string; round_name: string; crop_name: string }> }>('/admin/plots');
 
       setAllPlots(plotsRes.plots || []);
       setUnassignedRoundItems(plotsRes.unassigned_round_items || []);
-      setCrops(cropsData || []);
     } catch (err: any) {
       setLoadError(err.message || 'ไม่สามารถโหลดข้อมูลการใช้แปลงปลูกได้');
     } finally {
@@ -75,7 +66,6 @@ export const AdminPlotsPage: React.FC = () => {
     (!zoneFilter || plot.zone_name === zoneFilter) &&
     (!activeFilter || String(plot.is_active) === activeFilter)
   );
-  const activeCrops = crops.filter((crop) => crop.is_active !== false);
   const plotGroups = [
     { key: 'in-use', title: 'โซนใช้งาน', description: 'แปลงที่มีรอบปลูกกำลังใช้งานอยู่', plots: plots.filter(isPlotInUse), emptyMessage: 'ยังไม่มีแปลงที่กำลังใช้งาน', icon: Sprout },
     { key: 'vacant', title: 'โซนพื้นที่ว่าง', description: 'แปลงที่ยังไม่มีรอบปลูกใช้งาน', plots: plots.filter((plot) => !isPlotInUse(plot)), emptyMessage: 'ยังไม่มีแปลงว่าง', icon: LayoutGrid },
@@ -89,7 +79,6 @@ export const AdminPlotsPage: React.FC = () => {
     setName(`แปลงที่ ${allPlots.length + 1}`);
     setZoneName(existingZones.length > 0 ? existingZones[0] : 'โซน A (โรงเรือน 1)');
     setSlotCapacity(200);
-    setCropIds([]);
     setIsActive(true);
     setNotes('');
     setError(null);
@@ -101,7 +90,6 @@ export const AdminPlotsPage: React.FC = () => {
     setName(plot.name);
     setZoneName(plot.zone_name);
     setSlotCapacity(plot.slot_capacity);
-    setCropIds(getPlotCropIds(plot));
     setIsActive(plot.is_active);
     setNotes(plot.notes || '');
     setError(null);
@@ -115,7 +103,6 @@ export const AdminPlotsPage: React.FC = () => {
         name: plot.name,
         zone_name: plot.zone_name,
         slot_capacity: plot.slot_capacity,
-        crop_ids: getPlotCropIds(plot),
         is_active: !plot.is_active,
         notes: plot.notes,
       });
@@ -135,7 +122,6 @@ export const AdminPlotsPage: React.FC = () => {
         name: name.trim(),
         zone_name: zoneName.trim(),
         slot_capacity: Number(slotCapacity),
-        crop_ids: cropIds,
         is_active: isActive,
         notes: notes.trim() || null,
       };
@@ -163,7 +149,7 @@ export const AdminPlotsPage: React.FC = () => {
       if (permanent) await api.delete(`/admin/plots/${removalPlot.id}`);
       else await api.put(`/admin/plots/${removalPlot.id}`, {
         name: removalPlot.name, zone_name: removalPlot.zone_name,
-        slot_capacity: removalPlot.slot_capacity, crop_ids: getPlotCropIds(removalPlot),
+        slot_capacity: removalPlot.slot_capacity,
         is_active: false, notes: removalPlot.notes,
       });
       setRemovalPlot(null);
@@ -188,7 +174,7 @@ export const AdminPlotsPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">การจัดการแปลงปลูก (Plots Management)</h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            สร้างแปลงปลูกตามโซน กำหนดจำนวนต้นที่แต่ละแปลงรองรับ และเลือกผักได้หลายชนิดต่อแปลง
+            กำหนดจำนวนต้นที่แต่ละแปลงรองรับ แล้วเลือกผักจากแคตตาล็อกเมื่อสร้างรอบปลูก
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -312,7 +298,7 @@ export const AdminPlotsPage: React.FC = () => {
                 </header>
                 {group.plots.length > 0 ? (
                   <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-                    {group.plots.map((plot) => <PlotCard key={plot.id} plot={plot} crops={crops} onEdit={openEditModal} onToggle={togglePlotActive} onDelete={handleDelete} />)}
+                    {group.plots.map((plot) => <PlotCard key={plot.id} plot={plot} onEdit={openEditModal} onToggle={togglePlotActive} onDelete={handleDelete} />)}
                   </div>
                 ) : (
                   <p className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-6 text-center text-sm text-slate-400">{group.emptyMessage}</p>
@@ -418,32 +404,6 @@ export const AdminPlotsPage: React.FC = () => {
                 <span className="text-[11px] text-emerald-800 block">
                   💡 กำหนดจำนวนต้นที่แปลงนี้รองรับได้ ระบบจะตรวจพื้นที่ว่างของแปลงเมื่อสร้างรอบปลูก
                 </span>
-              </div>
-
-              {/* Crop Selection */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">
-                  ชนิดผักที่จะปลูกในแปลงนี้
-                </label>
-                <p className="mb-2 text-xs text-slate-500">เลือกผักได้หลายชนิด ไม่จำกัดจำนวนชนิดต่อแปลง (เลือกแล้ว {cropIds.length} ชนิด)</p>
-                <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {crops.filter((crop) => crop.is_active !== false || cropIds.includes(crop.id)).map((crop) => (
-                    <label key={crop.id} className="flex cursor-pointer items-center gap-3 p-3 hover:bg-emerald-50">
-                      <input
-                        type="checkbox"
-                        checked={cropIds.includes(crop.id)}
-                        onChange={(event) => setCropIds((previous) => event.target.checked ? [...previous, crop.id] : previous.filter((id) => id !== crop.id))}
-                        className="h-4 w-4 rounded text-emerald-600"
-                      />
-                      <span>
-                        <span className="block text-sm font-bold text-slate-800">{crop.name}{crop.is_active === false ? ' (ปิดใช้งานแล้ว · รายการเดิม)' : ''}</span>
-                        <span className="text-xs text-slate-500">฿{Number(crop.default_price_per_kg).toFixed(0)}/กก.</span>
-                      </span>
-                    </label>
-                  ))}
-                  {activeCrops.length === 0 && cropIds.length === 0 && <p className="p-3 text-xs text-slate-500">ยังไม่มีชนิดผักที่เปิดใช้งานในแคตตาล็อก</p>}
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">จำนวนต้นที่รองรับเป็นความจุรวมของแปลง ใช้ร่วมกันสำหรับผักทุกชนิดที่เลือก</p>
               </div>
 
               {/* Plot Active Toggle */}

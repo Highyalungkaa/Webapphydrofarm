@@ -140,3 +140,16 @@ test('unplaced plants in an older legacy round cannot be silently ignored when c
  const result=await createRound(1,100,{crops:[{id:cropId},{id:other}],plots:[{id:plotId,crop_ids:[cropId],slot_capacity:100,is_active:true},{id:second,crop_ids:[other],slot_capacity:100,is_active:true}],rounds:[{id:'legacy',status:'growing',current_step:2,notes:'legacy note',round_items:[{crop_id:cropId,plant_count:101}]}],items:[{crop_id:other,plant_count:1,growing_days:30,price_per_kg:100,plot_ids:[second]}]});
  assert.equal(result.res.statusCode,400);assert.match(result.res.body.error,/รอบเดิม/);assert.equal(result.savedItems,undefined);
 });
+
+
+test('any active catalog crop can use a plot regardless of retired crop assignments', async () => {
+  for (const crop_ids of [[], ['33333333-3333-4333-8333-333333333333']]) {
+    const {res,savedItems}=await createRound(50,100,{plots:[{id:plotId,crop_ids,slot_capacity:100,is_active:true}]});
+    assert.equal(res.statusCode,201);
+    assert.equal(savedItems[0].plant_count,50);
+  }
+  const inactive=await createRound(50,100,{plots:[{id:plotId,crop_ids:[],slot_capacity:100,is_active:false}]});
+  assert.equal(inactive.res.statusCode,400);
+  const over=await createRound(101,100,{plots:[{id:plotId,crop_ids:[],slot_capacity:100,is_active:true}]});
+  assert.equal(over.res.statusCode,400);
+});

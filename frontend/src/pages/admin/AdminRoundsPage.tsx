@@ -1,7 +1,7 @@
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import {plantCountToKg} from '../../lib/plantingQuantities.js';
 import { getRoundCropAvailability } from '../../lib/roundCropAvailability.js';
-import { plotSupportsCrop, allocatePlotSlots } from '../../lib/plotCrops.js';
+import { allocatePlotSlots } from '../../lib/plotCrops.js';
 import { PlotCapacityBar } from '../../components/admin/PlotCapacityBar.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -158,7 +158,7 @@ export const AdminRoundsPage: React.FC = () => {
       setFormError(setupLoadError || cropAvailability.issues[0]?.message || 'เพิ่มผักที่พร้อมปลูกครบทุกชนิดแล้ว หากต้องการเพิ่มชนิดอื่น กรุณาตรวจสอบแคตตาล็อกผักและแปลงปลูก');
       return;
     }
-    const cropPlots = activePlots.filter((p) => plotSupportsCrop(p, availableCrop.id));
+    const cropPlots = activePlots;
     const availableCropPlots = cropPlots.filter((p) => {
       const occ = plotSlotAllocation.used[p.id] || 0;
       return Number(p.slot_capacity || 0) - occ > 0;
@@ -198,7 +198,7 @@ export const AdminRoundsPage: React.FC = () => {
       return;
     }
     setFormError(null);
-    const cropPlots = activePlots.filter((p) => plotSupportsCrop(p, cropId));
+    const cropPlots = activePlots;
     const availableCropPlots = cropPlots.filter((p) => {
       const occ = itemOccupiedSlots(index, p.id);
       return Number(p.slot_capacity || 0) - occ > 0;
@@ -228,8 +228,8 @@ export const AdminRoundsPage: React.FC = () => {
   const handleTogglePlot = (itemIndex: number, plotId: string) => {
     const occ = plotOccupancyMap[plotId];
     const plot = activePlots.find((p) => p.id === plotId);
-    if (!plot || !plotSupportsCrop(plot, items[itemIndex]?.crop_id)) {
-      setFormError('เลือกได้เฉพาะแปลงที่กำหนดไว้สำหรับผักชนิดนี้');
+    if (!plot) {
+      setFormError('เลือกได้เฉพาะแปลงที่เปิดใช้งาน');
       return;
     }
     const cap = Number(plot?.slot_capacity || 0);
@@ -275,7 +275,7 @@ export const AdminRoundsPage: React.FC = () => {
     setItems((prevItems) =>
       prevItems.map((it, idx) => {
         if (idx !== itemIndex) return it;
-        const designatedPlots = activePlots.filter((p) => plotSupportsCrop(p, it.crop_id));
+        const designatedPlots = activePlots;
         // Only select plots that have available space > 0
         const availablePlots = designatedPlots.filter((p) => {
           const occ = itemOccupiedSlots(itemIndex, p.id);
@@ -374,7 +374,7 @@ export const AdminRoundsPage: React.FC = () => {
         return;
       }
       const selectedPlotIds = it.selected_plot_ids || [];
-      const chosenPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id) && plotSupportsCrop(p, it.crop_id));
+      const chosenPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
 
       if (chosenPlots.length === 0 || chosenPlots.length !== selectedPlotIds.length) {
         setFormError(`กรุณาเลือกแปลงปลูกสำหรับ ${cropName} อย่างน้อย 1 แปลง`);
@@ -950,8 +950,8 @@ export const AdminRoundsPage: React.FC = () => {
                       const selectedCrop = crops.find((c) => c.id === it.crop_id);
                       const requiredSlots = it.plant_count;
 
-                      // Only plots designated for this crop can be selected.
-                      const designatedPlots = activePlots.filter((p) => plotSupportsCrop(p, it.crop_id));
+                      // Every active plot can grow any active catalog crop.
+                      const designatedPlots = activePlots;
 
                       // Selected plots for this item
                       const selectedPlotIds = it.selected_plot_ids || [];
@@ -1003,10 +1003,9 @@ export const AdminRoundsPage: React.FC = () => {
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white font-bold text-xs focus:ring-2 focus:ring-emerald-500 text-slate-900"
                               >
                                 {designatedCrops.filter((crop) => crop.id === it.crop_id || !items.some((item) => item.crop_id === crop.id)).map((c) => {
-                                  const plotsCount = activePlots.filter((p) => plotSupportsCrop(p, c.id)).length;
                                   return (
                                     <option key={c.id} value={c.id}>
-                                      {c.name} (มีแปลงประจำ {plotsCount} แปลง)
+                                      {c.name}
                                     </option>
                                   );
                                 })}
@@ -1099,7 +1098,7 @@ export const AdminRoundsPage: React.FC = () => {
                                       onClick={() => handleSelectAllPlotsForCrop(idx)}
                                       className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition-colors shadow-2xs"
                                     >
-                                      ⚡ เลือกทุกแปลงของผักนี้ ({designatedPlots.length} แปลง)
+                                      ⚡ เลือกทุกแปลงที่มีพื้นที่ว่าง
                                     </button>
                                   )}
                                 </div>
@@ -1168,7 +1167,7 @@ export const AdminRoundsPage: React.FC = () => {
                                     onClick={() => handleSelectAllPlotsForCrop(idx)}
                                     className="px-2 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
                                   >
-                                    เลือกแปลงประจำ ({designatedPlots.length})
+                                    เลือกแปลงที่มีพื้นที่ว่าง
                                   </button>
                                 )}
                                 {totalSelectedAvailableSlots > 0 && totalSelectedAvailableSlots !== requiredSlots && (
@@ -1339,7 +1338,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   {designatedPlots.length > 0 && (
                                     <div className="space-y-1.5">
                                       <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                                        <span>🌱 แปลงที่กำหนดไว้สำหรับ {selectedCrop?.name} ({designatedPlots.length} แปลง):</span>
+                                        <span>🌱 แปลงที่เลือกปลูกได้ ({designatedPlots.length} แปลง):</span>
                                         <span className="text-[10px] text-slate-400 font-normal">
                                           ความจุรวม: {designatedPlots.reduce((s, p) => s + p.slot_capacity, 0).toLocaleString()} ต้น
                                         </span>
@@ -1350,11 +1349,11 @@ export const AdminRoundsPage: React.FC = () => {
                                     </div>
                                   )}
 
-                                  {/* A crop cannot use plots designated for another crop. */}
+                                  {/* At least one active plot is needed to plant. */}
                                   {designatedPlots.length === 0 && (
                                     <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-800 text-[11px] flex items-center justify-between">
                                       <span>
-                                        ผักนี้ยังไม่มีแปลงปลูกที่กำหนดไว้ กรุณากำหนดชนิดผักให้แปลงก่อนสร้างรอบ
+                                        ยังไม่มีแปลงที่เปิดใช้งาน กรุณาสร้างหรือเปิดใช้งานแปลงก่อนสร้างรอบ
                                       </span>
                                       <Link
                                         to="/admin/plots"

@@ -3,7 +3,6 @@ import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import {remainingEstimatedKg} from '../../lib/estimatedYield.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
-import { plotSupportsCrop } from '../../lib/plotCrops.js';
 import { PlantLossPanel } from '../../components/admin/PlantLossPanel.js';
 import { UnsoldRoundClose } from '../../components/admin/UnsoldRoundClose.js';
 import React, { useEffect, useState } from 'react';

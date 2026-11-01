@@ -71,11 +71,11 @@ function setup({ oldPlot, inactive = [], plots = [], rounds = [], writeError } =
   };
 }
 
-test('create saves every selected crop once in one plot', async () => {
+test('create needs only plot details and capacity, ignoring retired crop assignments', async () => {
   const app = setup();
   assert.equal((await app.request('post', { crop_ids: [...ids, ids[0]] })).statusCode, 201);
-  assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify(ids));
-  assert.equal(app.saved().crop_id, ids[0]);
+  assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify([]));
+  assert.equal(app.saved().crop_id, null);
 });
 
 test('plot capacity is independent of the retired farm ceiling', async () => {
@@ -91,9 +91,9 @@ test('an unapplied database migration reports the old ceiling clearly', async ()
   assert.match(result.body.error, /migration 047/);
 });
 
-test('unknown or newly inactive crops are rejected', async () => {
-  assert.equal((await setup().request('post', { crop_ids: [ids[0], '44444444-4444-4444-8444-444444444444'] })).statusCode, 400);
-  assert.equal((await setup({ inactive: [ids[1]] }).request('post', { crop_ids: ids })).statusCode, 400);
+test('plot creation does not depend on the old crop whitelist', async () => {
+  assert.equal((await setup().request('post', { crop_ids: [ids[0], '44444444-4444-4444-8444-444444444444'] })).statusCode, 201);
+  assert.equal((await setup({ inactive: [ids[1]] }).request('post', { crop_ids: ids })).statusCode, 201);
 });
 
 test('edit and status changes preserve existing assignments, including inactive crops', async () => {
@@ -101,14 +101,15 @@ test('edit and status changes preserve existing assignments, including inactive 
   assert.equal((await app.request('put', { is_active: false })).statusCode, 200);
   assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify(ids));
   assert.equal((await app.request('put', { crop_ids: [] })).statusCode, 200);
-  assert.equal(app.saved().crop_ids.length, 0);
-  assert.equal(app.saved().crop_id, null);
+  assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify(ids));
+  assert.equal(app.saved().crop_id, ids[0]);
 });
 
 test('legacy single-crop data remains editable', async () => {
   const app = setup({ oldPlot: { id: 'plot', ...body, crop_id: ids[0] } });
   assert.equal((await app.request('put', {})).statusCode, 200);
-  assert.equal(JSON.stringify(app.saved().crop_ids), JSON.stringify([ids[0]]));
+  assert.equal(app.saved().crop_id, ids[0]);
+  assert.equal(app.saved().crop_ids, undefined);
 });
 
 test('plot listing includes milestone dates and crop-specific harvests for each occupying round', async () => {

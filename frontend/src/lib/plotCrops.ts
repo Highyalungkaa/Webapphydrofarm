@@ -1,13 +1,3 @@
-import type { Plot } from '../types/index.js';
-
-export function getPlotCropIds(plot: Pick<Plot, 'crop_ids' | 'crop_id'>): string[] {
-  return plot.crop_ids ?? (plot.crop_id ? [plot.crop_id] : []);
-}
-
-export function plotSupportsCrop(plot: Pick<Plot, 'crop_ids' | 'crop_id'>, cropId: string): boolean {
-  return getPlotCropIds(plot).includes(cropId);
-}
-
 /** Allocate constrained crops first and reroute flexible crops into free selected plots. */
 export function allocatePlotSlots(
   plots: {id:string;slot_capacity:number}[],

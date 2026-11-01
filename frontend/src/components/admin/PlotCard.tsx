@@ -1,23 +1,20 @@
 import React from 'react';
-import { Edit2, Leaf, MapPin, Power, Trash2 } from 'lucide-react';
-import type { Crop, Plot } from '../../types/index.js';
-import { getPlotCropIds } from '../../lib/plotCrops.js';
+import { Edit2, MapPin, Power, Trash2 } from 'lucide-react';
+import type { Plot } from '../../types/index.js';
 import { PlotRoundTimeline } from './PlotRoundTimeline.js';
 
 interface Props {
   plot: Plot;
-  crops: Crop[];
   onEdit: (plot: Plot) => void;
   onToggle: (plot: Plot) => void;
   onDelete: (plot: Plot) => void;
 }
 
-export const PlotCard: React.FC<Props> = ({ plot, crops, onEdit, onToggle, onDelete }) => {
+export const PlotCard: React.FC<Props> = ({ plot, onEdit, onToggle, onDelete }) => {
   const capacity = Number(plot.slot_capacity || 0);
   const used = Math.max(0, Math.min(capacity, Number(plot.used_slots || 0)));
   const free = Math.max(0, capacity - used);
   const percent = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
-  const cropIds = getPlotCropIds(plot);
   const state = !plot.is_active ? 'เลิกใช้งานแล้ว' : used === 0 ? 'ว่างพร้อมปลูก' : free === 0 ? 'เต็มแปลง' : 'กำลังปลูก';
   const statusStyle = !plot.is_active ? 'bg-slate-100 text-slate-500' : free === 0
     ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800';
@@ -46,13 +43,6 @@ export const PlotCard: React.FC<Props> = ({ plot, crops, onEdit, onToggle, onDel
           </div>
         </div>
 
-        <section className="mt-5" aria-label="ผักที่ปลูกได้">
-          <h4 className="mb-2 text-xs font-bold text-slate-700">ผักที่ปลูกได้ <span className="font-normal text-slate-400">{cropIds.length} ชนิด</span></h4>
-          <div className="flex flex-wrap gap-1.5">
-            {cropIds.map((id) => <span key={id} className="inline-flex max-w-full items-start gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] text-slate-600"><Leaf className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" /><span className="break-words">{crops.find((crop) => crop.id === id)?.name || (plot.crops?.id === id ? plot.crops.name : 'ไม่พบชนิดผัก')}</span></span>)}
-          </div>
-          {cropIds.length === 0 && <button type="button" onClick={() => onEdit(plot)} className="rounded-lg border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">+ กำหนดผักให้แปลงนี้</button>}
-        </section>
 
         <PlotRoundTimeline rounds={plot.occupying_rounds || []} />
         {plot.notes && <p className="mt-4 break-words rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500"><span className="font-semibold">หมายเหตุ: </span>{plot.notes}</p>}

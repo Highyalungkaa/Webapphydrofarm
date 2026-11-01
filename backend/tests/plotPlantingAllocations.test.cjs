@@ -40,3 +40,11 @@ test('changed planting counts invalidate old snapshot and still preserve constra
  assert.equal(result.allocations.find(a=>a.crop_id==='oak'&&a.plot_id==='b').plant_count,100);
  assert.equal(result.allocations.find(a=>a.crop_id==='finley').plant_count,400);
 });
+
+
+test('explicit round-item plots preserve usage without any plot crop whitelist or notes',()=>{
+ const unrestricted=[{id:'a',slot_capacity:100,crop_ids:[]},{id:'b',slot_capacity:100,crop_ids:[]}];
+ const result=getPlotPlantingAllocations(unrestricted,[round([{...item('i','oak',60),plot_ids:['b']}])]);
+ assert.deepEqual(Array.from(result.allocations,a=>[a.plot_id,a.plant_count]),[['b',60]]);
+ assert.equal(result.unassignedItems.length,0);
+});

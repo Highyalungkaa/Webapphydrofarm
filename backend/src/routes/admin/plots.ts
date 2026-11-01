@@ -16,8 +16,6 @@ const plotSchema = z.object({
   name: z.string().trim().min(1, 'กรุณาระบุชื่อแปลงปลูก').max(100),
   zone_name: z.string().trim().min(1, 'กรุณาระบุชื่อโซน').max(100),
   slot_capacity: z.number().int().min(1, 'จำนวนต้นต้องมากกว่า 0').max(2147483647, 'จำนวนต้นเกินขนาดที่ระบบรองรับ'),
-  crop_ids: z.array(z.string().uuid('รหัสชนิดผักไม่ถูกต้อง')).optional(),
-  crop_id: z.string().uuid('รหัสชนิดผักไม่ถูกต้อง').optional().nullable(),
   is_active: z.boolean().default(true),
   notes: z.string().optional().nullable(),
 });
@@ -25,7 +23,7 @@ const plotSchema = z.object({
 // GET /api/admin/plots - List all plots with crop details
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { zone_name, is_active, crop_id } = req.query;
+    const { zone_name, is_active } = req.query;
     const db = getSupabaseClient(req);
 
     let query = db
@@ -46,9 +44,6 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
     }
     if (is_active !== undefined && is_active !== '') {
       query = query.eq('is_active', is_active === 'true');
-    }
-    if (crop_id && typeof crop_id === 'string') {
-      query = query.contains('crop_ids', [crop_id]);
     }
 
     const { data: plots, error } = await query;
@@ -130,17 +125,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    const { name, zone_name, slot_capacity, crop_id, crop_ids, is_active, notes } = parsed.data;
+    const { name, zone_name, slot_capacity, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
-
-    const selectedCropIds = [...new Set(crop_ids ?? (crop_id ? [crop_id] : []))];
-    if (selectedCropIds.length) {
-      const { data: selectedCrops, error: cropError } = await db.from('crops').select('id, is_active').in('id', selectedCropIds);
-      if (cropError || selectedCrops?.length !== selectedCropIds.length || selectedCrops.some((crop) => !crop.is_active)) {
-        res.status(400).json({ error: 'เลือกได้เฉพาะชนิดผักที่เปิดใช้งานและมีอยู่ในระบบ' });
-        return;
-      }
-    }
 
     // Each plot owns its capacity. The database still protects active plant allocations.
     const { data, error } = await db
@@ -149,8 +135,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         name: name.trim(),
         zone_name: zone_name.trim(),
         slot_capacity,
-        crop_id: selectedCropIds[0] || null,
-        crop_ids: selectedCropIds,
+        crop_id: null,
+        crop_ids: [],
         is_active,
         notes: notes ? notes.trim() : null,
       })
@@ -200,7 +186,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       return;
     }
 
-    const { name, zone_name, slot_capacity, crop_id, crop_ids, is_active, notes } = parsed.data;
+    const { name, zone_name, slot_capacity, is_active, notes } = parsed.data;
     const db = getSupabaseClient(req);
 
     const { data: oldPlot } = await db.from('plots').select('*').eq('id', id).single();
@@ -209,16 +195,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       res.status(404).json({ error: 'ไม่พบแปลงปลูก' });
       return;
     }
-    const selectedCropIds = [...new Set(crop_ids ?? (crop_id !== undefined ? (crop_id ? [crop_id] : []) : getPlotCropIds(oldPlot)))];
-    if (selectedCropIds.length) {
-      const { data: selectedCrops, error: cropError } = await db.from('crops').select('id, is_active').in('id', selectedCropIds);
-      const previousIds = getPlotCropIds(oldPlot);
-      if (cropError || selectedCrops?.length !== selectedCropIds.length || selectedCrops.some((crop) => !crop.is_active && !previousIds.includes(crop.id))) {
-        res.status(400).json({ error: 'เพิ่มได้เฉพาะชนิดผักที่เปิดใช้งานและมีอยู่ในระบบ' });
-        return;
-      }
-    }
-
+    // Keep legacy crop mappings only for reconstructing older round history.
+    // New planting choices use explicit round-item plot IDs, never these fields.
     // The database rejects shrinking below plants assigned to an active round.
     const { data, error } = await db
       .from('plots')
@@ -226,8 +204,6 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         name: name.trim(),
         zone_name: zone_name.trim(),
         slot_capacity,
-        crop_id: selectedCropIds[0] || null,
-        crop_ids: selectedCropIds,
         is_active,
         notes: notes ? notes.trim() : null,
         updated_at: new Date().toISOString(),

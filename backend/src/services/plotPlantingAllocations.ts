@@ -6,6 +6,7 @@ interface AllocationPlot {
 }
 interface AllocationItem {
   id?: string; crop_id: string; plant_count?: number | null; estimated_qty_kg: number; bookable_qty_kg: number;
+  plot_ids?: string[] | null;
   crops?: { name?: string; slots_per_kg?: number } | { name?: string; slots_per_kg?: number }[] | null;
 }
 interface AllocationRound {
@@ -28,7 +29,7 @@ export function getPlotPlantingAllocations(plots: AllocationPlot[], rounds: Allo
     if(snapshot&&typeof snapshot==='object'){
       const entries=(round.round_items||[]).map(item=>{
         const crop=Array.isArray(item.crops)?item.crops[0]:item.crops;
-        const selected=idsByCrop[item.crop_id];
+        const selected=idsByCrop[item.crop_id]?.length ? idsByCrop[item.crop_id] : item.plot_ids;
         return{...item,plant_count:item.plant_count??Math.round(Math.max(Number(item.estimated_qty_kg||0),Number(item.bookable_qty_kg||0))*Number(crop?.slots_per_kg||4)),selected_plot_ids:Array.isArray(selected)&&selected.length?selected:plots.filter(p=>getPlotCropIds(p).includes(item.crop_id)).map(p=>p.id)};
       });
       const plan=allocateRecordedPlotSlots(plots,entries,{},Object.fromEntries(used),snapshot);
@@ -42,7 +43,7 @@ export function getPlotPlantingAllocations(plots: AllocationPlot[], rounds: Allo
       const crop = Array.isArray(item.crops) ? item.crops[0] : item.crops;
       const rate = Number(crop?.slots_per_kg) > 0 ? Number(crop?.slots_per_kg) : 4;
       let needed = item.plant_count ?? Math.max(0, Math.round(Math.max(Number(item.estimated_qty_kg || 0), Number(item.bookable_qty_kg || 0)) * rate));
-      const assignedIds = Array.isArray(idsByCrop[item.crop_id]) ? idsByCrop[item.crop_id] : [];
+      const assignedIds = idsByCrop[item.crop_id]?.length ? idsByCrop[item.crop_id] : item.plot_ids || [];
       const candidates = assignedIds.length
         ? plots.filter(plot => assignedIds.includes(plot.id))
         : plots.filter(plot => getPlotCropIds(plot).includes(item.crop_id));

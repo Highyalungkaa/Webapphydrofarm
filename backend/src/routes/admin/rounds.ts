@@ -85,7 +85,7 @@ function planRoundAllocation(state:any,items:any[],currentRound?:any) {
     if(!crop||(!crop.is_active&&!unchanged))fail('มีชนิดผักที่ปิดใช้งานหรือไม่พบในระบบ กรุณาเลือกผักที่เปิดใช้งาน');
     if(item.plant_count==null&&!old)fail('กรุณาระบุจำนวนต้นที่ปลูกให้ครบทุกชนิดผัก');
     if(!selected.length||new Set(selected).size!==selected.length)fail('กรุณาเลือกแปลงปลูกให้แต่ละชนิดผัก และไม่เลือกแปลงซ้ำในรายการเดียวกัน');
-    if(!selected.every((id:string)=>plots.some(p=>p.id===id&&(unchanged||p.is_active&&getPlotCropIds(p).includes(item.crop_id)))))fail('เลือกได้เฉพาะแปลงที่เปิดใช้งานและกำหนดไว้สำหรับผักชนิดนั้น');
+    if(!selected.every((id:string)=>plots.some(p=>p.id===id&&(unchanged||p.is_active))))fail('เลือกได้เฉพาะแปลงที่เปิดใช้งาน');
     return {...item,plot_ids:selected,selected_plot_ids:selected,plant_count:item.plant_count??old?.plant_count??Math.round(Math.max(Number(old?.estimated_qty_kg||0),Number(old?.bookable_qty_kg||0))*Number(crop.slots_per_kg||4))};
   });
   if(new Set(fullItems.map(i=>i.crop_id)).size!==fullItems.length)fail('ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน');
