@@ -8,7 +8,7 @@ interface HarvestRound {
   notes?: string | null;
 }
 
-export const SEED_HARVEST_BASIS = 'seed_with_transplant_delay';
+export const SEED_HARVEST_BASIS = 'seed';
 const DAY_MS = 86400000;
 function calendarTime(value?: string | null): number | null {
   if (!value) return null;
@@ -18,14 +18,8 @@ function calendarTime(value?: string | null): number | null {
 }
 
 export function usesSeedHarvestDate(round: HarvestRound): boolean {
-  try { return JSON.parse(round.notes || '{}')?.harvestDateBasis === SEED_HARVEST_BASIS; }
+  try { return [SEED_HARVEST_BASIS, 'seed_with_transplant_delay'].includes(JSON.parse(round.notes || '{}')?.harvestDateBasis); }
   catch { return false; }
-}
-
-export function transplantDelayDays(round: HarvestRound, actualDate?: string | null): number {
-  const start = calendarTime(round.planting_start_date);
-  const actual = calendarTime(actualDate === undefined ? round.transplant_date : actualDate);
-  return start == null || actual == null ? 0 : Math.max(0, Math.round((actual-start)/DAY_MS));
 }
 
 export function calculateHarvestDate(round: HarvestRound, growingDays: number,
@@ -39,6 +33,5 @@ export function calculateHarvestDate(round: HarvestRound, growingDays: number,
   const fromSeed = options.fromSeed ?? usesSeedHarvestDate(round);
   const base = fromSeed && seed != null ? seed : calendarTime(actualDate);
   if (base == null) return null;
-  const delay = fromSeed && seed != null ? transplantDelayDays(round, actualDate) : 0;
-  return new Date(base+(growingDays+delay)*DAY_MS).toISOString().slice(0,10);
+  return new Date(base+growingDays*DAY_MS).toISOString().slice(0,10);
 }

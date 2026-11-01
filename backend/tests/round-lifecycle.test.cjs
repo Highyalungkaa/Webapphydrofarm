@@ -137,16 +137,16 @@ test('closing a scheduled booking before opening keeps the round completable', a
 });
 
 
-test('step four saves the seed-based harvest and does not compound repeated transplant delays',async()=>{
+test('step four records actual planting date without moving the seed-based harvest',async()=>{
  const app=setup({current_step:4,seed_date:'2026-08-15',planting_start_date:'2026-08-29',growing_days:40,notes:JSON.stringify({cropPlotIds:{oak:['plot-a']},cropGrowingDays:{oak:40}})});
  const save=async date=>{const result=await app.confirm(4,{date,growing_days:40,crop_growing_days:{oak:40}});assert.equal(result.statusCode,200);};
  await save('2026-08-31');
- assert.equal(app.round().expected_harvest_date,'2026-09-26');
- assert.equal(app.round().fulfillment_date,'2026-09-26');
+ assert.equal(app.round().expected_harvest_date,'2026-09-24');
+ assert.equal(app.round().fulfillment_date,'2026-09-24');
  assert.equal(app.round().growing_days,40);
  assert.equal(JSON.parse(app.round().notes).cropGrowingDays.oak,40);
- assert.equal(JSON.parse(app.round().notes).harvestDateBasis,'seed_with_transplant_delay');
- await save('2026-08-31');assert.equal(app.round().expected_harvest_date,'2026-09-26');
+ assert.equal(JSON.parse(app.round().notes).harvestDateBasis,'seed');
+ await save('2026-08-31');assert.equal(app.round().expected_harvest_date,'2026-09-24');
  await save('2026-08-29');assert.equal(app.round().expected_harvest_date,'2026-09-24');
  assert.deepEqual(JSON.parse(app.round().notes).cropPlotIds,{oak:['plot-a']});
 });

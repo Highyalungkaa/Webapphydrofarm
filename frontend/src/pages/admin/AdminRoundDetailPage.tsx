@@ -10,7 +10,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
-import { calculateHarvestDate, transplantDelayDays, usesSeedHarvestDate } from '../../lib/harvestDates.js';
+import { calculateHarvestDate, usesSeedHarvestDate } from '../../lib/harvestDates.js';
 import { PlantingRound, RoundItem } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -355,7 +355,6 @@ export const AdminRoundDetailPage: React.FC = () => {
     && !!round.booking_opens_at;
   const growingDays = round.growing_days || 45;
   const harvestOptions = activeStepTab === 4 && !isViewingPastStep ? {actualDate:inputDate, fromSeed:true} : {};
-  const plantingDelay = transplantDelayDays(round, activeStepTab === 4 ? inputDate : undefined);
   const seedBasedHarvest = activeStepTab === 4 && !isViewingPastStep || usesSeedHarvestDate(round);
   const calculatedHarvestDate = activeStepTab === 4 ? calculateHarvestDate(round, growingDays, harvestOptions) : round.expected_harvest_date;
 
@@ -620,7 +619,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                           <div className="bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200/60 flex items-center gap-2 text-xs text-sky-900 self-start sm:self-auto">
                             <Calendar className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
                             <span>
-                              {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {itemDays} วัน{seedBasedHarvest && plantingDelay > 0 ? ` + ล่าช้า ${plantingDelay} วัน` : ''} ➔{' '}
+                              {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {itemDays} วัน ➔{' '}
                               <strong className="text-sky-950 font-black underline">
                                 พร้อมเก็บและขาย: {formatDateDMY(itemHarvestDate)}
                               </strong>
@@ -631,7 +630,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     })
                   ) : (
                     <div className="p-3 bg-white rounded-xl border border-sky-100 text-xs text-sky-900">
-                      {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {growingDays} วัน{seedBasedHarvest && plantingDelay > 0 ? ` + ล่าช้า ${plantingDelay} วัน` : ''} ➔{' '}
+                      {seedBasedHarvest && round.seed_date ? `ปักเม็ด ${formatDateDMY(round.seed_date)}` : `ปลูกจริง ${inputDate ? formatDateDMY(inputDate) : 'ยังไม่เลือก'}`} + {growingDays} วัน ➔{' '}
                       <strong className="font-bold underline">พร้อมเก็บและขาย: {formatDateDMY(calculatedHarvestDate)}</strong>
                     </div>
                   )}
@@ -640,7 +639,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                 <p className="text-[11px] text-sky-800/80 pt-1 border-t border-sky-200/60 flex items-center gap-1.5">
                   <span className="font-bold">💡 หมายเหตุ:</span>
                   <span>
-                    {seedBasedHarvest ? <>นับระยะเวลาจาก <strong>วันปักเม็ด</strong> หากปลูกจริงช้ากว่าวันเริ่มปลูก จะเลื่อนวันเก็บเกี่ยวตามจำนวนวันที่ช้า</> : <>รอบนี้บันทึกด้วยสูตรเดิม: วันปลูกจริง + ระยะเวลาปลูก</>}
+                    {seedBasedHarvest ? <>นับระยะเวลาจาก <strong>วันปักเม็ด</strong> วันปลูกจริงใช้บันทึกข้อมูลเท่านั้น ไม่เปลี่ยนวันเก็บเกี่ยว</> : <>รอบนี้บันทึกด้วยสูตรเดิม: วันปลูกจริง + ระยะเวลาปลูก</>}
                   </span>
                 </p>
                 </div>
@@ -680,7 +679,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                                 {cropName}
                               </span>
                               <span className="text-[11px] text-slate-500">
-                                ระยะเวลา {itemDays} วัน{seedBasedHarvest ? ` จากวันปักเม็ด${plantingDelay > 0 ? ` · เลื่อน ${plantingDelay} วัน` : ''}` : round.transplant_date ? ` (วันปลูกจริง: ${formatDateDMY(round.transplant_date)})` : ''}
+                                ระยะเวลา {itemDays} วัน{seedBasedHarvest ? ' จากวันปักเม็ด' : round.transplant_date ? ` (วันปลูกจริง: ${formatDateDMY(round.transplant_date)})` : ''}
                               </span>
                             </div>
                           </div>
