@@ -515,6 +515,7 @@ export const AdminOrdersPage: React.FC = () => {
                     <div>
                       <p className="font-bold text-slate-900">{it.round_items?.crops?.name || 'ผัก'} × {Number(it.qty_kg).toFixed(1)} กก.</p>
                       <p className="mt-1 break-words text-xs font-medium text-slate-600">จากรอบ: {it.round_items?.planting_rounds?.name || (it.round_items?.round_id === selectedOrder.round_id || !selectedOrder.is_pooled ? selectedOrder.planting_rounds?.name : null) || 'ไม่พบชื่อรอบปลูก'}</p>
+                      <p className="mt-1 text-xs font-semibold text-emerald-800">ราคาที่จอง ฿{Number(it.price_per_kg).toLocaleString('th-TH', {maximumFractionDigits:2})}/กก.</p>
                       <p className="mt-0.5 text-[11px] text-slate-500">ราคาเต็ม ฿{gross.toLocaleString()}</p>
                     </div>
                     <label className="block"><span className="text-[11px] font-semibold text-slate-600">ส่วนลด (บาท)</span><input type="number" min="0" max={gross} step="0.01" value={discountInputs[it.id] ?? '0'} onChange={(e) => setDiscountInputs((prev) => ({ ...prev, [it.id]: e.target.value }))} className={`mt-1 w-full rounded-lg border px-2.5 py-2 text-sm ${invalidDiscount?'border-rose-400 bg-rose-50':'border-slate-200 bg-slate-50'}`} />{invalidDiscount&&<span className="mt-1 block text-[10px] text-rose-600">ส่วนลดห้ามเกิน ฿{gross.toLocaleString()}</span>}</label>
