@@ -158,24 +158,13 @@ export const AdminRoundsPage: React.FC = () => {
       setFormError(setupLoadError || cropAvailability.issues[0]?.message || 'เพิ่มผักที่พร้อมปลูกครบทุกชนิดแล้ว หากต้องการเพิ่มชนิดอื่น กรุณาตรวจสอบแคตตาล็อกผักและแปลงปลูก');
       return;
     }
-    const cropPlots = activePlots;
-    const availableCropPlots = cropPlots.filter((p) => {
-      const occ = plotSlotAllocation.used[p.id] || 0;
-      return Number(p.slot_capacity || 0) - occ > 0;
-    });
-    const plotIds = availableCropPlots.map((p) => p.id);
-    const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
-      const occ = plotSlotAllocation.used[p.id] || 0;
-      return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
-    }, 0);
-    const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems((prev) => [
       ...prev,
       {
         crop_id: availableCrop.id,
-        selected_plot_ids: plotIds,
-        plant_count: defaultPlantCount,
+        selected_plot_ids: [],
+        plant_count: 0,
         price_per_kg: Number(availableCrop.default_price_per_kg) || 130,
         growing_days: '',
       },
@@ -198,17 +187,6 @@ export const AdminRoundsPage: React.FC = () => {
       return;
     }
     setFormError(null);
-    const cropPlots = activePlots;
-    const availableCropPlots = cropPlots.filter((p) => {
-      const occ = itemOccupiedSlots(index, p.id);
-      return Number(p.slot_capacity || 0) - occ > 0;
-    });
-    const plotIds = availableCropPlots.map((p) => p.id);
-    const totalAvailableSlots = availableCropPlots.reduce((sum, p) => {
-      const occ = itemOccupiedSlots(index, p.id);
-      return sum + Math.max(0, Number(p.slot_capacity || 0) - occ);
-    }, 0);
-    const defaultPlantCount = Math.max(0, Math.floor(totalAvailableSlots));
 
     setItems(
       items.map((it, i) => {
@@ -216,8 +194,6 @@ export const AdminRoundsPage: React.FC = () => {
         return {
           ...it,
           crop_id: cropId,
-          selected_plot_ids: plotIds,
-          plant_count: defaultPlantCount,
           price_per_kg: selected ? Number(selected.default_price_per_kg) : it.price_per_kg,
           growing_days: '',
         };
@@ -369,15 +345,15 @@ export const AdminRoundsPage: React.FC = () => {
         return;
       }
       const requiredSlots = it.plant_count;
-      if (!Number.isSafeInteger(it.plant_count) || it.plant_count <= 0) {
-        setFormError(`กรุณาระบุจำนวนต้นของ ${cropName} เป็นจำนวนเต็มมากกว่า 0`);
-        return;
-      }
       const selectedPlotIds = it.selected_plot_ids || [];
       const chosenPlots = activePlots.filter((p) => selectedPlotIds.includes(p.id));
 
       if (chosenPlots.length === 0 || chosenPlots.length !== selectedPlotIds.length) {
         setFormError(`กรุณาเลือกแปลงปลูกสำหรับ ${cropName} อย่างน้อย 1 แปลง`);
+        return;
+      }
+      if (!Number.isSafeInteger(it.plant_count) || it.plant_count <= 0) {
+        setFormError(`กรุณาระบุจำนวนต้นของ ${cropName} เป็นจำนวนเต็มมากกว่า 0`);
         return;
       }
 
@@ -1087,7 +1063,7 @@ export const AdminRoundsPage: React.FC = () => {
                                   <div>
                                     <p className="font-bold">⚠️ ยังไม่ได้เลือกแปลงปลูกสำหรับ {selectedCrop?.name || 'ผักนี้'}!</p>
                                     <p className="text-[11px] text-amber-800 mt-0.5">
-                                      จำนวนที่ปลูก <strong>{requiredSlots.toLocaleString()} ต้น</strong> ต้องการพื้นที่อย่างน้อย <strong>{requiredSlots.toLocaleString()} ต้น</strong> กรุณาเลือกแปลงปลูกด้านล่าง
+                                      กดเลือกแปลงปลูกด้านล่างด้วยตนเอง แล้วตรวจสอบจำนวนต้นที่จะปลูก
                                     </p>
                                   </div>
                                 </div>
