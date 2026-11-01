@@ -151,7 +151,7 @@ export interface OrderItem {
   round_items?: {
     id: string;
     round_id?: string;
-    planting_rounds?: { id:string; name:string };
+    planting_rounds?: { id:string; name:string; status?: RoundStatus; completed_date?: string | null; current_step?: number };
     crop_id?: string;
     crops?: {
       id: string;

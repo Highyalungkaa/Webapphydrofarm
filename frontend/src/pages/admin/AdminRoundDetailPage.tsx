@@ -11,6 +11,7 @@ import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
 import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
 import { calculateHarvestDate, usesSeedHarvestDate } from '../../lib/harvestDates.js';
+import { isCurrentPlantingRound } from '../../lib/managedOrders.js';
 import { PlantingRound, RoundItem } from '../../types/index.js';
 import { Badge } from '../../components/common/Badge.js';
 import {
@@ -836,7 +837,7 @@ export const AdminRoundDetailPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-3 text-right">
                       <Link
-                        to={['completed', 'cancelled', 'no_show'].includes(ord.status)
+                        to={(['cancelled', 'no_show'].includes(ord.status) || (ord.status === 'completed' && !isCurrentPlantingRound(round)))
                           ? `/admin/rounds/history?section=orders&order_id=${encodeURIComponent(ord.id)}`
                           : `/admin/orders?round_id=${encodeURIComponent(round.id)}&order_id=${encodeURIComponent(ord.id)}`}
                         aria-label={`ดูออเดอร์ ${ord.id.slice(0, 8)}`}

@@ -1,10 +1,11 @@
 import {orderUpdateIssues,ownWeightForSave} from '../../lib/orderUpdateValidation.js';
+import {isCurrentPlantingRound, showInManagedOrders} from '../../lib/managedOrders.js';
 import {canSelectOrderStep,previousOrderStep,orderProgress} from '../../lib/orderProgress.js';
 import {harvestRange} from '../../lib/pooledBooking.js';
 import {EditOrderItems} from '../../components/admin/EditOrderItems.js';
 import {OrderDeadlineNotice} from '../../components/common/OrderDeadlineNotice.js';
 import { ChatOrderButton } from '../../components/admin/ChatOrderButton.js';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY } from '../../lib/dateFormat.js';
@@ -44,12 +45,13 @@ export const AdminOrdersPage: React.FC = () => {
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError,setLoadError]=useState('');
+  const ordersRequest = useRef(0);
 
   // Filters
   const [selectedRound, setSelectedRound] = useState(searchParams.get('round_id') || '');
   const [selectedStatus, setSelectedStatus] = useState(() => {
     const status = searchParams.get('status') || '';
-    return ['completed', 'cancelled', 'no_show'].includes(status) ? '' : status;
+    return ['cancelled', 'no_show'].includes(status) ? '' : status;
   });
   const [selectedFulfillment, setSelectedFulfillment] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('');
@@ -75,7 +77,11 @@ export const AdminOrdersPage: React.FC = () => {
   };
 
   useEffect(() => {
-    api.get<PlantingRound[]>('/admin/rounds').then(setRounds).catch(console.error);
+    api.get<PlantingRound[]>('/admin/rounds').then(data => {
+      const currentRounds = data.filter(isCurrentPlantingRound);
+      setRounds(currentRounds);
+      setSelectedRound(current => current && !currentRounds.some(round => round.id === current) ? '' : current);
+    }).catch(console.error);
     loadOrders();
   }, [selectedRound, selectedStatus, selectedFulfillment, selectedPayment]);
 
@@ -90,6 +96,7 @@ export const AdminOrdersPage: React.FC = () => {
   }, [orders, searchParams, setSearchParams]);
 
   const loadOrders = async () => {
+    const request = ++ordersRequest.current;
     try {
       setLoading(true);
       setLoadError('');
@@ -101,12 +108,12 @@ export const AdminOrdersPage: React.FC = () => {
       if (searchQuery) params.append('search', searchQuery);
 
       const data = await api.get<Order[]>(`/admin/orders?${params.toString()}`);
-      setOrders(data.filter((order) => !['completed', 'cancelled', 'no_show'].includes(order.status)));
+      if (request === ordersRequest.current) setOrders(data.filter(showInManagedOrders));
     } catch (err:any) {
       console.error(err);
-      setLoadError(err.message||'ไม่สามารถโหลดออเดอร์ได้ กรุณาลองใหม่');
+      if (request === ordersRequest.current) setLoadError(err.message||'ไม่สามารถโหลดออเดอร์ได้ กรุณาลองใหม่');
     } finally {
-      setLoading(false);
+      if (request === ordersRequest.current) setLoading(false);
     }
   };
 
@@ -222,6 +229,7 @@ export const AdminOrdersPage: React.FC = () => {
               <option value="pending_confirmation">รอยืนยัน</option>
               <option value="confirmed">ยืนยันแล้ว</option>
               <option value="ready">พร้อมรับ/ส่ง</option>
+              <option value="completed">สำเร็จแล้ว</option>
             </select>
           </div>
 
@@ -281,7 +289,7 @@ export const AdminOrdersPage: React.FC = () => {
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="flex flex-col gap-1 border-b border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-xs font-bold text-slate-700">รายการคำสั่งจอง <span className="font-medium text-slate-500">({orders.length} รายการ)</span></p>
-          <p className="text-[11px] text-slate-500">เปิดรายละเอียดออเดอร์เพื่อยืนยันหรือแก้ไขสถานะ</p>
+          <p className="text-[11px] text-slate-500">ออเดอร์สำเร็จจะแสดงอยู่จนกว่าจะสิ้นสุดรอบปลูก</p>
         </div>
         {loading ? (
           <div className="py-16 text-center text-slate-500 text-sm">กำลังโหลดข้อมูลคำสั่งจอง...</div>
@@ -633,7 +641,7 @@ export const AdminOrdersPage: React.FC = () => {
                       { value: 'no_show', title: 'ลูกค้าไม่มารับสินค้า', note: 'บันทึกประวัติไม่มารับของ', Icon: UserRoundX },
                     ] as const).map(({ value, title, note, Icon }) => {
                       const active = modalStatus === value;
-                      return <button key={value} type="button" aria-pressed={active} disabled={isUpdating || (value==='no_show' && selectedOrder.status!=='ready')} onClick={() => setModalStatus(value)}
+                      return <button key={value} type="button" aria-pressed={active} disabled={isUpdating || selectedOrder.status==='completed' || (value==='no_show' && selectedOrder.status!=='ready')} onClick={() => setModalStatus(value)}
                         className={`disabled:cursor-not-allowed disabled:opacity-40 rounded-xl border p-3 text-left flex items-center gap-3 transition-all focus:outline-none focus:ring-2 focus:ring-rose-300 ${active ? 'border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-100' : 'border-slate-200 bg-white hover:border-rose-300 text-slate-700'}`}>
                         <span className={`w-9 h-9 rounded-lg grid place-items-center ${active ? 'bg-rose-100' : 'bg-slate-100 text-slate-500'}`}><Icon size={18} /></span>
                         <span><span className="block font-bold">{title}</span><span className="block text-[11px] text-slate-500 mt-0.5">{note}</span></span>
@@ -654,7 +662,7 @@ export const AdminOrdersPage: React.FC = () => {
                     { value: 'paid', title: 'ชำระเงินแล้ว', note: 'ได้รับยอดชำระครบแล้ว', Icon: Banknote },
                   ] as const).map(({ value, title, note, Icon }) => {
                     const active = modalPaymentStatus === value;
-                    return <button key={value} type="button" aria-pressed={active} onClick={() => setModalPaymentStatus(value)}
+                    return <button key={value} type="button" disabled={isUpdating || (modalStatus==='completed' && value==='unpaid')} aria-pressed={active} onClick={() => setModalPaymentStatus(value)}
                       className={`rounded-xl border p-3 text-left flex items-center gap-3 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300 ${active ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100' : 'border-slate-200 bg-slate-50/60 hover:border-emerald-300 text-slate-700'}`}>
                       <span className={`w-9 h-9 rounded-lg grid place-items-center ${active ? 'bg-emerald-100' : 'bg-white text-slate-400'}`}><Icon size={18} /></span>
                       <span><span className="block font-bold">{title}</span><span className="block text-[11px] text-slate-500 mt-0.5">{note}</span></span>

@@ -85,7 +85,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         planting_rounds:planting_rounds!orders_round_id_fkey (
           id,
           name,
-          fulfillment_date
+          fulfillment_date, status, completed_date, current_step
         ),
         profiles (
           id,
@@ -109,7 +109,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           substitute_note,
           round_items (
             *,
-            planting_rounds(id,name),
+            planting_rounds(id,name,status,completed_date,current_step),
             crops (
               id,
               name
@@ -184,7 +184,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           fulfillment_date,
           delivery_start_time,
           delivery_end_time,
-          status
+          status, completed_date, current_step
         ),
         profiles (
           id,
@@ -208,7 +208,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           substitute_note,
           round_items (
             *,
-            planting_rounds(id,name),
+            planting_rounds(id,name,status,completed_date,current_step),
             crop_id,
             crops (
               id,
