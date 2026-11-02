@@ -2,6 +2,7 @@ import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { RoundStatusBadge } from '../../components/common/RoundStatusBadge.js';
 import {OrderHistoryDialog} from '../../components/admin/OrderHistoryDialog.js';
 import {orderDiscountAmount} from '../../lib/orderReport.js';
+import {archivedOrderRoundIds,archivedOrderRoundOptions} from '../../lib/archivedOrderRounds.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -119,6 +120,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
   const [rounds, setRounds] = useState<PlantingRound[]>([]);
   const [closedBookingRounds, setClosedBookingRounds] = useState<PlantingRound[]>([]);
   const [archivedOrders, setArchivedOrders] = useState<Order[]>([]);
+  const [orderFilterRounds, setOrderFilterRounds] = useState<PlantingRound[]>([]);
+  const [selectedOrderRound, setSelectedOrderRound] = useState('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('order_id') || '');
   const [selectedDate, setSelectedDate] = useState('');
@@ -138,6 +141,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
         api.get<Order[]>('/admin/orders'),
       ]);
       const allRounds = allRoundData || [];
+      setOrderFilterRounds(allRounds);
       setRounds(allRounds.filter((round) => round.status === 'completed'));
       setClosedBookingRounds(allRounds.filter((round) => !!round.booking_closes_at || ['booking_closed', 'harvested', 'completed'].includes(round.status)));
       setArchivedOrders((orderData || []).filter((order) => ['completed', 'cancelled', 'no_show'].includes(order.status)));
@@ -172,7 +176,9 @@ export const AdminRoundsHistoryPage: React.FC = () => {
     return round.name?.toLowerCase().includes(query) || (round.round_items || []).some((item: any) => (item.crop_name || item.crops?.name || '').toLowerCase().includes(query));
   });
   const totalKgSold = filteredRounds.reduce((sum, r) => sum + Number(r.total_booked_kg || 0), 0);
+  const orderRoundOptions = archivedOrderRoundOptions(archivedOrders, orderFilterRounds);
   const filteredOrders = archivedOrders.filter((order) => {
+    if (selectedOrderRound && !archivedOrderRoundIds(order).includes(selectedOrderRound)) return false;
     if (selectedDate && bangkokDateKey(order.status === 'cancelled' ? order.cancelled_at || order.updated_at : order.updated_at) !== selectedDate) return false;
     if (discountFilter === 'discounted' && orderDiscountAmount(order) <= 0) return false;
     if (discountFilter === 'regular' && orderDiscountAmount(order) > 0) return false;
@@ -282,8 +288,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
       </div>}
 
       {/* Search and Filters */}
-      <div className="flex flex-col gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs sm:flex-row sm:items-end">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="relative min-w-0 flex-1 sm:min-w-[14rem]">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -308,6 +314,13 @@ export const AdminRoundsHistoryPage: React.FC = () => {
             <option value="unsold">รอบที่ผักขายไม่หมด</option>
           </select>
         </label>}
+        {activeSection === 'orders' && <label htmlFor="archived-order-round" className="min-w-0 text-xs font-bold text-slate-600 sm:w-64">
+          <span className="mb-1.5 block">รอบการปลูก</span>
+          <select id="archived-order-round" value={selectedOrderRound} onChange={(e) => setSelectedOrderRound(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
+            <option value="">ทุกรอบ ({archivedOrders.length.toLocaleString()} ออเดอร์)</option>
+            {orderRoundOptions.map(round => <option key={round.id} value={round.id}>{round.name} ({round.count.toLocaleString()} ออเดอร์)</option>)}
+          </select>
+        </label>}
         {activeSection === 'orders' && <label className="min-w-0 text-xs font-bold text-slate-600 sm:w-44">
           <span className="mb-1.5 block">ประเภทคำสั่งจอง</span>
           <select value={discountFilter} onChange={(e) => setDiscountFilter(e.target.value as 'all' | 'discounted' | 'regular')} className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
@@ -325,6 +338,8 @@ export const AdminRoundsHistoryPage: React.FC = () => {
         </label>
         {selectedDate && <button type="button" onClick={() => setSelectedDate('')} className="self-start rounded-xl px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 sm:self-end">ล้างวันที่</button>}
       </div>
+
+      {activeSection === 'orders' && !loading && <p role="status" className="text-sm font-semibold text-slate-700">{selectedOrderRound ? orderRoundOptions.find(round => round.id === selectedOrderRound)?.name || 'รอบที่เลือก' : 'ทุกรอบ'} · พบ <strong className="text-emerald-800">{filteredOrders.length.toLocaleString()} ออเดอร์</strong> ตามตัวกรองที่เลือก</p>}
 
       {/* History records */}
       {activeSection === 'rounds' ? <div className="space-y-4">
@@ -490,7 +505,7 @@ export const AdminRoundsHistoryPage: React.FC = () => {
           })
         )}
       </div> : activeSection === 'orders' ? <div className="space-y-5">
-        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate || discountFilter !== 'all' ? 'ไม่พบออเดอร์ตามตัวกรอง' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่เสร็จสิ้น ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
+        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">กำลังโหลดประวัติคำสั่งจอง...</div> : filteredOrders.length === 0 ? <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center"><PackageCheck className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-bold text-slate-800">{searchQuery || selectedDate || selectedOrderRound || discountFilter !== 'all' ? 'ไม่พบออเดอร์ตามตัวกรอง' : 'ยังไม่มีประวัติคำสั่งจอง'}</p><p className="mt-1 text-xs text-slate-500">ออเดอร์ที่เสร็จสิ้น ยกเลิก หรือไม่มารับ จะแสดงในส่วนนี้</p></div> : <>
           {completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length > 0 && <section className="space-y-3">
             <div className="flex items-center gap-2"><CircleCheck className="h-5 w-5 text-emerald-600" /><h2 className="font-extrabold text-slate-900">เสร็จสิ้น</h2><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">{completedOrders.filter((order) => filteredOrders.some((filtered) => filtered.id === order.id)).length}</span></div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
