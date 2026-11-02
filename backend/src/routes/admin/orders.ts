@@ -11,6 +11,7 @@ router.use(requireAuth, requireAdmin);
 const amendSchema=z.object({
   request_id:z.string().uuid(),expected_updated_at:z.string().datetime({offset:true}),reason:z.string().trim().min(1,'กรุณาระบุเหตุผล').max(1000),
   preview_token:z.string().regex(/^[a-f0-9]{32}$/).optional(),
+  return_stock:z.boolean().default(true),
   items:z.array(z.object({crop_id:z.string().uuid(),qty_kg:z.number().min(0.5).max(99999999).refine(n=>Math.abs(n*100-Math.round(n*100))<0.000001)})).min(1).max(100),
 }).refine(body=>new Set(body.items.map(i=>i.crop_id)).size===body.items.length,'ชนิดผักต้องไม่ซ้ำกัน');
 function amendHandler(preview:boolean){return async(req:AuthenticatedRequest,res:Response):Promise<void>=>{
@@ -19,7 +20,15 @@ function amendHandler(preview:boolean){return async(req:AuthenticatedRequest,res
   const {request_id,...payload}=parsed.data;
   if(!preview&&!payload.preview_token){res.status(400).json({error:'กรุณาตรวจสอบสต๊อกและยอดใหม่ก่อนบันทึก'});return;}
   try{
-    const {data,error}=await supabaseAdmin.rpc('amend_order_items',{p_actor_id:req.user!.id,p_order_id:req.params.id,p_request_id:request_id,p_payload:payload,p_preview:preview});
+    const args={p_actor_id:req.user!.id,p_order_id:req.params.id,p_request_id:request_id,p_payload:payload,p_preview:preview};
+    let {data,error}=await supabaseAdmin.rpc('amend_order_items_with_stock_choice',args);
+    if(error&&['PGRST202','42883'].includes(error.code)){
+      if(!payload.return_stock){res.status(503).json({error:'กรุณารัน migration 059 ก่อนใช้ตัวเลือกไม่คืนสต็อก'});return;}
+      // Existing editing remains available while the new SQL is being installed.
+      const {return_stock,...legacyPayload}=payload;
+      ({data,error}=await supabaseAdmin.rpc('amend_order_items',{...args,p_payload:legacyPayload}));
+      if(!error)data={...data,return_stock:true};
+    }
     if(error){res.status(400).json({error:error.message});return;}
     res.json({data});
   }catch(error:any){res.status(500).json({error:'ไม่สามารถแก้รายการออเดอร์ได้ กรุณาลองใหม่'});}

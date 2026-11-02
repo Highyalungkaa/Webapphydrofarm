@@ -4,7 +4,7 @@ function setup(file,error=null){
  const routes=new Map(),calls=[],middleware=[],actor=randomUUID(),auth=()=>{},admin=()=>{};
  const router={use:(...handlers)=>middleware.push(...handlers)};
  for(const method of ['get','post','patch','put'])router[method]=(route,...handlers)=>routes.set(method+' '+route,handlers.at(-1));
- const db={rpc:async(name,args)=>{calls.push({name,args});return{data:{preview:true},error};},from(){return{select(){return Promise.resolve({data:[],error:null});},upsert(){return Promise.resolve({error:null});}};}};
+ const db={rpc:async(name,args)=>{calls.push({name,args});return{data:{preview:true},error:typeof error==='function'?error(name,args):error};},from(){return{select(){return Promise.resolve({data:[],error:null});},upsert(){return Promise.resolve({error:null});}};}};
  const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,console:{error(){}},require(name){
   if(name==='express')return{Router:()=>router};if(name.endsWith('/supabase.js'))return{supabaseAdmin:db};if(name.endsWith('/auth.js'))return{requireAuth:auth,requireAdmin:admin};if(name.endsWith('/audit.js'))return{recordAuditLog:async()=>{}};if(name.endsWith('/roundOrders.js'))return require('./load-service.cjs')('roundOrders');return require(name);
  }});
@@ -15,7 +15,17 @@ test('amendment preview/save are admin-only and use server-selected actor and pr
  const app=setup('../src/routes/admin/orders.ts');assert.equal(app.middleware[0],app.auth);assert.equal(app.middleware[1],app.admin);
  assert.equal((await app.request('post','/:id/items/preview',{...amendment(),actor_id:randomUUID(),p_preview:false})).statusCode,200);
  assert.equal(app.calls[0].args.p_actor_id,app.actor);assert.equal(app.calls[0].args.p_preview,true);assert.equal(app.calls[0].args.p_payload.actor_id,undefined);
+ assert.equal(app.calls[0].name,'amend_order_items_with_stock_choice');assert.equal(app.calls[0].args.p_payload.return_stock,true);
  assert.equal((await app.request('post','/:id/items',{...amendment(),preview_token:'a'.repeat(32)})).statusCode,200);assert.equal(app.calls[1].args.p_preview,false);
+});
+
+test('no-restock choice is passed through and cannot silently fall back before migration 059',async()=>{
+ const app=setup('../src/routes/admin/orders.ts');await app.request('post','/:id/items/preview',{...amendment(),return_stock:false});assert.equal(app.calls[0].args.p_payload.return_stock,false);
+ const missing=setup('../src/routes/admin/orders.ts',{code:'PGRST202',message:'Missing function'});
+ const response=await missing.request('post','/:id/items/preview',{...amendment(),return_stock:false});assert.equal(response.statusCode,503);assert.match(response.body.error,/059/);assert.equal(missing.calls.length,1);
+ const legacy=setup('../src/routes/admin/orders.ts',name=>name==='amend_order_items_with_stock_choice'?{code:'PGRST202',message:'Missing function'}:null);
+ const fallback=await legacy.request('post','/:id/items/preview',amendment());assert.equal(fallback.statusCode,200);assert.equal(fallback.body.data.return_stock,true);assert.equal(legacy.calls[1].name,'amend_order_items');assert.equal(legacy.calls[1].args.p_payload.return_stock,undefined);
+ for(const value of ['false',null,0]){const invalid=setup('../src/routes/admin/orders.ts');assert.equal((await invalid.request('post','/:id/items/preview',{...amendment(),return_stock:value})).statusCode,400);assert.equal(invalid.calls.length,0);}
 });
 test('missing preview, stale-format dates, duplicate crops and invalid quantities cannot reach the RPC',async()=>{
  const repeated=randomUUID();

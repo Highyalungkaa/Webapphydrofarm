@@ -1,11 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript'),{randomUUID}=require('node:crypto');
-function setup(rpcError=null){
+function setup(rpcError=null,unavailable=0){
  const routes=new Map(),calls=[],middleware=[],actor=randomUUID(),round=randomUUID(),item=randomUUID();
  const auth=()=>{},admin=()=>{},router={use:(...handlers)=>middleware.push(...handlers)};
  for(const method of ['get','post'])router[method]=(url,...handlers)=>routes.set(method+' '+url,handlers.at(-1));
  const db={rpc:async(name,args)=>{calls.push({name,args});return{data:{id:'saved'},error:rpcError};},from:table=>{
-  const result=()=>({error:null,data:table==='planting_rounds'?{id:round,status:'booking_open'}:table==='round_items'?[{id:item,plant_count:100,planting_plants_per_kg:2,additional_qty_kg:5,price_per_kg:130,crops:{name:'Oak',slots_per_kg:2}}]:table==='orders'?[{status:'confirmed',order_items:[{round_item_id:item,qty_kg:50}]},{status:'cancelled',order_items:[{round_item_id:item,qty_kg:7}]}]:[{id:'history',round_item_id:item,added_qty_kg:5}]});
+  const result=()=>({error:null,data:table==='planting_rounds'?{id:round,status:'booking_open'}:table==='round_items'?[{id:item,plant_count:100,planting_plants_per_kg:2,additional_qty_kg:5,unavailable_qty_kg:unavailable,price_per_kg:130,crops:{name:'Oak',slots_per_kg:2}}]:table==='orders'?[{status:'confirmed',order_items:[{round_item_id:item,qty_kg:50}]},{status:'cancelled',order_items:[{round_item_id:item,qty_kg:7}]}]:[{id:'history',round_item_id:item,added_qty_kg:5}]});
   const q={select(){return q;},eq(){return q;},or(){return q;},order(){return q;},limit(){return q;},maybeSingle:async()=>result(),then:(resolve,reject)=>Promise.resolve(result()).then(resolve,reject)};return q;
  }};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../src/routes/admin/stock.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:{},console,require:name=>{
@@ -39,4 +39,8 @@ test('stock dialog reads available kilos including surplus and its recorded hist
  const app=setup(),res=await app.request('get');assert.equal(res.statusCode,200);
  assert.equal(res.body.items[0].available_qty_kg,5);assert.equal(res.body.items[0].additional_qty_kg,5);assert.equal(res.body.items[0].ordered_qty_kg,50);
  assert.equal(res.body.additions.length,1);
+});
+
+test('stock dialog subtracts quantities withheld by no-restock amendments',async()=>{
+ const app=setup(null,3),res=await app.request('get');assert.equal(res.body.items[0].available_qty_kg,2);assert.equal(res.body.items[0].unavailable_qty_kg,3);
 });

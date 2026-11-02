@@ -146,4 +146,64 @@ test('confirmation expiry and atomic order amendments',async t=>{
     await save('ready','paid');assert.equal((await read(o)).status,'ready');assert.equal((await read(o)).payment_status,'paid');assert.equal((await read(o)).completed_at,null);
   });
 
+  // Install on top of the real order, loss, stock and status migrations above.
+  for(const name of ['052_remove_booking_limits.sql','057_add_weighed_surplus_for_sale.sql','059_order_amendment_stock_choice.sql','059_order_amendment_stock_choice.sql'])await db.exec(migration(name));
+  async function prepareStockEdit(x,id,quantity,returnStock,request=randomUUID()){
+    const body={items:[{crop_id:x.crop,qty_kg:quantity}],reason:'Customer agreed to shortage reduction',return_stock:returnStock,expected_updated_at:(await read(id)).updated_at.toISOString()};
+    const call=async preview=>(await db.query('SELECT amend_order_items_with_stock_choice($1,$2,$3,$4,$5) AS r',[actor,id,request,JSON.stringify(body),preview])).rows[0].r;
+    const preview=await call(true);body.preview_token=preview.preview_token;return{preview,body,call};
+  }
+  const withheld=async id=>Number((await db.query('SELECT unavailable_qty_kg FROM round_items WHERE id=$1',[id])).rows[0].unavailable_qty_kg);
+  await t.test('returning stock releases only the reduced quantity and preserves original price',async()=>{
+    const x=await setup(),id=await book(x,8);await db.query('UPDATE round_items SET price_per_kg=99 WHERE id=$1',[x.ia]);
+    const edit=await prepareStockEdit(x,id,5,true);assert.equal(await qty(x.ia),2);assert.equal(await withheld(x.ia),0);
+    await edit.call(false);assert.equal(await qty(x.ia),5);assert.equal(await withheld(x.ia),0);assert.equal(Number((await read(id)).total_amount),250);
+  });
+  await t.test('8 to 5 without restocking keeps public availability at zero and checkout cannot resell the missing 3',async()=>{
+    const x=await setup();await db.query('UPDATE round_items SET plant_count=40 WHERE id=$1',[x.ia]);
+    await db.query("UPDATE planting_rounds SET status='booking_closed' WHERE id=$1",[x.b]);const id=await book(x,8);
+    const edit=await prepareStockEdit(x,id,5,false);assert.equal(Number(edit.preview.stock_adjustments[0].withheld_qty_kg),3);
+    assert.equal(await withheld(x.ia),0);await edit.call(false);assert.equal(await withheld(x.ia),3);assert.equal(await qty(x.ia),0);
+    assert.equal(Number((await db.query('SELECT booking_stock_kg($1) AS n',[x.ia])).rows[0].n),5);
+    assert.equal(Number((await db.query('SELECT qty_kg FROM order_items WHERE order_id=$1',[id])).rows[0].qty_kg),5);
+    await assert.rejects(book(x,0.5),/สต๊อก/);
+    await db.query("UPDATE orders SET status='cancelled' WHERE id=$1",[id]);assert.equal(await qty(x.ia),5);
+  });
+  await t.test('already recorded plant losses are not deducted twice when reducing an overbooked order',async()=>{
+    const x=await setup();await db.query('UPDATE round_items SET plant_count=40 WHERE id=$1',[x.ia]);const id=await book(x,8);
+    await db.query('UPDATE round_items SET lost_plant_count=15 WHERE id=$1',[x.ia]);
+    const edit=await prepareStockEdit(x,id,5,false);assert.equal(Number(edit.preview.stock_adjustments[0].withheld_qty_kg),0);
+    await edit.call(false);assert.equal(await withheld(x.ia),0);assert.equal(await qty(x.ia),0);
+  });
+  await t.test('retry and repeated reductions withhold once and keep unrelated customers and available stock intact',async()=>{
+    const x=await setup(),id=await book(x,8),other=await book(x,1);
+    const edit=await prepareStockEdit(x,id,5,false);const result=await edit.call(false);assert.deepEqual(await edit.call(false),result);
+    assert.equal(await withheld(x.ia),3);assert.equal(await qty(x.ia),1);
+    assert.equal(Number((await db.query('SELECT qty_kg FROM order_items WHERE order_id=$1',[other])).rows[0].qty_kg),1);
+    const second=await prepareStockEdit(x,id,4,false);await second.call(false);assert.equal(await withheld(x.ia),4);assert.equal(await qty(x.ia),1);
+    const third=await prepareStockEdit(x,id,3,true);await third.call(false);assert.equal(await withheld(x.ia),4);assert.equal(await qty(x.ia),2);
+    const log=(await db.query('SELECT new_data FROM audit_logs WHERE entity_id=$1 ORDER BY ctid DESC LIMIT 1',[id])).rows[0].new_data;
+    assert.equal(log.return_stock,true);assert.ok(Array.isArray(log.stock_adjustments));
+  });
+  await t.test('no-restock preserves existing sources when an earlier harvest becomes available later',async()=>{
+    const x=await setup();await db.query("UPDATE planting_rounds SET status='booking_closed' WHERE id=$1",[x.a]);const id=await book(x,8);
+    await db.query("UPDATE planting_rounds SET status='booking_open' WHERE id=$1",[x.a]);
+    const edit=await prepareStockEdit(x,id,5,false);await edit.call(false);
+    assert.equal((await db.query('SELECT round_item_id FROM order_items WHERE order_id=$1',[id])).rows[0].round_item_id,x.ib);
+    assert.equal(await qty(x.ia),10);assert.equal(await withheld(x.ib),3);assert.equal(await qty(x.ib),2);
+  });
+  await t.test('switching crops withholds removed source stock and preview binds the stock choice',async()=>{
+    const x=await setup(),y=await setup(),id=await book(x,8),edit=await prepareStockEdit(y,id,2,true);
+    edit.body.return_stock=false;await assert.rejects(edit.call(false),/ตรวจสอบยอดใหม่/);assert.equal(await withheld(x.ia),0);
+    edit.body.preview_token=(await edit.call(true)).preview_token;await edit.call(false);
+    assert.equal(await withheld(x.ia),8);assert.equal(await qty(x.ia),2);assert.equal(await qty(y.ia),8);
+  });
+  await t.test('save failures roll back withheld stock and quantities; browser roles cannot invoke the RPC',async()=>{
+    const x=await setup(),id=await book(x,8),edit=await prepareStockEdit(x,id,5,false);
+    await db.exec("CREATE FUNCTION fail_stock_choice_audit() RETURNS TRIGGER LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'audit failed';END$$;CREATE TRIGGER fail_stock_choice_audit BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION fail_stock_choice_audit();");
+    await assert.rejects(edit.call(false),/audit failed/);await db.exec('DROP TRIGGER fail_stock_choice_audit ON audit_logs');
+    assert.equal(await withheld(x.ia),0);assert.equal(await qty(x.ia),2);assert.equal(Number((await read(id)).total_amount),400);
+    await db.exec('SET ROLE authenticated');await assert.rejects(edit.call(true),/permission denied/);await db.exec('RESET ROLE');
+  });
+
 });

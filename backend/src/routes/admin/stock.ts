@@ -24,8 +24,8 @@ router.get('/:id/stock',async(req:AuthenticatedRequest,res:Response)=>{
    }
    const rate=Number(item.planting_plants_per_kg??item.crops?.slots_per_kg);
    const forecast=rate>0&&item.plant_count!=null?Math.floor(Math.max(0,Number(item.plant_count)-Number(item.lost_plant_count||0))/rate):Number(item.estimated_qty_kg||0);
-   const additional=Number(item.additional_qty_kg||0);
-   return{id:item.id,crop_name:item.crops?.name||item.crop_name_snapshot||'ผัก',price_per_kg:Number(item.price_per_kg),plant_count:item.plant_count,estimated_qty_kg:forecast,additional_qty_kg:additional,ordered_qty_kg:ordered,weighed_own_qty_kg:weighed,substitute_qty_kg:sub,delivered_qty_kg:delivered,available_qty_kg:Math.max(0,Math.round((forecast+additional-reserved)*100)/100)};
+   const additional=Number(item.additional_qty_kg||0),unavailable=Number(item.unavailable_qty_kg||0);
+   return{id:item.id,crop_name:item.crops?.name||item.crop_name_snapshot||'ผัก',price_per_kg:Number(item.price_per_kg),plant_count:item.plant_count,estimated_qty_kg:forecast,additional_qty_kg:additional,unavailable_qty_kg:unavailable,ordered_qty_kg:ordered,weighed_own_qty_kg:weighed,substitute_qty_kg:sub,delivered_qty_kg:delivered,available_qty_kg:Math.max(0,Math.round((Math.max(0,forecast+additional-unavailable)-reserved)*100)/100)};
   })});
  }catch{res.status(500).json({error:'ไม่สามารถโหลดน้ำหนักชั่งจริงได้'});}
 });

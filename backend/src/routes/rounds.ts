@@ -62,7 +62,7 @@ async function enrichRoundItems(roundId: string, limited = false) {
     const booked_qty_kg = bookedMap.get(item.id) || 0;
     const rate=Number(item.planting_plants_per_kg??item.crops?.slots_per_kg);
     const estimated=rate>0&&item.plant_count!=null?Math.floor(Math.max(0,Number(item.plant_count)-Number(item.lost_plant_count||0))/rate):Number(item.estimated_qty_kg||0);
-    const available=Math.max(0,Math.round((estimated-booked_qty_kg)*100)/100);
+    const available=Math.max(0,Math.round((Math.max(0,estimated+Number(item.additional_qty_kg||0)-Number(item.unavailable_qty_kg||0))-booked_qty_kg)*100)/100);
     return {
       id:item.id,round_id:item.round_id,crop_id:item.crop_id,price_per_kg:item.price_per_kg,crops:item.crops,
       crop_id_snapshot:item.crop_id_snapshot,crop_name_snapshot:item.crop_name_snapshot,

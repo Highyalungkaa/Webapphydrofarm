@@ -82,6 +82,7 @@ export interface RoundItem {
   bookable_qty_kg: number;
   actual_qty_kg?: number | null;
   additional_qty_kg?: number;
+  unavailable_qty_kg?: number;
   effective_bookable_qty_kg?: number | null;
   farm_reserved_qty_kg?: number;
   allocated_own_qty_kg?: number;
