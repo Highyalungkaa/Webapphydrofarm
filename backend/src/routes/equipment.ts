@@ -238,6 +238,16 @@ router.get('/admin/products/:id/stock-history', async (req, res) => {
   res.json(data || []);
 });
 
+router.get('/admin/orders/pending-count', async (_req, res) => {
+  res.setHeader('Cache-Control','no-store');
+  try {
+    const {count,error}=await supabaseAdmin.from('equipment_orders')
+      .select('id',{count:'exact',head:true}).eq('status','pending_confirmation');
+    if(error || typeof count!=='number') {res.status(500).json({error:'โหลดจำนวนคำสั่งซื้ออุปกรณ์รอยืนยันไม่สำเร็จ'});return;}
+    res.json({count});
+  } catch {res.status(500).json({error:'โหลดจำนวนคำสั่งซื้ออุปกรณ์รอยืนยันไม่สำเร็จ'});}
+});
+
 router.get('/admin/orders', async (req, res) => {
   let query = supabaseAdmin.from('equipment_orders').select('*, equipment_order_items(*), profiles(id,full_name,email,phone)').order('created_at', { ascending: false });
   if (typeof req.query.status === 'string' && req.query.status !== 'all') query = query.eq('status', req.query.status);

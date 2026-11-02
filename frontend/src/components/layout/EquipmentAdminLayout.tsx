@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
+import { usePendingOrdersCount } from '../../lib/usePendingOrdersCount.js';
+import { equipmentOrderChangesEvent } from '../../lib/api.js';
 import { ArrowLeft, BarChart3, Boxes, History, LayoutDashboard, LogOut, Menu, PackageSearch, Settings2, ShieldAlert, Truck, X } from 'lucide-react';
 
 export const EquipmentAdminLayout: React.FC = () => {
   const { user, profile, isAdmin, isLoading, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const pendingOrders = usePendingOrdersCount(!isLoading && isAdmin,location.pathname,'/equipment/admin/orders/pending-count',equipmentOrderChangesEvent);
   const navItems = [
     { to: '/admin/equipment', label: 'ภาพรวมร้านอุปกรณ์', icon: LayoutDashboard, end: true },
     { to: '/admin/equipment/products', label: 'สินค้าและสต็อก', icon: PackageSearch },
@@ -20,7 +24,7 @@ export const EquipmentAdminLayout: React.FC = () => {
   if (!isAdmin) return <div className="grid min-h-screen place-items-center bg-slate-50 p-4"><div className="max-w-md rounded-3xl border border-slate-200 bg-white p-7 text-center shadow-lg"><ShieldAlert className="mx-auto h-10 w-10 text-rose-600" /><h1 className="mt-3 text-xl font-black text-slate-900">ไม่มีสิทธิ์เข้าถึงส่วนจัดการอุปกรณ์</h1><p className="mt-2 text-sm text-slate-600">กรุณาเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ</p><Link to="/" className="mt-5 inline-flex rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-bold text-white">กลับหน้าร้าน</Link></div></div>;
 
   const signOutAndReturn = async () => { await signOut(); navigate('/'); };
-  const navigation = (mobile = false) => <nav className="space-y-1 font-sans">{navItems.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} onClick={() => mobile && setMenuOpen(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-teal-600 font-semibold text-white shadow-sm' : 'text-teal-100/75 hover:bg-teal-900 hover:text-white'}`}><Icon className="h-4 w-4" /><span>{label}</span></NavLink>)}</nav>;
+  const navigation = (mobile = false) => <nav className="space-y-1 font-sans">{navItems.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} onClick={() => mobile && setMenuOpen(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-teal-600 font-semibold text-white shadow-sm' : 'text-teal-100/75 hover:bg-teal-900 hover:text-white'}`}><Icon className="h-4 w-4 shrink-0" /><span>{label}</span>{to==='/admin/equipment/orders'&&pendingOrders>0&&<span role="status" aria-label={`คำสั่งซื้ออุปกรณ์รอยืนยัน ${pendingOrders} ออเดอร์`} title="คำสั่งซื้ออุปกรณ์รอยืนยัน" className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-white">{pendingOrders.toLocaleString('th-TH')}</span>}</NavLink>)}</nav>;
 
   return <div className="min-h-screen bg-slate-100 lg:flex">
     <aside className="hidden w-64 shrink-0 flex-col bg-teal-950 text-teal-100 lg:sticky lg:top-0 lg:flex lg:h-screen lg:self-start">

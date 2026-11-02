@@ -4,6 +4,7 @@ import { sessionExpiredEvent } from './sessionLifetime.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 export const orderChangesEvent='hydrofarm:orders-changed';
+export const equipmentOrderChangesEvent='hydrofarm:equipment-orders-changed';
 const pendingReads=new Map<string,Promise<unknown>>();
 
 async function getAuthHeaders(): Promise<HeadersInit> {
@@ -48,6 +49,10 @@ export async function apiRequest<T = any>(
   if(options.method && options.method.toUpperCase()!=='GET'
     && /^\/?(?:admin\/)?orders(?:[/?]|$)/.test(endpoint)) {
     window.dispatchEvent(new Event(orderChangesEvent));
+  }
+  if(options.method && options.method.toUpperCase()!=='GET'
+    && /^\/?equipment\/(?:admin\/)?orders(?:[/?]|$)/.test(endpoint)) {
+    window.dispatchEvent(new Event(equipmentOrderChangesEvent));
   }
   return data as T;
   };

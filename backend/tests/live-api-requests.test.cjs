@@ -35,3 +35,11 @@ test('only successful mutations notify other live views; failed reads remain ret
   const read=app.api.get('/rounds/catalog');await flush();app.requests[2].finish({error:'offline'},false);await assert.rejects(read,/offline/);
   const retry=app.api.get('/rounds/catalog');await flush();assert.equal(app.requests.length,4);app.requests[3].finish({remaining:10});assert.equal((await retry).remaining,10);
 });
+
+test('equipment creation and confirmation notify equipment badges independently from vegetable orders',async()=>{
+ for(const endpoint of ['/equipment/orders','/equipment/admin/orders/one']){
+  const app=setup(),saved=app.api.post(endpoint,{});await flush();app.requests[0].finish({ok:true});await saved;
+  assert.ok(app.events.includes('hydrofarm:equipment-orders-changed'));assert.ok(!app.events.includes('hydrofarm:orders-changed'));
+ }
+ const app=setup(),failed=app.api.patch('/equipment/admin/orders/one',{});await flush();app.requests[0].finish({error:'conflict'},false);await assert.rejects(failed,/conflict/);assert.ok(!app.events.includes('hydrofarm:equipment-orders-changed'));
+});
