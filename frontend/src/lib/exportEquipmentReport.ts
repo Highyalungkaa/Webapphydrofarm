@@ -122,8 +122,8 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
     ['ออเดอร์จัดส่งแล้ว/สำเร็จ', saleOrders.length, 'ออเดอร์', 'ใช้คำนวณยอดขายและจำนวนชิ้นที่ขายได้'],
     ['ออเดอร์ยกเลิก', orders.filter((order) => order.status === 'cancelled').length, 'ออเดอร์', 'รวมออเดอร์สถานะยกเลิก'],
     ['ออเดอร์รอยืนยัน', orders.filter((order) => order.status === 'pending_confirmation').length, 'ออเดอร์', 'ออเดอร์ที่ผู้ดูแลยังไม่ยืนยัน'],
-    ['ออเดอร์ชำระแล้ว', orders.filter((order) => order.payment_status === 'paid').length, 'ออเดอร์', 'นับตามสถานะชำระเงิน ไม่ใช่การรับเงินสดจริง'],
-    ['ออเดอร์ยังไม่ชำระ', activeOrders.filter((order) => order.payment_status !== 'paid').length, 'ออเดอร์', 'ไม่นับออเดอร์ยกเลิก'],
+    ['ออเดอร์ชำระเงินแล้ว', orders.filter((order) => order.payment_status === 'paid').length, 'ออเดอร์', 'นับตามสถานะชำระเงิน ไม่ใช่การรับเงินสดจริง'],
+    ['ออเดอร์ยังไม่ชำระเงิน', activeOrders.filter((order) => order.payment_status !== 'paid').length, 'ออเดอร์', 'ไม่นับออเดอร์ยกเลิก'],
     ['สินค้าที่ขายได้', sum(saleItems, (item) => number(item.quantity)), 'ชิ้น', 'จำนวนชิ้นในออเดอร์จัดส่งแล้วหรือสำเร็จ'],
     ['ยอดขายสินค้า', saleProductsAmount, 'บาท', 'รวมจำนวนชิ้น × ราคาต่อชิ้น เฉพาะออเดอร์จัดส่งแล้วหรือสำเร็จ'],
     ['ค่าจัดส่งจากออเดอร์ขาย', saleShipping, 'บาท', 'รวมค่าส่งของออเดอร์จัดส่งแล้วหรือสำเร็จ'],
@@ -136,7 +136,7 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
   });
   summary.finish();
 
-  const daily = addSheet('ยอดขายรายวัน', 'จัดกลุ่มตามวันสั่งซื้อของออเดอร์ที่จัดส่งแล้วหรือสำเร็จ ไม่ใช่วันที่รับชำระ', [
+  const daily = addSheet('ยอดขายรายวัน', 'จัดกลุ่มตามวันสั่งซื้อของออเดอร์ที่จัดส่งแล้วหรือสำเร็จ ไม่ใช่วันที่รับชำระเงิน', [
     { header: 'วันสั่งซื้อ', key: 'date', width: 20, format: 'dd/mm/yyyy' },
     { header: 'จำนวนออเดอร์', key: 'orders', width: 19, format: countFormat },
     { header: 'จำนวนชิ้น', key: 'units', width: 18, format: countFormat },
@@ -198,7 +198,7 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
     { header: 'ค่าจัดส่ง (บาท)', key: 'shipping', width: 21, format: moneyFormat },
     { header: 'ยอดรวม (บาท)', key: 'total', width: 21, format: moneyFormat },
     { header: 'เลขพัสดุ', key: 'tracking', width: 25 }, { header: 'ที่อยู่จัดส่ง', key: 'address', width: 48 },
-    { header: 'วันที่ชำระ', key: 'paid', width: 23, format: timeFormat },
+    { header: 'วันที่ชำระเงิน', key: 'paid', width: 23, format: timeFormat },
     { header: 'วันที่จัดส่ง', key: 'shipped', width: 23, format: timeFormat },
     { header: 'วันที่สำเร็จ', key: 'completed', width: 23, format: timeFormat },
     { header: 'วันที่ยกเลิก', key: 'cancelled', width: 23, format: timeFormat },
@@ -207,7 +207,7 @@ export async function exportEquipmentReport(data: EquipmentExportData, period: E
     id: order.id, created: bangkokDate(order.created_at), customerId: order.customer_id,
     customer: order.profiles?.full_name || '-', phone: order.contact_phone || order.profiles?.phone || '-',
     status: statusLabels[order.status] || order.status,
-    payment: order.payment_status === 'paid' ? 'ชำระแล้ว' : 'รอชำระ',
+    payment: order.payment_status === 'paid' ? 'ชำระเงินแล้ว' : 'รอชำระเงิน',
     paymentMethod: order.payment_method === 'cash_on_delivery' ? 'เก็บเงินปลายทาง' : 'โอนเงิน',
     units: sum(orderItems(order), (item) => number(item.quantity)),
     productsAmount: sum(orderItems(order), lineAmount), shipping: number(order.shipping_fee),

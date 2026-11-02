@@ -50,7 +50,7 @@ export const AdminEquipmentDashboardPage: React.FC = () => {
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <Metric icon={<ShoppingBag />} label="ออเดอร์ที่กำลังดำเนินการ" value={loading ? '—' : String(summary.activeOrders.length)} detail={`รอตรวจสอบ ${summary.waitingOrders.length} รายการ`} color="teal" />
       <Metric icon={<Clock3 />} label="รอตรวจสอบออเดอร์" value={loading ? '—' : String(summary.waitingOrders.length)} detail="ตรวจสอบและยืนยันคำสั่งซื้อ" color="amber" />
-      <Metric icon={<WalletCards />} label="ยอดที่ยังไม่ชำระ" value={loading ? '—' : money(summary.unpaidOrders.reduce((sum, order) => sum + Number(order.total_amount), 0))} detail={`${summary.unpaidOrders.length} ออเดอร์ · เก็บเงินปลายทาง`} color="violet" />
+      <Metric icon={<WalletCards />} label="ยอดที่ยังไม่ชำระเงิน" value={loading ? '—' : money(summary.unpaidOrders.reduce((sum, order) => sum + Number(order.total_amount), 0))} detail={`${summary.unpaidOrders.length} ออเดอร์ · เก็บเงินปลายทาง`} color="violet" />
       <Metric icon={<AlertTriangle />} label="สินค้าใกล้หมด" value={loading ? '—' : `${summary.lowStock.length} รายการ`} detail="ถึงหรือต่ำกว่าจุดแจ้งเตือน" color="rose" />
     </div>
 
