@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase.js';
 import { api } from '../lib/api.js';
-import { sessionHasExpired, sessionExpiredEvent } from '../lib/sessionLifetime.js';
 import { CustomerProfile } from '../types/index.js';
 
 interface AuthContextType {
@@ -49,90 +48,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const profileRequest = useRef(0);
-  const [authNotice, setAuthNotice] = useState('');
 
   useEffect(() => {
     let active = true;
-    let deadline: string | null = null;
-    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
-    let expiring = false;
-    let verifiedToken: string | undefined;
-    const clearIdentity = () => {
-      profileRequest.current += 1;
-      setUser(null);
-      setProfile(null);
-      setIsAdmin(false);
-      setIsLoading(false);
-    };
-    const expire = () => {
-      if (!active || expiring) return;
-      expiring = true;
-      deadline = null;
-      clearTimeout(expiryTimer);
-      clearIdentity();
-      setAuthNotice('ครบเวลาเข้าสู่ระบบ 24 ชั่วโมงแล้ว กรุณาเข้าสู่ระบบใหม่');
-      // Defer Supabase calls until the auth event callback has released its lock.
-      setTimeout(() => { void supabase.auth.signOut({ scope: 'local' }); }, 0);
-    };
-    const checkTime = () => {
-      if (deadline && sessionHasExpired(deadline)) expire();
-    };
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Supabase also emits SIGNED_IN on tab focus. Keep the original deadline.
-      if (session?.access_token && session.access_token === verifiedToken && deadline) {
-        checkTime();
-        return;
-      }
+    let lastUserId: string | null = null;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') return;
+      if (event === 'SIGNED_IN' && session?.user.id === lastUserId) return;
+      lastUserId = session?.user.id ?? null;
       const request = ++profileRequest.current;
-      if (!session?.user) {
-        clearTimeout(expiryTimer);
-        deadline = null;
-        clearIdentity();
-        return;
-      }
-      expiring = false;
-      // Never grant UI access until the server has checked this session's age.
-      setTimeout(async () => {
-        if (!active || request !== profileRequest.current) return;
-        try {
-          const { data, error } = await supabase.rpc('get_current_session_deadline');
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        setIsLoading(true);
+        // Supabase auth callbacks must finish before another Supabase call starts.
+        setTimeout(() => {
           if (!active || request !== profileRequest.current) return;
-          if (error) {
-            clearIdentity();
-            setAuthNotice('ตรวจสอบการเข้าสู่ระบบไม่สำเร็จ กรุณารีเฟรชหน้าเว็บเพื่อลองใหม่');
-            return;
-          }
-          deadline = typeof data === 'string' ? data : null;
-          if (sessionHasExpired(deadline)) { expire(); return; }
-          verifiedToken = session.access_token;
-          clearTimeout(expiryTimer);
-          expiryTimer = setTimeout(expire, Math.max(0, Date.parse(deadline!) - Date.now()));
-          setAuthNotice('');
-          setUser(session.user);
-          const result = await loadProfile(session.user);
-          if (!active || request !== profileRequest.current || expiring) return;
-          setProfile(result.profile);
-          setIsAdmin(result.isAdmin);
-          setIsLoading(false);
-        } catch {
-          if (active && request === profileRequest.current) {
-            clearIdentity();
-            setAuthNotice('ตรวจสอบการเข้าสู่ระบบไม่สำเร็จ กรุณารีเฟรชหน้าเว็บเพื่อลองใหม่');
-          }
-        }
-      }, 0);
+          loadProfile(session.user).then((result) => {
+            if (!active || request !== profileRequest.current) return;
+            setProfile(result.profile);
+            setIsAdmin(result.isAdmin);
+          }).finally(() => {
+            if (active && request === profileRequest.current) setIsLoading(false);
+          });
+        }, 0);
+      } else {
+        setProfile(null);
+        setIsAdmin(false);
+        setIsLoading(false);
+      }
     });
-    window.addEventListener('focus', checkTime);
-    document.addEventListener('visibilitychange', checkTime);
-    window.addEventListener(sessionExpiredEvent, expire);
+
     return () => {
       active = false;
       profileRequest.current += 1;
-      clearTimeout(expiryTimer);
       subscription.unsubscribe();
-      window.removeEventListener('focus', checkTime);
-      document.removeEventListener('visibilitychange', checkTime);
-      window.removeEventListener(sessionExpiredEvent, expire);
     };
   }, []);
 
@@ -177,7 +126,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshProfile,
       }}
     >
-      {authNotice && <div role="alert" className="bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">{authNotice}</div>}
       {children}
     </AuthContext.Provider>
   );

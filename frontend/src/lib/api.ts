@@ -1,6 +1,5 @@
 import { supabase } from './supabase.js';
 import { notifyDataChange } from './liveRefresh.js';
-import { sessionExpiredEvent } from './sessionLifetime.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 export const orderChangesEvent='hydrofarm:orders-changed';
@@ -38,9 +37,6 @@ export async function apiRequest<T = any>(
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    if (response.status === 401 && data.code === 'SESSION_EXPIRED') {
-      window.dispatchEvent(new Event(sessionExpiredEvent));
-    }
     throw new Error(data.error || `เกิดข้อผิดพลาด (${response.status})`);
   }
 

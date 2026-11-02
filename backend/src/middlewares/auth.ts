@@ -1,12 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabaseAdmin, getSupabaseClient } from '../config/supabase.js';
-
-async function sessionIsCurrent(req: Request): Promise<boolean> {
-  const { data, error } = await getSupabaseClient(req).rpc('get_current_session_deadline');
-  if (error) throw new Error(`Session deadline check failed: ${error.message}`);
-  const deadline = typeof data === 'string' ? Date.parse(data) : NaN;
-  return Number.isFinite(deadline) && Date.now() < deadline;
-}
+import { supabaseAdmin } from '../config/supabase.js';
 
 export interface AuthenticatedUser {
   id: string;
@@ -34,11 +27,6 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 
     if (error || !user || !user.email) {
       res.status(401).json({ error: 'เซสชันหมดอายุหรือไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
-      return;
-    }
-
-    if (!await sessionIsCurrent(req)) {
-      res.status(401).json({ code: 'SESSION_EXPIRED', error: 'ครบเวลาเข้าสู่ระบบ 24 ชั่วโมงแล้ว กรุณาเข้าสู่ระบบใหม่' });
       return;
     }
 
@@ -96,7 +84,7 @@ export async function optionalAuth(req: AuthenticatedRequest, res: Response, nex
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user && user.email && await sessionIsCurrent(req)) {
+      if (user && user.email) {
         const { data: adminRecord } = await supabaseAdmin
           .from('admin_users')
           .select('email')
