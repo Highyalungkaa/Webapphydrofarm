@@ -575,9 +575,8 @@ export const AdminRoundDetailPage: React.FC = () => {
                   className="w-full p-3 rounded-2xl border border-slate-300 bg-white font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-2xs disabled:cursor-default disabled:bg-slate-50"
                 />
               </div>
-              {!isViewingPastStep && <p className="text-[11px] text-slate-500 mt-1.5">
+              {!isViewingPastStep && activeStepTab !== 2 && <p className="text-[11px] text-slate-500 mt-1.5">
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
-                {activeStepTab === 2 && '🧪 ระบุวันที่เริ่มให้ปุ๋ย AB สูตรอนุบาล (ปกติ 5-7 วันหลังปักเม็ด)'}
                 {activeStepTab === 3 && '🌱 ระบุวันเริ่มปลูกหลังจากใส่ปุ๋ยและอนุบาลต้นกล้า'}
                 {activeStepTab === 4 && '🌿 ระบบแสดงวันเดียวกับวันเริ่มปลูกก่อน เปลี่ยนได้ตามวันที่ย้ายลงรางปลูกจริง'}
                 {activeStepTab === 6 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
@@ -879,7 +878,7 @@ export const AdminRoundDetailPage: React.FC = () => {
       </div>
 
       <div className="space-y-1">
-        <h2 className="text-lg font-extrabold text-slate-900">ข้อมูลผลผลิตและจัดการการสั่งซื้อ</h2>
+        <h2 className="text-lg font-extrabold text-slate-900">บันทึกข้อมูลผักเสียหาย</h2>
         <p className="text-sm text-slate-500">บันทึกผักเสียและกำหนดจำนวนที่ลูกค้าแต่ละคนจองได้</p>
       </div>
       <PlantLossPanel roundId={round.id} onChanged={loadRound} />
