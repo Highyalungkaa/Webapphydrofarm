@@ -496,7 +496,7 @@ export const AdminOrdersPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 block font-medium">วิธีรับและสถานที่</span>
                 <p className="font-bold text-slate-900">
-                  {selectedOrder.fulfillment_method === 'pickup' ? 'มารับเองที่ฟาร์ม' : 'จัดส่งในตัวเมือง'}
+                  {selectedOrder.fulfillment_method === 'pickup' ? 'มารับเองที่ฟาร์ม' : 'จัดส่งตามสถานที่'}
                 </p>
                 {selectedOrder.fulfillment_method === 'delivery' && (
                   <p className="text-slate-600 mt-1 whitespace-pre-line leading-relaxed">
