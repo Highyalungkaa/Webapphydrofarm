@@ -375,7 +375,7 @@ export const CheckoutPage: React.FC = () => {
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" />
-                <span>ยืนยันการสั่งจอง (ชำระ ฿{totalAmount.toLocaleString()} ตอนรับของ)</span>
+                <span>ยืนยันการสั่งจอง (ชำระเงิน ฿{totalAmount.toLocaleString()} ตอนรับของ)</span>
               </>
             )}
           </button>
