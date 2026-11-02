@@ -55,7 +55,6 @@ export const CheckoutPage: React.FC = () => {
     );
   }
 
-  const isLargeOrder = totalKg >= 10;
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,17 +208,6 @@ export const CheckoutPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Large order badge */}
-          {isLargeOrder && (
-            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs space-y-1">
-              <p className="font-semibold flex items-center gap-1.5">
-                <span>📦 คำสั่งจองขนาดใหญ่ (ตั้งแต่ 10 กก. ขึ้นไป)</span>
-              </p>
-              <p className="text-blue-700">
-                เนื่องจากเป็นออเดอร์ปริมาณมาก ทางฟาร์มจะติดต่อทางโทรศัพท์เพื่อยืนยันรายการก่อนเริ่มเก็บเกี่ยว
-              </p>
-            </div>
-          )}
         </div>
 
         <form onSubmit={handleSubmitOrder} className="space-y-6">
