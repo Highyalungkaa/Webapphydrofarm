@@ -968,10 +968,10 @@ export const AdminRoundsPage: React.FC = () => {
                           className="rounded-2xl border-2 border-emerald-300 border-l-4 border-l-emerald-700 bg-emerald-50 p-4 shadow-md transition-shadow hover:shadow-lg sm:p-5"
                         >
                           {/* Crop, plant count, growing days and delete action */}
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5">
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-2.5">
                             {/* Crop select */}
                             <div className="min-w-0 flex-1">
-                              <label htmlFor={`crop-select-${idx}`} className="mb-1.5 block text-sm font-extrabold text-emerald-950">
+                              <label htmlFor={`crop-select-${idx}`} className="mb-1.5 flex min-h-5 items-center text-sm font-extrabold text-emerald-950">
                                 ชนิดผักที่ ({idx + 1})
                               </label>
                               <select
@@ -992,7 +992,7 @@ export const AdminRoundsPage: React.FC = () => {
 
                             {/* Plant count */}
                             <div className="w-full sm:w-32 sm:shrink-0">
-                              <label htmlFor={`plant-count-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">
+                              <label htmlFor={`plant-count-${idx}`} className="mb-1.5 flex min-h-5 items-center text-[10px] font-bold text-slate-500">
                                 จำนวนต้น
                               </label>
                               <input
@@ -1006,13 +1006,11 @@ export const AdminRoundsPage: React.FC = () => {
                                 }
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500"
                               />
-                              <p className="mt-2 text-xs font-bold text-emerald-800">ประมาณ {plantCountToKg(it.plant_count,Number(selectedCrop?.slots_per_kg)).toLocaleString()} กก.</p>
-                              <p className="mt-0.5 text-[10px] text-slate-500">{Number(selectedCrop?.slots_per_kg||0).toLocaleString()} ต้น/กก. · ปัดเศษลง</p>
                             </div>
 
                             {/* Growing Days */}
                             <div className="w-full sm:w-48 sm:shrink-0">
-                              <label htmlFor={`growing-days-${idx}`} className="text-[10px] font-bold text-slate-500 block mb-0.5">ระยะเวลาการเจริญเติบโต <span className="text-rose-600">*</span></label>
+                              <label htmlFor={`growing-days-${idx}`} className="mb-1.5 flex min-h-5 items-center gap-1 text-[10px] font-bold text-slate-500">ระยะเวลาการเจริญเติบโต <span className="text-rose-600">*</span></label>
                               <input
                                 id={`growing-days-${idx}`}
                                 type="number"
@@ -1035,11 +1033,16 @@ export const AdminRoundsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleRemoveItem(idx)}
-                              className="p-2.5 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 self-end sm:self-center transition-colors"
+                              className="p-2.5 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 self-end sm:self-start sm:mt-[26px] transition-colors"
                               title="ลบผักรายการนี้"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
+                          </div>
+
+                          <div className="my-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-emerald-200 bg-white/70 px-3 py-2" aria-live="polite">
+                            <p className="text-xs font-bold text-emerald-800">ผลผลิตคาดการณ์ {plantCountToKg(it.plant_count,Number(selectedCrop?.slots_per_kg)).toLocaleString()} กก.</p>
+                            <p className="text-[10px] text-slate-500">{Number(selectedCrop?.slots_per_kg||0).toLocaleString()} ต้น/กก. · ปัดเศษลง</p>
                           </div>
 
                           {/* PROMINENT REAL-TIME WARNING & NOTIFICATION ALERT BOX */}
