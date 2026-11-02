@@ -1,5 +1,4 @@
 import {harvestRange,priceLabel} from '../../lib/pooledBooking.js';
-import {EstimatedYield} from '../../components/common/EstimatedYield.js';
 import React, { useEffect, useState } from 'react';
 import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import { useParams, Link, useNavigate } from 'react-router-dom';
@@ -259,7 +258,7 @@ export const RoundDetailPage: React.FC = () => {
                     <span className="text-xs text-slate-500 font-normal">/ กิโลกรัม</span>
                   </div>
 
-                  {round.is_pooled?<div className="mb-3 space-y-1"><p className="font-extrabold text-emerald-800">คงเหลือ {formatKg(Number(item.available_qty_kg||0))} กก.</p><p className="text-xs text-slate-500">ผลผลิตประมาณ {formatKg(item.estimated_qty_kg)} กก.</p><p className="text-xs text-slate-500">เก็บ {harvestRange(item.harvest_start_date,item.harvest_end_date)}</p></div>:<EstimatedYield item={item} compact/>}
+                  {round.is_pooled?<div className="mb-3 space-y-1"><p className="font-extrabold text-emerald-800">คงเหลือ {formatKg(Number(item.available_qty_kg||0))} กก.</p><p className="text-xs text-slate-500">เก็บ {harvestRange(item.harvest_start_date,item.harvest_end_date)}</p></div>:null}
                 </div>
 
                 {/* Per-crop quantity step and controller */}
