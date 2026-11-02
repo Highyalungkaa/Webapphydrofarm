@@ -54,7 +54,7 @@ export const Navbar: React.FC = () => {
               className={`transition-colors ${location.pathname.startsWith('/orders') ? 'text-farm-600 font-semibold' : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
-              ประวัติการสั่งจอง/ซื้อ
+              ดูรายการ / ประวัติการซื้อ
             </Link>
           )}
           {isAdmin && (
