@@ -91,7 +91,7 @@ function planRoundAllocation(state:any,items:any[],currentRound?:any) {
   });
   if(new Set(fullItems.map(i=>i.crop_id)).size!==fullItems.length)fail('ชนิดผักในรอบปลูกต้องไม่ซ้ำกัน');
   const selectedPlots=plots.filter(p=>fullItems.some(i=>i.plot_ids.includes(p.id)));
-  const plan=allocateRecordedPlotSlots(selectedPlots,fullItems,{},occupied,metadata.cropPlotAllocations||{});
+  const plan=allocateRecordedPlotSlots(selectedPlots,fullItems,{},occupied,metadata.cropPlotAllocations||{},true);
   if(plan.unallocatedByItem.some(n=>n>0))fail('พื้นที่แปลงที่เลือกไม่เพียงพอสำหรับผักทุกชนิด กรุณาปรับจำนวนต้นหรือเลือกแปลงเพิ่ม');
   return {items:fullItems,allocations:Object.fromEntries(fullItems.map((item,index)=>[item.crop_id,plan.allocatedByItem[index]]))};
 }

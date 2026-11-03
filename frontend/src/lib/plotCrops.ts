@@ -2,7 +2,7 @@
 export function allocatePlotSlots(
   plots: {id:string;slot_capacity:number}[],
   items: {selected_plot_ids?:string[];bookable_qty_kg?:number;plant_count?:number|null;crop_id:string}[],
-  rates: Record<string,number>, occupied: Record<string,number>,
+  rates: Record<string,number>, occupied: Record<string,number>, preferSelectionOrder = true,
 ) {
   type Edge={to:number;reverse:number;capacity:number;initial:number};
   const source=items.length+plots.length,sink=source+1;
@@ -13,7 +13,15 @@ export function allocatePlotSlots(
     graph[from].push(forward);graph[to].push(reverse);return forward;
   };
   const needs=items.map(item=>Math.max(0,Math.floor(Number(item.plant_count??Math.round(Number(item.bookable_qty_kg||0)*(rates[item.crop_id]||4))))));
-  const candidates=items.map(item=>plots.map((p,index)=>item.selected_plot_ids?.includes(p.id)?index:-1).filter(index=>index>=0));
+  const plotIndexes = new Map(plots.map((plot, index) => [plot.id, index]));
+  const candidates = items.map(item => {
+    const selected = new Set(item.selected_plot_ids);
+    if (!preferSelectionOrder) return plots.flatMap((plot, index) => selected.has(plot.id) ? [index] : []);
+    return Array.from(selected).flatMap(id => {
+      const index = plotIndexes.get(id);
+      return index === undefined ? [] : [index];
+    });
+  });
   const priority=items.map((_,index)=>index).sort((a,b)=>candidates[a].length-candidates[b].length||a-b);
   for(const index of priority)edge(source,index,needs[index]);
   const links=items.map((_,index)=>candidates[index].map(plotIndex=>({plotIndex,edge:edge(index,items.length+plotIndex,needs[index])})));
@@ -41,8 +49,9 @@ export function allocateRecordedPlotSlots(
  plots:{id:string;slot_capacity:number}[],
  items:{selected_plot_ids?:string[];bookable_qty_kg?:number;plant_count?:number|null;crop_id:string}[],
  rates:Record<string,number>,occupied:Record<string,number>,snapshot:Record<string,Record<string,number>>,
+ preferSelectionOrder = false,
 ){
- const fallback=()=>allocatePlotSlots(plots,items,rates,occupied);
+ const fallback=()=>allocatePlotSlots(plots,items,rates,occupied,preferSelectionOrder);
  const used={...occupied};const allocatedByItem:Record<string,number>[]=[];const beforeItem:Record<string,number>[]=[];
  for(const item of items){
   const saved=snapshot[item.crop_id];if(!saved||typeof saved!=='object'||Array.isArray(saved))return fallback();

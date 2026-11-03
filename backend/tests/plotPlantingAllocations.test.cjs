@@ -3,6 +3,21 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 function load(relative){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,require(name){if(name.endsWith('/plantAllocation.js'))return load('../src/services/plantAllocation.ts');return name.endsWith('/plotCrops.js')?load('../src/services/plotCrops.ts'):require(name);}});return exports;}
 const {getPlotPlantingAllocations}=load('../src/services/plotPlantingAllocations.ts');
+test('creation fills the first selected plot before using the extra plot in both preview and save',()=>{
+  const plots=[{id:'2',slot_capacity:480},{id:'3',slot_capacity:480}];
+  const items=[
+    {crop_id:'oak',plant_count:400,selected_plot_ids:['3']},
+    {crop_id:'cos',plant_count:100,selected_plot_ids:['3','2']},
+  ];
+  const preview=load('../../frontend/src/lib/plotCrops.ts').allocatePlotSlots(plots,items,{},{});
+  const saved=load('../src/services/plantAllocation.ts').allocateRecordedPlotSlots(plots,items,{},{},{},true);
+  for(const plan of [preview,saved]){
+    assert.equal(plan.allocatedByItem[0]['3'],400);
+    assert.equal(plan.allocatedByItem[1]['3'],80);
+    assert.equal(plan.allocatedByItem[1]['2'],20);
+    assert.equal(plan.used['3'],480);
+  }
+});
 const plots=[{id:'a',slot_capacity:100,crop_ids:['oak']},{id:'b',slot_capacity:100,crop_ids:['oak','cos']},{id:'c',slot_capacity:100,crop_ids:['cos']}];
 const item=(id,crop,count)=>({id,crop_id:crop,plant_count:count,estimated_qty_kg:count/5,bookable_qty_kg:count/5,crops:{name:crop,slots_per_kg:5}});
 const round=(items,notes)=>({id:'round',name:'R',status:'growing',current_step:5,round_items:items,notes:notes?JSON.stringify({cropPlotIds:notes}):'legacy note'});
