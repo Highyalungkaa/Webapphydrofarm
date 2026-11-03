@@ -3,6 +3,7 @@ const frontendRequire=require('node:module').createRequire(path.resolve(__dirnam
 const React=frontendRequire('react'),{renderToStaticMarkup}=frontendRequire('react-dom/server');
 function load(file,requireMock){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.resolve(__dirname,file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{exports,require:requireMock});return exports;}
 const helper=load('../../frontend/src/lib/customerOrderHistory.ts');
+const equipmentHistory=load('../../frontend/src/lib/equipmentOrderHistory.ts');
 const base={total_amount:100,created_at:'2026-11-03',order_items:[],equipment_order_items:[],fulfillment_method:'pickup',payment_method:'transfer'};
 const fixtures=[['active','confirmed','unpaid'],['paid','completed','paid'],['unpaid','completed','unpaid'],['cancelled','cancelled','paid']];
 function render(filter,records){let index=0;const state=[filter,records.vegetables,records.equipment,false,null];
@@ -10,6 +11,7 @@ function render(filter,records){let index=0;const state=[filter,records.vegetabl
   if(name==='react')return{...React,useState:()=>[state[index++],()=>{}],useEffect(){}};
   if(name==='react-router-dom')return{Link:({to,children,...props})=>React.createElement('a',{href:to,...props},children),useSearchParams:()=>[new URLSearchParams()]};
   if(name.endsWith('/customerOrderHistory.js'))return helper;
+  if(name.endsWith('/equipmentOrderHistory.js'))return equipmentHistory;
   if(name.endsWith('/useLiveRefresh.js'))return{useLiveRefresh(){}};
   if(name.endsWith('/dateFormat.js'))return{formatDateDMY:value=>value};
   if(name.endsWith('/bookingQuantity.js'))return{formatKg:value=>String(value)};
@@ -28,4 +30,14 @@ test('customer current and history screens partition both kinds of orders withou
  // Reversing payment must return the order to the current list on the next refresh.
  records.vegetables.find(order=>order.id==='veg-paid').payment_status='unpaid';
  assert.ok(render('all',records).includes('href="/orders/veg-paid"'));assert.ok(!render('history',records).includes('href="/orders/veg-paid"'));
+});
+
+test('shipped equipment goes to purchase history only after payment',()=>{
+ const equipment=[{...base,id:'shipped-paid',status:'shipped',payment_status:'paid'},{...base,id:'shipped-unpaid',status:'shipped',payment_status:'unpaid'}];
+ const records={vegetables:[],equipment};
+ const current=render('equipment',records),history=render('history',records);
+ assert.ok(!current.includes('href="/orders/equipment/shipped-paid"'));
+ assert.ok(history.includes('href="/orders/equipment/shipped-paid"'));
+ assert.ok(current.includes('href="/orders/equipment/shipped-unpaid"'));
+ assert.ok(!history.includes('href="/orders/equipment/shipped-unpaid"'));
 });

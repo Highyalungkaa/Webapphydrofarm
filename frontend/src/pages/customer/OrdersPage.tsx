@@ -1,3 +1,4 @@
+import { isEquipmentOrderInHistory } from '../../lib/equipmentOrderHistory.js';
 import {isCustomerOrderInHistory} from '../../lib/customerOrderHistory.js';
 import {useLiveRefresh} from '../../lib/useLiveRefresh.js';
 import {harvestRange} from '../../lib/pooledBooking.js';
@@ -42,12 +43,12 @@ export const OrdersPage: React.FC = () => {
   }, []);
 
   const activeCount = orders.filter((order) => !['completed','cancelled','no_show'].includes(order.status)).length
-    + equipmentOrders.filter((order) => !['completed','cancelled'].includes(order.status)).length;
+    + equipmentOrders.filter(order => order.status !== 'cancelled' && !isEquipmentOrderInHistory(order)).length;
 
   const currentOrders = orders.filter(order => !isCustomerOrderInHistory(order));
-  const currentEquipmentOrders = equipmentOrders.filter(order => !isCustomerOrderInHistory(order));
+  const currentEquipmentOrders = equipmentOrders.filter(order => !isEquipmentOrderInHistory(order));
   const historicOrders = orders.filter(isCustomerOrderInHistory);
-  const historicEquipmentOrders = equipmentOrders.filter(isCustomerOrderInHistory);
+  const historicEquipmentOrders = equipmentOrders.filter(isEquipmentOrderInHistory);
   const showingHistory = historyFilter === 'history';
   const visibleOrders = showingHistory ? historicOrders : currentOrders;
   const visibleEquipmentOrders = showingHistory ? historicEquipmentOrders : currentEquipmentOrders;
@@ -65,7 +66,7 @@ export const OrdersPage: React.FC = () => {
       ['history', 'ประวัติการจองและซื้อ', historicOrders.length + historicEquipmentOrders.length],
     ] as const).map(([filter, label, count]) => <button key={filter} type="button" onClick={() => setHistoryFilter(filter)} aria-pressed={historyFilter === filter} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold transition ${historyFilter === filter ? 'bg-emerald-800 text-white shadow-sm' : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-900'}`}>{label}<span className={`rounded-full px-2 py-0.5 text-[11px] ${historyFilter === filter ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{count}</span></button>)}</div>
 
-    {showingHistory && <p className="text-sm text-slate-500">รายการที่เสร็จสิ้นและชำระเงินแล้ว</p>}
+    {showingHistory && <p className="text-sm text-slate-500">รายการที่ชำระเงินแล้วและเสร็จสิ้น หรืออุปกรณ์ที่จัดส่งและชำระเงินแล้ว</p>}
 
     {loading ? <div className="space-y-3">{[0,1].map((n) => <div key={n} className="h-44 animate-pulse rounded-3xl bg-slate-200/70" />)}</div> : <>
       {(historyFilter === 'all' || historyFilter === 'vegetables' || showingHistory) && <section className="space-y-4"><SectionHeading icon={<Leaf className="h-5 w-5" />} title="การจองผัก" description="รอบปลูกและการส่งมอบจากฟาร์ม" count={visibleOrders.length} />{visibleOrders.length === 0 ? <Empty text={showingHistory ? 'ยังไม่มีประวัติการจองผักที่เสร็จสิ้นและชำระเงินแล้ว' : 'ยังไม่มีรายการจองผักปัจจุบัน'} link="/" linkText="ดูรอบเปิดจอง" /> : <div className="space-y-3">{visibleOrders.map((order) => {
@@ -78,7 +79,7 @@ export const OrdersPage: React.FC = () => {
         </div></div></article>;
       })}</div>}</section>}
 
-      {(historyFilter === 'all' || historyFilter === 'equipment' || showingHistory) && <section className="space-y-4"><SectionHeading icon={<Package className="h-5 w-5" />} title="การซื้ออุปกรณ์" description="ติดตามสินค้า การชำระเงิน และการจัดส่ง" count={visibleEquipmentOrders.length} />{visibleEquipmentOrders.length === 0 ? <Empty text={showingHistory ? 'ยังไม่มีประวัติการซื้ออุปกรณ์ที่เสร็จสิ้นและชำระเงินแล้ว' : 'ยังไม่มีรายการซื้ออุปกรณ์ปัจจุบัน'} link="/equipment" linkText="เลือกซื้ออุปกรณ์" /> : <div className="space-y-3">{visibleEquipmentOrders.map((order) => {
+      {(historyFilter === 'all' || historyFilter === 'equipment' || showingHistory) && <section className="space-y-4"><SectionHeading icon={<Package className="h-5 w-5" />} title="การซื้ออุปกรณ์" description="ติดตามสินค้า การชำระเงิน และการจัดส่ง" count={visibleEquipmentOrders.length} />{visibleEquipmentOrders.length === 0 ? <Empty text={showingHistory ? 'ยังไม่มีประวัติการซื้ออุปกรณ์' : 'ยังไม่มีรายการซื้ออุปกรณ์ปัจจุบัน'} link="/equipment" linkText="เลือกซื้ออุปกรณ์" /> : <div className="space-y-3">{visibleEquipmentOrders.map((order) => {
         const itemCount = (order.equipment_order_items || []).reduce((sum, item) => sum + item.quantity, 0);
         const productNames = (order.equipment_order_items || []).map((item) => item.product_name).join(', ');
         return <article key={order.id} className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition hover:shadow-lg hover:shadow-emerald-900/5 ${order.id === newEquipmentOrder ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200 hover:border-emerald-300'}`}><div className="flex"><div className="w-1.5 shrink-0 bg-gradient-to-b from-teal-400 to-emerald-900" /><div className="min-w-0 flex-1 p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-[11px] font-extrabold uppercase tracking-wide text-teal-700">ซื้ออุปกรณ์ · #{order.id.slice(0,8)}</p><h3 className="mt-1 line-clamp-2 text-lg font-black text-slate-950">{productNames || 'รายการอุปกรณ์ปลูก'}</h3><p className="mt-1 text-xs text-slate-500">สั่งซื้อเมื่อ {formatDateDMY(order.created_at)}</p></div><div className="flex flex-wrap gap-1.5"><Badge type="custom" label={equipmentStatus[order.status]} className={equipmentStatusColors[order.status]} /><EquipmentPaymentBadge order={order} /></div></div><div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-3 text-xs sm:grid-cols-2 sm:p-4"><div><p className="flex items-center gap-1.5 font-bold text-slate-500"><ShoppingBag className="h-3.5 w-3.5 text-emerald-700" />จำนวนสินค้า</p><p className="mt-1 font-extrabold text-slate-900">{itemCount} ชิ้น</p></div><div><p className="flex items-center gap-1.5 font-bold text-slate-500"><Truck className="h-3.5 w-3.5 text-emerald-700" />วิธีรับสินค้า</p><p className="mt-1 font-extrabold text-slate-900">จัดส่งปกติ · {order.payment_method === 'transfer' ? 'โอนเงิน' : 'เก็บเงินปลายทาง'}</p></div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[11px] text-slate-500">ยอดรวม</p><p className="text-xl font-black text-emerald-800">{money(order.total_amount)}</p></div><Link to={`/orders/equipment/${order.id}`} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-800 px-4 py-2.5 text-xs font-extrabold text-white transition hover:bg-emerald-900">ดูรายละเอียด <ArrowRight className="h-3.5 w-3.5" /></Link></div></div></div></article>;
