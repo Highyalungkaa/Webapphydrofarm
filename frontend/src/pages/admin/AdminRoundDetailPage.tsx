@@ -60,7 +60,7 @@ const STEPS: StepDef[] = [
     number: 2,
     key: 'fertilizing',
     title: '2. วันใส่ปุ๋ย',
-    subtitle: 'อนุบาลและเริ่มให้ปุ๋ย AB',
+    subtitle: 'ดูแลต้นกล้าและเริ่มให้ปุ๋ย AB',
     icon: '🧪',
     field: 'fertilizing_date',
     color: 'sky',
@@ -69,7 +69,7 @@ const STEPS: StepDef[] = [
     number: 3,
     key: 'planting_start',
     title: '3. วันเริ่มปลูก',
-    subtitle: 'เริ่มปลูกหลังระยะอนุบาล',
+    subtitle: 'เริ่มปลูกเมื่อต้นกล้าพร้อม',
     icon: '🌱',
     field: 'planting_start_date',
     color: 'lime',
@@ -577,7 +577,7 @@ export const AdminRoundDetailPage: React.FC = () => {
               </div>
               {!isViewingPastStep && activeStepTab !== 2 && <p className="text-[11px] text-slate-500 mt-1.5">
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
-                {activeStepTab === 3 && '🌱 ระบุวันเริ่มปลูกหลังจากใส่ปุ๋ยและอนุบาลต้นกล้า'}
+                {activeStepTab === 3 && '🌱 ระบุวันที่เริ่มปลูกหลังจากเตรียมต้นกล้าแล้ว'}
                 {activeStepTab === 4 && '🌿 ระบบแสดงวันเดียวกับวันเริ่มปลูกก่อน เปลี่ยนได้ตามวันที่ย้ายลงรางปลูกจริง'}
                 {activeStepTab === 6 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
                 {activeStepTab === 7 && '🏷️ ระบุวันที่ขายผลผลิตในรอบนี้หมดแล้ว'}
