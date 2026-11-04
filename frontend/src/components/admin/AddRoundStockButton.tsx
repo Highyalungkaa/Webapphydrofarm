@@ -13,13 +13,13 @@ const num=(n:number)=>Number(n).toLocaleString('th-TH',{maximumFractionDigits:2}
 
 export const AddRoundStockButton:React.FC<{round:PlantingRound;onChanged:()=>Promise<void>}>=({round,onChanged})=>{
   const [open,setOpen]=useState(false),[snapshot,setSnapshot]=useState<Snapshot|null>(null);
-  const [itemId,setItemId]=useState(''),[quantity,setQuantity]=useState(''),[note,setNote]=useState('ชั่งผลผลิตได้มากกว่าประมาณการ');
+  const [itemId,setItemId]=useState(''),[quantity,setQuantity]=useState(''),[note,setNote]=useState('');
   const [reopen,setReopen]=useState(false),[loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState('');
   const request=useRef({key:'',id:''}),saveLock=useRef(false);
   useEffect(()=>{
     if(!open)return;
     let active=true;
-    setLoading(true);setError('');setSnapshot(null);setItemId('');setQuantity('');setNote('ชั่งผลผลิตได้มากกว่าประมาณการ');
+    setLoading(true);setError('');setSnapshot(null);setItemId('');setQuantity('');setNote('');
     request.current={key:'',id:''};
     void api.get<Snapshot>(`/admin/rounds/${round.id}/stock`).then(data=>{
       if(!active)return;
@@ -64,7 +64,7 @@ export const AddRoundStockButton:React.FC<{round:PlantingRound;onChanged:()=>Pro
         {error&&<p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
         {!loading&&snapshot&&editable&&<form onSubmit={submit} className="space-y-4">
           <fieldset disabled={saving} className="space-y-4">
-            <p className="rounded-xl bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-900">กรอกเฉพาะผักที่ชั่งได้เพิ่มและยังไม่ได้จัดให้ลูกค้า โดยไม่เปลี่ยนจำนวนต้นหรือผลผลิตประมาณเดิม</p>
+            <p className="rounded-xl bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-900">เมื่อยอดเปิดจองเต็มแล้วและยังมีผักเหลือหลังชั่งจัดออเดอร์ ให้กรอกน้ำหนักผักที่เหลือจริงเพื่อเปิดให้ลูกค้าจองเพิ่ม</p>
             <label className="block text-sm font-bold text-slate-800">ชนิดผัก <span className="text-rose-600">*</span><select required value={itemId} onChange={e=>setItemId(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 text-sm"><option value="">เลือกผักในรอบนี้</option>{snapshot.items.map(i=><option key={i.id} value={i.id}>{i.crop_name}</option>)}</select></label>
             {item&&<div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs"><p className="text-slate-500">ราคาขายปัจจุบัน<strong className="mt-1 block text-sm text-slate-800">฿{num(item.price_per_kg)}/กก.</strong></p><p className="text-slate-500">เปิดให้จองได้อีก<strong className="mt-1 block text-sm text-emerald-800">{num(item.available_qty_kg)} กก.</strong></p></div>}
             <label className="block text-sm font-bold text-slate-800">ปริมาณที่เพิ่ม (กก.) <span className="text-rose-600">*</span><input required type="number" min="0.01" max="99999999" step="0.01" value={quantity} onChange={e=>setQuantity(e.target.value)} placeholder="เช่น 5" className="mt-2 w-full rounded-xl border border-slate-300 p-3 text-sm"/></label>
