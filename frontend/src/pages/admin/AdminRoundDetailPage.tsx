@@ -10,7 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatDateDMY, formatDateTimeDMY, toBangkokDateString, differenceInBangkokCalendarDays } from '../../lib/dateFormat.js';
-import { plantingStartDate, transplantDate } from '../../lib/roundStepDates.js';
+import { plantingStartDate, suggestedTransplantDate } from '../../lib/roundStepDates.js';
 import { calculateHarvestDate, usesSeedHarvestDate } from '../../lib/harvestDates.js';
 import { isCurrentPlantingRound } from '../../lib/managedOrders.js';
 import { roundCropSales } from '../../lib/roundCropSales.js';
@@ -252,7 +252,7 @@ export const AdminRoundDetailPage: React.FC = () => {
     } else if (stepNum === 3) {
       defaultVal = plantingStartDate(currentRound) || today;
     } else if (stepNum === 4) {
-      defaultVal = transplantDate(currentRound) || today;
+      defaultVal = suggestedTransplantDate(currentRound) || today;
     } else if (stepNum === 5) {
       defaultVal = toBangkokDateString(currentRound.booking_opens_at) || today;
     } else if (stepNum === 6) {
@@ -575,7 +575,7 @@ export const AdminRoundDetailPage: React.FC = () => {
               {!isViewingPastStep && activeStepTab !== 2 && <p className="text-[11px] text-slate-500 mt-1.5">
                 {activeStepTab === 1 && '🌱 ระบุวันที่เริ่มปักเมล็ดลงฟองน้ำเพาะกล้า'}
                 {activeStepTab === 3 && '🌱 ระบุวันที่เริ่มปลูกหลังจากเตรียมต้นกล้าแล้ว'}
-                {activeStepTab === 4 && '🌿 ระบบแสดงวันเดียวกับวันเริ่มปลูกก่อน เปลี่ยนได้ตามวันที่ย้ายลงรางปลูกจริง'}
+                {activeStepTab === 4 && '🌿 หากยังไม่ได้บันทึก ระบบแนะนำวันที่ปัจจุบัน โดยไม่เร็วกว่าวันเริ่มปลูก คุณสามารถเลือกวันที่ปลูกจริงก่อนบันทึกได้'}
                 {activeStepTab === 6 && '🧺 ระบุวันที่ผลผลิตเติบโตเต็มที่ พร้อมเก็บเกี่ยวและส่งมอบ/ขาย'}
                 {activeStepTab === 7 && '🏷️ ระบุวันที่ขายผลผลิตในรอบนี้หมดแล้ว'}
                 {activeStepTab === 8 && '🏁 ระบุวันที่จัดส่งมอบเสร็จสิ้น และปิดรอบการปลูก'}

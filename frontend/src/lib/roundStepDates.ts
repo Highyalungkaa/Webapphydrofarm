@@ -1,4 +1,4 @@
-import { addCalendarDays } from './dateFormat.js';
+import { addCalendarDays, toBangkokDateString } from './dateFormat.js';
 
 interface RoundStepDates {
   current_step?: number;
@@ -20,4 +20,14 @@ export function transplantDate(round: RoundStepDates): string | null {
   return round.transplant_date
     || (Number(round.current_step || 1) > 4 ? round.planted_at || null : null)
     || plantingStartDate(round);
+}
+
+export function suggestedTransplantDate(round: RoundStepDates, now = new Date()): string | null {
+  if (round.transplant_date || Number(round.current_step || 1) !== 4) {
+    return round.transplant_date || transplantDate(round);
+  }
+
+  const today = toBangkokDateString(now.toISOString())!;
+  const start = toBangkokDateString(plantingStartDate(round));
+  return start && start > today ? start : today;
 }
