@@ -84,6 +84,9 @@ export const AdminEquipmentOrdersPage: React.FC = () => {
       } else {
         setDraft(draft);
         setNotice('');
+        if (statusFilter !== 'all' && statusFilter !== draft.status) {
+          setStatusFilter(draft.status);
+        }
       }
       if (savingShipmentUpdate) { setShipmentImageFile(null); setShipmentImagePreview(''); }
     } catch (err: any) { setError(err.message || 'อัปเดตออเดอร์ไม่สำเร็จ'); }

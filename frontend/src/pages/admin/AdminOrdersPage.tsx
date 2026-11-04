@@ -169,7 +169,21 @@ export const AdminOrdersPage: React.FC = () => {
       });
 
       setSelectedOrder(null);
-      await loadOrders();
+      const nextStatus = selectedStatus && !['cancelled', 'no_show'].includes(modalStatus)
+        ? modalStatus
+        : selectedStatus;
+      const nextPayment = selectedPayment ? modalPaymentStatus : selectedPayment;
+      if (nextStatus !== selectedStatus || nextPayment !== selectedPayment) {
+        setSelectedStatus(nextStatus);
+        setSelectedPayment(nextPayment);
+        if (nextStatus !== selectedStatus && searchParams.has('status')) {
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.set('status', nextStatus);
+          setSearchParams(nextParams, { replace: true });
+        }
+      } else {
+        await loadOrders();
+      }
     } catch (err: any) {
       setUpdateError(err.message || 'เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
     } finally {
