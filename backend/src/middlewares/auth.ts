@@ -30,14 +30,20 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     }
 
     const token = authHeader.split(' ')[1];
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    const [identity, session] = await Promise.allSettled([
+      supabaseAdmin.auth.getUser(token),
+      sessionIsCurrent(req),
+    ]);
+    if (identity.status === 'rejected') throw identity.reason;
+    const { data: { user }, error } = identity.value;
 
     if (error || !user || !user.email) {
       res.status(401).json({ error: 'เซสชันหมดอายุหรือไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่' });
       return;
     }
 
-    if (!await sessionIsCurrent(req)) {
+    if (session.status === 'rejected') throw session.reason;
+    if (!session.value) {
       res.status(401).json({ code: 'SESSION_EXPIRED', error: 'ครบเวลาเข้าสู่ระบบ 24 ชั่วโมงแล้ว กรุณาเข้าสู่ระบบใหม่' });
       return;
     }

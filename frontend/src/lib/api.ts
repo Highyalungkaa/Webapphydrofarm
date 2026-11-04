@@ -45,7 +45,11 @@ export async function apiRequest<T = any>(
     throw new Error(data.error || `เกิดข้อผิดพลาด (${response.status})`);
   }
 
-  if(options.method && options.method.toUpperCase()!=='GET')notifyDataChange();
+  if (options.method && options.method.toUpperCase() !== 'GET') {
+    // Reads started before the save may still contain the previous state.
+    pendingReads.clear();
+    notifyDataChange();
+  }
   if(options.method && options.method.toUpperCase()!=='GET'
     && /^\/?(?:admin\/)?orders(?:[/?]|$)/.test(endpoint)) {
     window.dispatchEvent(new Event(orderChangesEvent));

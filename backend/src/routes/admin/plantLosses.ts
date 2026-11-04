@@ -47,18 +47,13 @@ router.get('/:id/losses', async (req: AuthenticatedRequest, res: Response) => {
       .select('id,notes,status,current_step,seed_date,created_at,sold_out_date,completed_date').eq('id', req.params.id).maybeSingle();
     if (roundError) { fail(res, roundError); return; }
     if (!round) { res.status(404).json({ error: 'ไม่พบรอบปลูก' }); return; }
-    const [itemResult, lossResult, planting, bookedResult] = await Promise.all([
+    const [itemResult, lossResult, planting] = await Promise.all([
       supabaseAdmin.from('round_items').select('*,crops(name,slots_per_kg)').eq('round_id', round.id),
       supabaseAdmin.from('plant_losses').select('*').eq('round_id', round.id).order('created_at', { ascending: false }),
       loadPlantingContext(),
-      supabaseAdmin.from('orders').select('status,order_items(round_item_id,qty_kg,own_qty_kg,fulfillment_source,fulfilled_qty_kg)').eq('round_id', round.id).neq('status', 'cancelled'),
     ]);
-    const error = itemResult.error || lossResult.error || bookedResult.error;
+    const error = itemResult.error || lossResult.error;
     if (error) { fail(res, error); return; }
-    const booked = new Map<string, number>();
-    for (const order of bookedResult.data || []) for (const item of order.order_items || []) {
-      booked.set(item.round_item_id, (booked.get(item.round_item_id) || 0) + (order.status === 'no_show' ? 0 : Math.max(0, Number(item.own_qty_kg || 0), Number(item.qty_kg) - (item.fulfillment_source === 'substitute' ? Number(item.fulfilled_qty_kg || 0) : 0))));
-    }
     const items = (itemResult.data || []).map((item: any) => {
       const original=Number(item.loss_baseline_plant_count??item.plant_count??0);
       const lost=Number(item.lost_plant_count||0);

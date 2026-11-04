@@ -209,7 +209,7 @@ export const AdminRoundDetailPage: React.FC = () => {
   }, [id]);
 
 
-  const loadRound = async (silent=false) => {
+  const loadRound = async (silent = false, knownStep = round?.current_step) => {
     const request=++roundRequest.current;
     try {
       if(!silent)setLoading(true);
@@ -227,7 +227,7 @@ export const AdminRoundDetailPage: React.FC = () => {
       setItemDaysMap(daysMap);
 
       const currentStep = data.current_step || 1;
-      if(!silent||currentStep!==round?.current_step){
+      if(!silent||currentStep!==knownStep){
         setActiveStepTab(currentStep);
         initDateForStep(currentStep, data);
       }
@@ -326,15 +326,12 @@ export const AdminRoundDetailPage: React.FC = () => {
       setRound((previous) => previous ? { ...previous, ...updated } : updated);
 
       if (activeStepTab === 8) {
-        setActionSuccess(`🏁 สิ้นสุดรอบการปลูก "${round.name}" เรียบร้อยแล้ว! กำลังนำทางไปยังหน้าประวัติรอบปลูก...`);
-        setTimeout(() => {
-          navigate('/admin/rounds/history');
-        }, 1200);
+        navigate('/admin/rounds/history');
         return;
       }
 
       // Advance to next step tab if available
-      const nextStep = activeStepTab < 8 ? activeStepTab + 1 : 8;
+      const nextStep = updated.current_step ?? Math.min(activeStepTab + 1, 8);
       setActiveStepTab(nextStep);
       initDateForStep(nextStep, updated);
 
@@ -343,7 +340,7 @@ export const AdminRoundDetailPage: React.FC = () => {
           ? `ตั้งเวลาเปิดจองของ "${round.name}" แล้ว ลูกค้าจะเริ่มจองได้เมื่อถึงวันที่กำหนด`
           : `อัปเดต "${STEPS[activeStepTab - 1].title}" เรียบร้อยแล้ว`
       );
-      await loadRound();
+      await loadRound(true, updated.current_step);
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาดในการอัปเดตสเต็ป');
     } finally {
@@ -799,7 +796,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         <h2 className="text-lg font-extrabold text-slate-900">ยอดจองและคำสั่งซื้อ</h2>
         <p className="text-sm text-slate-500">ดูน้ำหนักที่จอง น้ำหนักที่ชั่ง และคำสั่งจองของลูกค้าในรอบนี้</p>
       </div>
-      <RoundWeightSummary round={round} onChanged={loadRound} />
+      <RoundWeightSummary round={round} onChanged={() => loadRound(true)} />
 
       {/* Customer Orders in this Round */}
       <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
@@ -881,7 +878,7 @@ export const AdminRoundDetailPage: React.FC = () => {
         <h2 className="text-lg font-extrabold text-slate-900">บันทึกข้อมูลผักเสียหาย</h2>
         <p className="text-sm text-slate-500">บันทึกผักเสียและกำหนดจำนวนที่ลูกค้าแต่ละคนจองได้</p>
       </div>
-      <PlantLossPanel roundId={round.id} onChanged={loadRound} />
+      <PlantLossPanel roundId={round.id} onChanged={() => loadRound(true)} />
     </div>
   );
 };

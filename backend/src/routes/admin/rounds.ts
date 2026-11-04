@@ -328,31 +328,35 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     }
 
     // Get orders for this round
-    const { data: sourceOrders,error:ordersError } = await db
-      .from('orders')
-      .select(`
-        *,
-        profiles (
-          id,
-          full_name,
-          email
-        ),
-        order_items (
-          id,
-          round_item_id,
-          qty_kg,
-          own_qty_kg,
-          fulfilled_qty_kg,
-          fulfillment_source,
-          price_per_kg,
-          discount_amount,
-          round_items (
-            crops (name)
+    const orderFilter = await roundOrderFilter(db, id);
+    const [{ data: sourceOrders, error: ordersError }, { data: allPlots }] = await Promise.all([
+      db
+        .from('orders')
+        .select(`
+          *,
+          profiles (
+            id,
+            full_name,
+            email
+          ),
+          order_items (
+            id,
+            round_item_id,
+            qty_kg,
+            own_qty_kg,
+            fulfilled_qty_kg,
+            fulfillment_source,
+            price_per_kg,
+            discount_amount,
+            round_items (
+              crops (name)
+            )
           )
-        )
-      `)
-      .or(await roundOrderFilter(db,id))
-      .order('created_at', { ascending: false });
+        `)
+        .or(orderFilter)
+        .order('created_at', { ascending: false }),
+      db.from('plots').select('id, name, zone_name, slot_capacity, is_active, crop_id'),
+    ]);
 
     if(ordersError)throw ordersError;
     const orders=scopeRoundOrders(sourceOrders||[],(round.round_items||[]).map((i:any)=>i.id));
@@ -367,10 +371,6 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       }
     }
 
-    // Fetch all plots to enrich round items with plot details
-    const { data: allPlots } = await db
-      .from('plots')
-      .select('id, name, zone_name, slot_capacity, is_active, crop_id');
     const plotMap = new Map((allPlots || []).map((p: any) => [p.id, p]));
 
     const cropDaysMap = extractCropGrowingDays(round.notes);

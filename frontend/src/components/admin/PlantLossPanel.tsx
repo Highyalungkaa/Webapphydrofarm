@@ -83,7 +83,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
       await api.post(`/admin/rounds/${roundId}/losses`, { request_id: requestId, round_item_id: itemId,
         plot_id: plotId, loss_date: date, plant_count: quantity, reason: reason.trim(), note: note.trim() });
       setOpen(false); setMessage('บันทึกผักเสียหายและปรับจำนวนต้นคงเหลือแล้ว');
-      await load(); await onChanged();
+      await Promise.all([load(), onChanged()]);
     } catch (err: any) { setError(err.message || 'บันทึกผักเสียหายไม่สำเร็จ'); }
     finally { setSaving(false); }
   };
@@ -93,7 +93,7 @@ export const PlantLossPanel: React.FC<{ roundId: string; onChanged: () => Promis
     try {
       await api.post(`/admin/rounds/${roundId}/losses/${voidEntry.id}/void`, { round_item_id: voidEntry.round_item_id, reason: voidReason });
       setVoidEntry(null); setMessage('ยกเลิกรายการแล้ว ประวัติเดิมยังคงอยู่และยอดคงเหลือถูกคำนวณใหม่');
-      await load(); await onChanged();
+      await Promise.all([load(), onChanged()]);
     } catch (err: any) { setError(err.message || 'ยกเลิกรายการไม่สำเร็จ'); }
     finally { setSaving(false); }
   };
