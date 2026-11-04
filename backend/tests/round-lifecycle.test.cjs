@@ -14,11 +14,14 @@ function setup(initialRound = {}) {
     router[method] = (url, ...handlers) => routes.set(`${method} ${url}`, handlers.at(-1));
   }
   const db = {
-    from() {
+    from(table) {
+      assert.equal(table, 'planting_rounds');
       let update;
       const query = {
         select() { return query; },
         eq() { return query; },
+        neq() { return query; },
+        async order() { return { data: [round], error: null }; },
         update(payload) { update = payload; return query; },
         async single() {
           if (update) {
@@ -55,6 +58,11 @@ function setup(initialRound = {}) {
   return {
     computeCurrentStep: exports.computeCurrentStep,
     round: () => round,
+    async list() {
+      const res = { status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; } };
+      await routes.get('get /')({ query: {} }, res);
+      return res.body;
+    },
     openBooking() {
       round = { ...round, status: 'booking_open', booking_opens_at: '2026-01-01T00:00:00Z', booking_closes_at: null };
     },
@@ -68,6 +76,18 @@ function setup(initialRound = {}) {
     },
   };
 }
+
+test('round list summarizes embedded booking quantities without per-round database reads', async () => {
+  const app = setup({ round_items: [
+    { id: 'oak', crop_id: 'oak', order_items: [{ qty_kg: '2.5' }, { qty_kg: 1 }] },
+    { id: 'cos', crop_id: 'cos', order_items: [] },
+  ] });
+  const [round] = await app.list();
+  assert.equal(round.total_booked_kg, 3.5);
+  assert.equal(round.round_items[0].booked_qty_kg, 3.5);
+  assert.equal(round.round_items[1].booked_qty_kg, 0);
+  assert.equal(round.round_items[0].order_items, undefined);
+});
 
 test('all eight milestones preserve dates, booking checks and harvest calculation', async () => {
   const app = setup();

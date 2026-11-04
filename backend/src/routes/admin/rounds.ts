@@ -216,6 +216,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         *,
         round_items (
           *,
+          order_items (qty_kg, orders!inner(status)),
           crops (
             id,
             name,
@@ -225,6 +226,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           )
         )
       `)
+      .neq('round_items.order_items.orders.status', 'cancelled')
       .order('created_at', { ascending: false });
 
     if (status === 'active') {
@@ -242,54 +244,36 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Enrich with booked totals
-    const enriched = await Promise.all(
-      (rounds || []).map(async (round: any) => {
-        const itemIds = (round.round_items || []).map((i: any) => i.id);
-        let bookedMap: Record<string, number> = {};
-
-        if (itemIds.length > 0) {
-          const { data: booked } = await db
-            .from('order_items')
-            .select('round_item_id, qty_kg, own_qty_kg, fulfillment_source, fulfilled_qty_kg, orders!inner(status)')
-            .in('round_item_id', itemIds)
-            .neq('orders.status', 'cancelled');
-
-          if (booked) {
-            for (const b of booked) {
-              bookedMap[b.round_item_id] = (bookedMap[b.round_item_id] || 0) + Number(b.qty_kg);
-            }
-          }
-        }
-
-        const cropDaysMap = extractCropGrowingDays(round.notes);
-        const itemsWithBooked = (round.round_items || []).map((item: any) => {
-          const bookedKg = bookedMap[item.id] || 0;
-          const itemDays = cropDaysMap[item.crop_id] || item.crops?.growing_days || round.growing_days || 45;
-          return {
-            ...item,
-            crop_name: item.crops?.name,
-            growing_days: itemDays,
-            booked_qty_kg: bookedKg,
-            effective_bookable_qty_kg: null,
-            available_qty_kg: null,
-          };
-        });
-
-        const totalBooked = itemsWithBooked.reduce((s: number, i: any) => s + Number(i.booked_qty_kg), 0);
-
+    const enriched = (rounds || []).map((round) => {
+      const cropDaysMap = extractCropGrowingDays(round.notes);
+      const itemsWithBooked = (round.round_items || []).map(({ order_items, ...item }: Record<string, any> & {
+        order_items?: { qty_kg: number | string }[];
+      }) => {
+        const bookedKg = (order_items || []).reduce((sum, line) => sum + Number(line.qty_kg), 0);
+        const itemDays = cropDaysMap[item.crop_id] || item.crops?.growing_days || round.growing_days || 45;
         return {
-          ...round,
-          current_step: computeCurrentStep(round),
-          is_booking_created: isRoundBookingCreated(round),
-          round_items: itemsWithBooked,
-          total_estimated_kg: null,
-          total_bookable_kg: null,
-          total_booked_kg: totalBooked,
-          total_available_kg: null,
+          ...item,
+          crop_name: item.crops?.name,
+          growing_days: itemDays,
+          booked_qty_kg: bookedKg,
+          effective_bookable_qty_kg: null,
+          available_qty_kg: null,
         };
-      })
-    );
+      });
+
+      const totalBooked = itemsWithBooked.reduce((s: number, i: any) => s + Number(i.booked_qty_kg), 0);
+
+      return {
+        ...round,
+        current_step: computeCurrentStep(round),
+        is_booking_created: isRoundBookingCreated(round),
+        round_items: itemsWithBooked,
+        total_estimated_kg: null,
+        total_bookable_kg: null,
+        total_booked_kg: totalBooked,
+        total_available_kg: null,
+      };
+    });
 
     res.json(enriched);
   } catch (err: any) {

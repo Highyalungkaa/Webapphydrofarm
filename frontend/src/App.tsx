@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, matchPath } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { CartProvider } from './context/CartContext.js';
 import { EquipmentCartProvider } from './context/EquipmentCartContext.js';
@@ -9,38 +9,71 @@ import { CustomerLayout } from './components/layout/CustomerLayout.js';
 import { AdminLayout } from './components/layout/AdminLayout.js';
 import { EquipmentAdminLayout } from './components/layout/EquipmentAdminLayout.js';
 
+const pagePreloads = new Map<string, () => Promise<unknown>>();
+
+function lazyPage<T extends React.ComponentType<any>>(paths: string | string[], load: () => Promise<{ default: T }>) {
+  let pending: Promise<{ default: T }> | undefined;
+  const preload = () => pending ??= load().catch(error => {
+    pending = undefined;
+    throw error;
+  });
+  for (const path of Array.isArray(paths) ? paths : [paths]) pagePreloads.set(path, preload);
+  return React.lazy(preload);
+}
+
+function PreloadLinkedPages() {
+  React.useEffect(() => {
+    const preload = (event: Event) => {
+      if (!(event.target instanceof Element)) return;
+      const link = event.target.closest<HTMLAnchorElement>('a[href]');
+      if (!link || link.origin !== window.location.origin || link.download) return;
+      const pathname = link.pathname.replace(/\/+$/, '') || '/';
+      const load = pagePreloads.get(pathname)
+        ?? [...pagePreloads].find(([path]) => path.includes(':') && matchPath(path, pathname))?.[1];
+      if (load) void load().catch(() => {});
+    };
+    document.addEventListener('pointerover', preload, { passive: true });
+    document.addEventListener('focusin', preload);
+    return () => {
+      document.removeEventListener('pointerover', preload);
+      document.removeEventListener('focusin', preload);
+    };
+  }, []);
+  return null;
+}
+
 // Customer Pages
-const HomePage = React.lazy(() => import('./pages/customer/HomePage.js').then((module) => ({ default: module.HomePage })));
-const RoundDetailPage = React.lazy(() => import('./pages/customer/RoundDetailPage.js').then((module) => ({ default: module.RoundDetailPage })));
-const CheckoutPage = React.lazy(() => import('./pages/customer/CheckoutPage.js').then((module) => ({ default: module.CheckoutPage })));
-const BookingReviewPage = React.lazy(() => import('./pages/customer/BookingReviewPage.js').then((module) => ({ default: module.BookingReviewPage })));
-const OrdersPage = React.lazy(() => import('./pages/customer/OrdersPage.js').then((module) => ({ default: module.OrdersPage })));
-const OrderDetailPage = React.lazy(() => import('./pages/customer/OrderDetailPage.js').then((module) => ({ default: module.OrderDetailPage })));
-const EquipmentOrderDetailPage = React.lazy(() => import('./pages/customer/EquipmentOrderDetailPage.js').then((module) => ({ default: module.EquipmentOrderDetailPage })));
-const ProfilePage = React.lazy(() => import('./pages/customer/ProfilePage.js').then((module) => ({ default: module.ProfilePage })));
-const LoginPage = React.lazy(() => import('./pages/customer/LoginPage.js').then((module) => ({ default: module.LoginPage })));
-const EquipmentShopPage = React.lazy(() => import('./pages/customer/EquipmentShopPage.js').then((module) => ({ default: module.EquipmentShopPage })));
-const EquipmentCheckoutPage = React.lazy(() => import('./pages/customer/EquipmentCheckoutPage.js').then((module) => ({ default: module.EquipmentCheckoutPage })));
+const HomePage = lazyPage("/", () => import('./pages/customer/HomePage.js').then((module) => ({ default: module.HomePage })));
+const RoundDetailPage = lazyPage("/rounds/:id", () => import('./pages/customer/RoundDetailPage.js').then((module) => ({ default: module.RoundDetailPage })));
+const CheckoutPage = lazyPage("/checkout", () => import('./pages/customer/CheckoutPage.js').then((module) => ({ default: module.CheckoutPage })));
+const BookingReviewPage = lazyPage("/booking-review", () => import('./pages/customer/BookingReviewPage.js').then((module) => ({ default: module.BookingReviewPage })));
+const OrdersPage = lazyPage("/orders", () => import('./pages/customer/OrdersPage.js').then((module) => ({ default: module.OrdersPage })));
+const OrderDetailPage = lazyPage("/orders/:id", () => import('./pages/customer/OrderDetailPage.js').then((module) => ({ default: module.OrderDetailPage })));
+const EquipmentOrderDetailPage = lazyPage("/orders/equipment/:id", () => import('./pages/customer/EquipmentOrderDetailPage.js').then((module) => ({ default: module.EquipmentOrderDetailPage })));
+const ProfilePage = lazyPage("/profile", () => import('./pages/customer/ProfilePage.js').then((module) => ({ default: module.ProfilePage })));
+const LoginPage = lazyPage("/login", () => import('./pages/customer/LoginPage.js').then((module) => ({ default: module.LoginPage })));
+const EquipmentShopPage = lazyPage(["/equipment","/equipment/:id"], () => import('./pages/customer/EquipmentShopPage.js').then((module) => ({ default: module.EquipmentShopPage })));
+const EquipmentCheckoutPage = lazyPage("/equipment/checkout", () => import('./pages/customer/EquipmentCheckoutPage.js').then((module) => ({ default: module.EquipmentCheckoutPage })));
 
 // Admin Pages
-const AdminDashboardPage = React.lazy(() => import('./pages/admin/AdminDashboardPage.js').then((module) => ({ default: module.AdminDashboardPage })));
-const AdminRoundsPage = React.lazy(() => import('./pages/admin/AdminRoundsPage.js').then((module) => ({ default: module.AdminRoundsPage })));
-const AdminRoundDetailPage = React.lazy(() => import('./pages/admin/AdminRoundDetailPage.js').then((module) => ({ default: module.AdminRoundDetailPage })));
-const AdminRoundsHistoryPage = React.lazy(() => import('./pages/admin/AdminRoundsHistoryPage.js').then((module) => ({ default: module.AdminRoundsHistoryPage })));
-const AdminOrdersPage = React.lazy(() => import('./pages/admin/AdminOrdersPage.js').then((module) => ({ default: module.AdminOrdersPage })));
-const AdminCropsPage = React.lazy(() => import('./pages/admin/AdminCropsPage.js').then((module) => ({ default: module.AdminCropsPage })));
-const AdminAdminsPage = React.lazy(() => import('./pages/admin/AdminAdminsPage.js').then((module) => ({ default: module.AdminAdminsPage })));
-const AdminSettingsPage = React.lazy(() => import('./pages/admin/AdminSettingsPage.js').then((module) => ({ default: module.AdminSettingsPage })));
-const AdminCustomersPage = React.lazy(() => import('./pages/admin/AdminCustomersPage.js').then((module) => ({ default: module.AdminCustomersPage })));
-const AdminPlotsPage = React.lazy(() => import('./pages/admin/AdminPlotsPage.js').then((module) => ({ default: module.AdminPlotsPage })));
-const AdminBookingsPage = React.lazy(() => import('./pages/admin/AdminBookingsPage.js').then((module) => ({ default: module.AdminBookingsPage })));
-const AdminReportsPage = React.lazy(() => import('./pages/admin/AdminReportsPage.js').then((module) => ({ default: module.AdminReportsPage })));
-const AdminEquipmentPage = React.lazy(() => import('./pages/admin/AdminEquipmentPage.js').then((module) => ({ default: module.AdminEquipmentPage })));
-const AdminEquipmentDashboardPage = React.lazy(() => import('./pages/admin/AdminEquipmentDashboardPage.js').then((module) => ({ default: module.AdminEquipmentDashboardPage })));
-const AdminEquipmentOrdersPage = React.lazy(() => import('./pages/admin/AdminEquipmentOrdersPage.js').then((module) => ({ default: module.AdminEquipmentOrdersPage })));
-const AdminEquipmentOrderHistoryPage = React.lazy(() => import('./pages/admin/AdminEquipmentOrderHistoryPage.js').then((module) => ({ default: module.AdminEquipmentOrderHistoryPage })));
-const AdminEquipmentReportsPage = React.lazy(() => import('./pages/admin/AdminEquipmentReportsPage.js').then((module) => ({ default: module.AdminEquipmentReportsPage })));
-const AdminEquipmentShippingPage = React.lazy(() => import('./pages/admin/AdminEquipmentShippingPage.js').then((module) => ({ default: module.AdminEquipmentShippingPage })));
+const AdminDashboardPage = lazyPage("/admin", () => import('./pages/admin/AdminDashboardPage.js').then((module) => ({ default: module.AdminDashboardPage })));
+const AdminRoundsPage = lazyPage("/admin/rounds", () => import('./pages/admin/AdminRoundsPage.js').then((module) => ({ default: module.AdminRoundsPage })));
+const AdminRoundDetailPage = lazyPage("/admin/rounds/:id", () => import('./pages/admin/AdminRoundDetailPage.js').then((module) => ({ default: module.AdminRoundDetailPage })));
+const AdminRoundsHistoryPage = lazyPage("/admin/rounds/history", () => import('./pages/admin/AdminRoundsHistoryPage.js').then((module) => ({ default: module.AdminRoundsHistoryPage })));
+const AdminOrdersPage = lazyPage("/admin/orders", () => import('./pages/admin/AdminOrdersPage.js').then((module) => ({ default: module.AdminOrdersPage })));
+const AdminCropsPage = lazyPage("/admin/crops", () => import('./pages/admin/AdminCropsPage.js').then((module) => ({ default: module.AdminCropsPage })));
+const AdminAdminsPage = lazyPage("/admin/admins", () => import('./pages/admin/AdminAdminsPage.js').then((module) => ({ default: module.AdminAdminsPage })));
+const AdminSettingsPage = lazyPage("/admin/settings", () => import('./pages/admin/AdminSettingsPage.js').then((module) => ({ default: module.AdminSettingsPage })));
+const AdminCustomersPage = lazyPage("/admin/customers", () => import('./pages/admin/AdminCustomersPage.js').then((module) => ({ default: module.AdminCustomersPage })));
+const AdminPlotsPage = lazyPage("/admin/plots", () => import('./pages/admin/AdminPlotsPage.js').then((module) => ({ default: module.AdminPlotsPage })));
+const AdminBookingsPage = lazyPage("/admin/bookings", () => import('./pages/admin/AdminBookingsPage.js').then((module) => ({ default: module.AdminBookingsPage })));
+const AdminReportsPage = lazyPage("/admin/reports", () => import('./pages/admin/AdminReportsPage.js').then((module) => ({ default: module.AdminReportsPage })));
+const AdminEquipmentPage = lazyPage("/admin/equipment/products", () => import('./pages/admin/AdminEquipmentPage.js').then((module) => ({ default: module.AdminEquipmentPage })));
+const AdminEquipmentDashboardPage = lazyPage("/admin/equipment", () => import('./pages/admin/AdminEquipmentDashboardPage.js').then((module) => ({ default: module.AdminEquipmentDashboardPage })));
+const AdminEquipmentOrdersPage = lazyPage("/admin/equipment/orders", () => import('./pages/admin/AdminEquipmentOrdersPage.js').then((module) => ({ default: module.AdminEquipmentOrdersPage })));
+const AdminEquipmentOrderHistoryPage = lazyPage("/admin/equipment/orders/history", () => import('./pages/admin/AdminEquipmentOrderHistoryPage.js').then((module) => ({ default: module.AdminEquipmentOrderHistoryPage })));
+const AdminEquipmentReportsPage = lazyPage("/admin/equipment/reports", () => import('./pages/admin/AdminEquipmentReportsPage.js').then((module) => ({ default: module.AdminEquipmentReportsPage })));
+const AdminEquipmentShippingPage = lazyPage("/admin/equipment/settings/shipping", () => import('./pages/admin/AdminEquipmentShippingPage.js').then((module) => ({ default: module.AdminEquipmentShippingPage })));
 
 // Route Guard for authenticated customers
 const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -62,6 +95,7 @@ const ProtectedCustomerRoute: React.FC<{ children: React.ReactNode }> = ({ child
 export const App: React.FC = () => {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <PreloadLinkedPages />
       <AuthProvider>
         <CartProvider>
         <EquipmentCartProvider>
